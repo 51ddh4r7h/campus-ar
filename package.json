@@ -1,0 +1,23 @@
+{
+  "name": "campus-ar",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Minimal WebAR World Tracking MVP: 8th Wall Engine + Three.js anchored directional arrows.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@8thwall/engine-binary": "^1.0.0",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/three": "^0.185.4",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1"
+  }
+}

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Mobile-first AR: fit the viewport, disable pinch-zoom/bounce on the camera view. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Campus AR — World Tracking Navigation MVP</title>
+    <meta name="description" content="Markerless World Tracking (SLAM) with anchored Three.js navigation arrows." />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AD%3C/text%3E%3C/svg%3E"
+    />
+
+    <!-- ============================================================
+         8th Wall Engine Binary (current engine, NOT the archived
+         ithub.com/8thwall/web repo).
+         - Loaded via script tag (it cannot be bundled by Vite).
+         - data-preload-chunks="slam" enables World Tracking / SLAM
+           (adds XR8.XrController to the global XR8 object).
+         - The files are copied from node_modules/@8thwall/engine-binary/dist
+           into public/xr8/ by vite.config.ts on startup.
+         - The engine resolves ./xr-slam.js relative to this file's URL.
+    ============================================================ -->
+    <script src="./xr8/xr.js" async crossorigin="anonymous" data-preload-chunks="slam"></script>
+    <script>
+      // Friendly fallback if the engine file fails to load (e.g. no npm install / bad deploy).
+      window.addEventListener('error', function (e) {
+        const t = e.target
+        if (t && t.tagName === 'SCRIPT' && /xr[^/]*\.js/.test(t.src || '')) {
+          const el = document.getElementById('engine-error')
+          if (el) el.textContent = 'Failed to load the 8th Wall engine. Check the "engine bridge" path.'
+        }
+      })
+    </script>
+  </head>
+  <body>
+    <!-- Camera feed + AR overlay are drawn into this canvas by the 8th Wall engine. -->
+    <canvas id="camerafeed"></canvas>
+
+    <!-- Fullscreen start screen. Start Navigation both requests camera
+         permission and starts the SLAM / world tracking session. -->
+    <div id="start-overlay">
+      <div class="start-card">
+        <h1>Campus&nbsp;AR <span class="tag">MVP</span></h1>
+        <p>Aim your phone at a flat, well-lit area, then press start.</p>
+        <button id="start-button" type="button">Start Navigation</button>
+        <p id="start-error" class="error" hidden></p>
+        <p class="hint">Requires HTTPS and camera access.</p>
+      </div>
+    </div>
+
+    <!-- Small debug HUD with live engine / camera / tracking state. -->
+    <aside id="hud" aria-label="Debug HUD">
+      <div class="hud-row"><span class="hud-key">Engine</span><span class="hud-val" id="hud-engine">loading…</span></div>
+      <div class="hud-row"><span class="hud-key">Device</span><span class="hud-val" id="hud-device">—</span></div>
+      <div class="hud-row"><span class="hud-key">Camera</span><span class="hud-val" id="hud-camera">—</span></div>
+      <div class="hud-row"><span class="hud-key">Tracking</span><span class="hud-val" id="hud-tracking">—</span></div>
+      <div class="hud-row"><span class="hud-key">Reason</span><span class="hud-val" id="hud-reason">—</span></div>
+      <div class="hud-row"><span class="hud-key">Arrows</span><span class="hud-val" id="hud-arrows">—</span></div>
+    </aside>
+
+    <!-- Contextual instruction shown once the camera is live but tracking
+         has not locked in yet. -->
+    <div id="hint" hidden>Move your phone slowly to initialize tracking…</div>
+
+    <!-- Recenter button: resets the world origin to the current device pose
+         and re-places the arrow path in front of the user. -->
+    <button id="recenter-button" type="button" disabled>↺ Recenter</button>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
