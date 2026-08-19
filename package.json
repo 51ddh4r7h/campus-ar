@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Minimal WebAR World Tracking MVP: 8th Wall Engine + Three.js anchored directional arrows.",
+  "description": "Campus Film Hunt — a timed AR scavenger hunt. Find three movie sets on campus, catch the clapperboard reveal in world-tracking AR, and put your time on the marquee (8th Wall Engine Binary + Three.js, Tailwind-themed UI).",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -19,6 +19,10 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@types/three": "^0.185.4",
+    "autoprefixer": "^10.4.20",
+    "playwright": "^1.62.1",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
     "vite": "^8.2.1",
     "wrangler": "^4.124.0"

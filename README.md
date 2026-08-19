@@ -1,99 +1,93 @@
-# Campus AR — WebAR World Tracking MVP
+# Campus Film Hunt — AR scavenger hunt MVP
 
-A minimal, mobile-first WebAR experience that uses the **current 8th Wall Engine**
-(`@8thwall/engine-binary`) with **Three.js** for **markerless World Tracking (SLAM)**.
+A timed, onboarding scavenger hunt for new joiners. **Three real spots on
+campus** once stood in for famous films. You walk the ground with only a coarse
+**cold / warm / hot** GPS signal — never a compass, never directions — get
+prompted to **open your camera** once you're inside a spot's radius, and catch a
+cinematic **clapperboard reveal** in AR confirming the set + showing the movie.
+Three sets, one running clock, and your total time lands on the (stubbed)
+leaderboard marquee.
 
-When you press **Start Navigation**, the app:
+Built on the **current 8th Wall Engine Binary** (`@8thwall/engine-binary`) with
+**Three.js** world tracking — the Phase 1 SLAM pipeline is untouched; the arrow
+trail is gone.
 
-1. Requests camera permission.
-2. Starts 8th Wall **World Tracking** (SLAM).
-3. Renders a **transparent Three.js AR scene** over the live camera feed.
-4. Anchors a **series of directional 3D arrows** in world space a short distance in front of you.
-5. Keeps the arrows locked in place as you move the phone; use **Recenter** to reset the
-   world origin and re-place the path in front of you.
-6. Shows a small **debug HUD** with live engine / camera / tracking state.
+---
 
-No GPS, VPS, routing, maps, or authentication — this project's only job is reliable
-markerless world tracking with anchored Three.js arrows.
+## Flow (see `DESIGN.md` for the design system)
 
-> **Which engine is this?** This uses the current
-> [8th Wall Engine Binary](https://8thwall.org/docs/engine/overview)
-> (`@8thwall/engine-binary`), **not** the archived `8thwall/web` repo. World Tracking is
-> added by the engine's `slam` chunk, which registers the classic
-> `XR8.XrController` / `XR8.Threejs` / `XR8.addCameraPipelineModules` API.
+```
+Start screen → Hunt (GPS warmth, no directions)
+  → inside a spot's radius → "Open camera"
+  → tracking NORMAL + inside for ≥2 s → REVEAL
+    (in-world clapperboard claps + spotlight + info panel + split time)
+  × 3 → Summary (total time, splits, name entry → stubbed leaderboard)
+```
+
+- **No arrows, no waypoints, no turn-by-turn.** The proximity gate only says how
+  *warm* you are (bands: >100 m Cold · 55–100 Chilly · 25–55 Warm · <25 Hot ·
+  inside the radius). If more than one spot is plausibly close, the signal stays
+  ambiguous and won't name a nearest spot.
+- **Timer** is wall-clock based (`Date.now()`), persists across background /
+  foreground / brief tracking loss, and survives a mid-hunt reload
+  (sessionStorage).
+- **Spot states:** `locked → unlocked → found`. Once found, a spot can never
+  re-reveal ("already in the can" toast instead).
+- **Leaderboard is stubbed** — `submitScore()` in `src/leaderboard.ts` is the only
+  call the app makes. Swap its body for a real backend later without touching
+  anything else.
 
 ---
 
 ## Stack
 
-| Piece            | Choice                              | Why                                                                 |
-| ---------------- | ----------------------------------- | ------------------------------------------------------------------- |
-| Language         | TypeScript (`strict`)               | Type safety for the XR8 API surface.                                |
-| Bundler/dev srv  | Vite (v8)                           | Instant dev server, trivial config, static build.                   |
-| AR engine        | `@8thwall/engine-binary@1`          | Current engine; `slam` chunk provides world tracking / SLAM.        |
-| 3D               | `three` (r185)                      | Scene, camera, and arrow meshes.                                    |
-| Build output     | Static files → any HTTPS host       | No server runtime needed.                                           |
+| Piece | Choice | Why |
+| --- | --- | --- |
+| Language | TypeScript (`strict`) | Type safety for the XR8 API surface |
+| UI styling | **Tailwind CSS v3** with a custom token system | `tailwind.config.js` defines the full cinema theme (see `DESIGN.md`) |
+| Bundler / dev | Vite (v8) | Instant dev server, static build |
+| AR engine | `@8thwall/engine-binary@1` | Current engine; `slam` chunk = world tracking |
+| 3D | `three` (r185) | Clapperboard reveal device + AR scene |
+| Build output | Static → any HTTPS host | No server runtime |
 
-There is **no React**, **no Next.js**, **no extra frameworks** — just plain TS modules
-and the engine's camera-pipeline plumbing.
+No frameworks beyond plain TS modules + the engine's camera-pipeline.
+
+> **Which engine?** The current [8th Wall Engine Binary](https://8thwall.org/docs/engine/overview)
+> (`@8thwall/engine-binary`), **not** the archived `8thwall/web` repo. World
+> tracking is added by the engine's `slam` chunk, which registers the classic
+> `XR8.XrController` / `XR8.Threejs` / `XR8.addCameraPipelineModules` API.
 
 ---
 
-## How the AR pipeline works (read this before editing)
+## Project layout
 
-The 8th Wall engine runs a **camera pipeline** of modules every frame.
-`src/main.ts` installs them in this order (order matters):
+| File | Responsibility |
+| --- | --- |
+| `src/main.ts` | App orchestrator: screens, proximity gate, timer, AR open/close, summary |
+| `src/ar.ts` | 8th Wall session manager (register modules once, `run`/`stop` per spot) + the "inside for ≥2 s + tracking NORMAL" trigger |
+| `src/reveal.ts` | The signature 3D **clapperboard** device + spotlight/can-flash animation |
+| `src/hunt.ts` | Hunt state machine + wall-clock timer + splits |
+| `src/location.ts` | Single geolocation source (no heading/bearing) + `?sim` simulator |
+| `src/leaderboard.ts` | **Stub** leaderboard — `submitScore()` is the swap point |
+| `src/data/spots.ts` | The 3 film spots (lat/lng/radius/movie/reveal-asset) |
+| `src/full-window-canvas.ts` | Keeps the camera canvas filling the viewport |
+| `DESIGN.md` | Token system + signature-element + motion plan |
+| `scripts/e2e-smoke.mjs` | Headless Playwright test of the full hunt flow |
+
+### Setting your real campus spots
+
+`src/data/spots.ts` ships with placeholder coordinates (a generic campus).
+Drop your own pins:
 
 ```ts
-XR8.addCameraPipelineModules([
-  XR8.GlTextureRenderer.pipelineModule(), // 1. Draws the camera feed to the canvas.
-  XR8.Threejs.pipelineModule(),           // 2. Creates the Three.js scene + camera, renders the overlay transparently.
-  XR8.XrController.pipelineModule(),      // 3. SLAM: 6DoF world tracking feed.
-  sceneModule(),                          // 4. Anchors the arrow path once tracking locks in (custom).
-  hudModule(),                            // 5. Feeds the debug HUD (custom).
-])
-```
-
-- The engine is loaded from `public/xr8/xr.js` (copied from
-  `node_modules/@8thwall/engine-binary/dist` by `vite.config.ts` on startup) with
-  `data-preload-chunks="slam"`. Because it's loaded via `<script>`, it cannot be
-  bundled by Vite and is served verbatim. The engine resolves its SLAM chunk
-  (`xr-slam.js`) and resources relative to its own URL, so **the whole `dist`
-  folder must be copied** — the config plugin does this automatically.
-- `XR8.XrController.pipelineModule()` exposes `processCpuResult.reality` with
-  `position`, `rotation`, `intrinsics`, `trackingStatus` (`NORMAL` | `LIMITED`), and
-  `trackingReason` (`INITIALIZING`, `EXCESSIVE_MOTION`, …) every frame.
-- The app waits for `trackingStatus === 'NORMAL'`, then anchors
-  `ARROW_COUNT` arrows at decreasing `-Z` positions (the "forward" direction).
-  The arrows live in a top-level `THREE.Group`, so they stay fixed in world space
-  while only the camera moves.
-- **Recenter** calls `XR8.XrController.recenter()`, which resets the world origin to
-  the device's current pose and restarts tracking; the path is cleared and re-anchored
-  in front of the user once SLAM re-locks.
-- **HUD** state comes from the pipeline's `onCameraStatusChange` (values
-  `requesting → hasStream → hasVideo`) and from `reality.trackingStatus` each frame.
-
-### Configuration knobs (`src/main.ts`)
-
-| Constant           | Default | What it controls                        |
-| ------------------ | ------- | --------------------------------------- |
-| `ARROW_COUNT`      | `5`     | Number of arrows in the path            |
-| `ARROW_SPACING`    | `1.6`   | World-unit distance between arrows      |
-| `FIRST_ARROW_DIST` | `1.4`   | Distance from the user to the first arrow |
-| `ARROW_HEIGHT`     | `0.8`   | Height of the arrows above the origin plane |
-| `ARROW_COLOR`      | `#22d3ee` | Arrow material + emissive color       |
-| `allowedDevices`   | `ANY`   | `MOBILE_AND_HEADSETS` for a production lock-down |
-
-Change the arrows' size/shape in `createArrow()` — nothing else touches the 3D scene.
-
----
-
-## Installation
-
-```bash
-# Prerequisites: Node 20+ and npm.
-cd campus-ar
-npm install
+{
+  id: 'the-quad',                   // short slug
+  name: 'The Quad',
+  lat: 37.4279, lng: -122.1706,     // ← real spot
+  radiusM: 15,                      // how close you must get to unlock
+  movie: {title: 'The Social Network', blurb: '…one-liner…'},
+  asset: {color: '#F3B93F', label: 'clip-quad-01'},
+}
 ```
 
 ---
@@ -101,141 +95,82 @@ npm install
 ## Development
 
 ```bash
-npm run dev
+npm install
+npm run dev        # http://localhost:5173 + LAN URL + tunnel-host-ready
+npm run typecheck  # tsc --noEmit
+npm run build      # production build into dist/
+npm run preview    # serve the build locally
 ```
 
-- Vite copies the engine binary into `public/xr8/` automatically on startup
-  (via the `copy-8thwall-engine-binary` plugin).
-- The dev server listens on `0.0.0.0:5173` and prints both a localhost URL and your
-  LAN IP. It also accepts tunnel hosts (`ngrok`, `cloudflared`) out of the box.
-- Visit `http://localhost:5173` on your computer — the AR screen and HUD will load.
-  Desktop browsers have no world tracking, so `trackingStatus` will stay `LIMITED` and
-  arrows won't spawn. That's expected: **this MVP targets phones.** Use the HUD to
-  verify the camera and engine states.
+### Try the whole hunt without leaving your desk (− `?sim`)
 
-Other scripts:
+`?sim` (or `?simulate`) starts a simulated GPS feed that drifts through all three
+spots and shows a **jump rail** on the hunt screen. Perfect for demos:
 
-```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # production build into dist/
-npm run preview     # serve the production build locally
 ```
+http://localhost:5173/?sim
+```
+
+- The signal starts **Cold**, then warms until each spot unlocks — no walking.
+- Headless/e2e controls are exposed on `window.__campushunt` in **dev/`?sim` only**
+  (never in production builds): `jump(spotId)`, `reveal()`, `openAr()`.
+- Automated check: `node scripts/e2e-smoke.mjs` (starts the whole flow in
+  headless Chromium against the running dev server).
 
 ---
 
-## HTTPS / local testing
+## On a real phone
 
-Camera access requires a **secure context**:
-
-- `http://localhost:5173` **is** a secure context on modern browsers — fine on
-  desktop. (Camera is still gated behind permission prompts.)
-- `http://192.168.x.x:5173` (LAN URL on a phone) is **not** a secure context —
-  camera access will be blocked.
-- Therefore, testing on a phone needs the dev server exposed over **HTTPS**.
-
----
-
-## Mobile testing (ngrok / cloudflared)
-
-**Option A — ngrok**
+Camera + location need HTTPS. `http://localhost` is fine on desktop; for a phone:
 
 ```bash
 npm run dev            # terminal 1
-ngrok http 5173        # terminal 2
+cloudflared tunnel --url http://localhost:5173   # terminal 2  (or: ngrok http 5173)
 ```
 
-Open the resulting `https://*.ngrok-free.dev` URL on your phone.
+Open the `https://…` URL on the phone, grant camera **and location**, press
+**Start the hunt**, and start walking. The HUD's last two lines show the active
+**SPOT** and its **STATE** (`locked`/`unlocked`/`found`).
 
-**Option B — cloudflared (no account needed)**
+Testing tips:
 
-```bash
-npm run dev           # terminal 1
-cloudflared tunnel --url http://localhost:5173   # terminal 2
-```
-
-Open the resulting `https://*.trycloudflare.com` URL on your phone.
-
-The Vite dev server is already configured with `allowedHosts: true`, so **no extra
-Vite config is needed** for tunnels.
-
-Testing tips on the phone:
-
-1. Grant camera permission when prompted.
-2. In a **well-lit area with texture** (not a blank wall), point at the floor and
-   press **Start Navigation**.
-3. Slowly move the phone sideways to let SLAM initialize. When the HUD shows
-   `Tracking: NORMAL`, arrows appear anchored in front of you.
-4. Walk around — the arrows stay put in world space.
-5. Tap **Recenter** to reset the origin; the path re-anchors in front of you.
+1. Start in a well-lit, textured area and move the phone slowly to lock tracking
+   (`Tracking: NORMAL`).
+2. The reveal needs you to stay inside the spot's radius for **2 continuous
+   seconds** while tracking is locked.
 
 ---
 
 ## Deployment
 
-### Cloudflare Pages (recommended)
+### Cloudflare Pages
 
-The project ships with a `wrangler.jsonc` config and a `.node-version` file
-(Cloudflare's CI reads it to pick the exact Node version: 22.16.0, which satisfies
-Vite 8's requirement).
+The repo ships `wrangler.jsonc` + `.node-version` (Node 22.16 for Vite 8).
 
-**Option A — Git integration (auto-deploy on every push)**
+- **Git integration:** Pages → Connect a Git repo → build `npm run build`,
+  output `dist`.
+- **CLI:** `npx wrangler login` then `npm run deploy`
+  (→ `https://campus-ar.pages.dev`).
 
-1. Push this repo to GitHub (done) and open the
-   [Cloudflare Pages dashboard](https://dash.cloudflare.com/).
-2. **Workers & Pages → Create → Pages → Connect to Git → select `51ddh4r7h/campus-ar`**.
-3. In **Build settings**:
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-4. Click **Save and Deploy**.
-5. On first transfer, download and install the **cloudflared** daemon once, then click
-   **Get site**; the production URL is typically `https://campus-ar.pages.dev`.
+The engine binary at `public/xr8/` is gitignored; the Vite build re-copies it
+from `node_modules`, so CI builds from a fresh clone work.
 
-> The engine binary (`public/xr8/`) is gitignored, so it is **not** in the repo —
-> the Vite build copies it from `node_modules` automatically, so CI builds work from
-> a fresh clone.
-
-**Option B — Wrangler CLI (currently not signed in on this machine)**
-
-```bash
-npx wrangler login                 # opens a browser to authenticate your Cloudflare account
-npm run deploy                     # builds dist/ and uploads it → https://campus-ar.pages.dev
-npm run deploy:preview             # deploy a preview branch (draft URL) instead
-```
-
-### Any other static host
-
-The build is fully static — Netlify, Vercel, GitHub Pages, S3, nginx all work.
-
-```bash
-npm run build
-```
-
-- Output: `dist/`
-- The engine binary is at `dist/xr8/` (copied automatically during build).
-- `base: './'` is already set, so the app can be served from `/` or a sub-path.
-
-Notes:
-
-- **HTTPS is mandatory** for camera access on phones. Most static hosts provide it
-  for free.
-- No API keys are required anywhere — the engine binary is self-contained.
-- The engine shows its own "Powered by 8th Wall" branding; see
-  [Attribution Guidelines](https://8thwall.org/docs/open-source) and the
-  [engine license](https://github.com/8thwall/engine/blob/main/LICENSE) for acceptable use.
+Any static HTTPS host works too (`base: './'`, engine served verbatim from
+`dist/xr8/`). No API keys required.
 
 ---
 
 ## Troubleshooting
 
-| Symptom                                          | Likely cause / fix                                                            |
-| ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| HUD shows `Engine: engine not loaded`            | `npm install` didn't run, or `public/xr8/` is missing. Restart `vite`.         |
-| Camera permission prompt never appears           | Visiting via plain `http://` on a non-localhost host — use HTTPS (tunnel).     |
-| HUD shows `Tracking: LIMITED` / `INITIALIZING` forever | Not enough visual texture, too dark, or phone is still. Move the phone slowly; aim at a textured area. |
-| Tracking drops while walking                     | SLAM under poor lighting / low texture; move to better conditions.             |
-| No arrows but tracking is `NORMAL`               | The path was placed at the first lock; tap **Recenter** or reload.             |
-| Works nowhere on desktop                         | World tracking requires a mobile-class device; this is a phone-first MVP.      |
-| Black/blank canvas                               | Check the browser console; a failed `xr.js` load usually logs clearly.         |
+| Symptom | Likely cause / fix |
+| --- | --- |
+| HUD shows `Engine: engine not loaded` | `npm install` didn't run / `public/xr8/` missing — restart Vite. |
+| Camera never prompts | Plain `http://` on non-localhost — use an HTTPS tunnel. |
+| Location error button shown | Location permission denied; tap **Enable location** to re-ask. |
+| Signal stays `Cold` while walking | Wrong/last-known coords, or the spot list in `spots.ts` needs your campus coords. |
+| Tracking stuck `LIMITED` | Too dark / no texture — move to a textured, well-lit area. |
+| Reveal never fires | Must be inside the radius *and* tracking `NORMAL` for 2 s consecutively. |
+| Works nowhere on desktop | World tracking is phone-first; desktop gets a `Desktop 3D (dev)` session. |
 
 ---
 
@@ -244,5 +179,4 @@ Notes:
 - Engine docs: <https://8thwall.org/docs/engine/overview>
 - API reference: <https://8thwall.org/docs/api/engine/xr8>
 - Official three.js world-effects example: <https://github.com/8thwall/threejs-world-effects-example>
-- Engine binary license: <https://github.com/8thwall/engine/blob/main/LICENSE>
-- Open-source engine (no SLAM): <https://github.com/8thwall/8thwall/tree/main/packages/engine>
+- Engine license: <https://github.com/8thwall/engine/blob/main/LICENSE>

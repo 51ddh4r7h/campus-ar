@@ -1,331 +1,640 @@
 /**
- * Campus AR — minimal WebAR World Tracking MVP.
+ * Campus Film Hunt — app orchestrator.
  *
- * Pipeline (current 8th Wall Engine Binary API, see https://8thwall.org/docs/engine/overview):
- *   1. The engine binary loads via <script> in index.html (data-preload-chunks="slam"),
- *      which registers XR8.XrController (SLAM / world tracking). We await XR8Promise
- *      exported by the @8thwall/engine-binary npm package.
- *   2. "Start Navigation" -> XR8.run() requests camera permission and opens the feed.
- *   3. Camera pipeline modules run every frame:
- *        - GlTextureRenderer draws the camera feed to the canvas.
- *        - Threejs.pipelineModule creates the Three.js scene + camera, renders the
- *          transparent AR overlay, and keeps the scene camera synced to the XrController.
- *        - XrController.pipelineModule enables SLAM and exposes `processCpuResult.reality`
- *          with position/rotation/intrinsics/trackingStatus.
- *        - Two custom modules below: one builds the arrow path, one feeds the debug HUD.
- *   4. Once SLAM reaches trackingStatus 'NORMAL', we anchor a straight line of arrows
- *      in world space a short distance in front of the user.
- *   5. "Recenter" resets the world origin to the device's current pose and re-places
- *      the arrow path in front of the user.
+ * Torches the "navigation" concept from Phase 1 (no arrows, no directions) and
+ * replaces it with a *coarse proximity gate* + the AR clapperboard reveal.
+ *
+ * Flow: start screen → hunt (GPS warmth only) → open camera inside a spot's
+ * radius → tracking locks + ≥2 s inside → reveal (3D slate + info panel) →
+ * all three spots → summary (splits, name entry, stub leaderboard).
  */
-import {XR8Promise} from '@8thwall/engine-binary'
-import * as THREE from 'three'
+
 import './style.css'
-import {fullWindowCanvasModule} from './full-window-canvas'
-import type {Xr8, Xr8CameraPipelineModule, Xr8RealityFrameData} from './types/xr8'
+import {XR8Promise} from '@8thwall/engine-binary'
+import {createArControl} from './ar'
+import {FILM_SPOTS, type FilmSpot} from './data/spots'
+import {createHunt, formatClock, type HuntController} from './hunt'
+import {fetchLeaderboard, submitScore, type ScoreEntry} from './leaderboard'
+import {
+  distanceM,
+  startRealLocation,
+  startSimulatedFixer,
+  wantsSimulation,
+  type GeoFix,
+  type LocationController,
+} from './location'
+import type {Xr8RealityFrameData} from './types/xr8'
 
-// The engine's Threejs pipeline module reads a global THREE object (the official
-// example does the same). This must be set before XR8.Threejs.pipelineModule() runs.
-window.THREE = THREE
+// ------------------------------------------------------------------ DOM
+const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id.replace(/^#/, '')) as T
 
-// ---------------------------------------------------------------------------
-// DOM
-// ---------------------------------------------------------------------------
+const startScreen = $('#screen-start')
+const huntScreen = $('#screen-hunt')
+const summaryScreen = $('#screen-summary')
+const arChrome = $('#ar-chrome')
+const revealPanel = $('#reveal-panel')
 
-const canvas = document.querySelector<HTMLCanvasElement>('#camerafeed')!
-const startOverlay = document.querySelector<HTMLDivElement>('#start-overlay')!
-const startButton = document.querySelector<HTMLButtonElement>('#start-button')!
-const startError = document.querySelector<HTMLParagraphElement>('#start-error')!
-const recenterButton = document.querySelector<HTMLButtonElement>('#recenter-button')!
-const hint = document.querySelector<HTMLDivElement>('#hint')!
+const startButton = $('#start-button') as HTMLButtonElement
+const openArBtn = $('#open-ar-btn') as HTMLButtonElement
+const huntHint = $('#hunt-hint')
+const gpsErrorBtn = $('#gps-error-btn') as HTMLButtonElement
+const signalLabel = $('#signal-label')
+const signalBand = $('#signal-band')
+const signalCopy = $('#signal-copy')
+const signalSpot = $('#signal-spot')
+const signalMeter = $('#signal-meter')
+const spotList = $('#spot-list')
+const setsChip = $('#sets-chip')
+const timerChip = $('#timer-chip')
+const simRail = $('#sim-rail')
+const revealContinueBtn = $('#reveal-continue') as HTMLButtonElement
+
 const hud = {
-  engine: document.querySelector<HTMLSpanElement>('#hud-engine')!,
-  device: document.querySelector<HTMLSpanElement>('#hud-device')!,
-  camera: document.querySelector<HTMLSpanElement>('#hud-camera')!,
-  tracking: document.querySelector<HTMLSpanElement>('#hud-tracking')!,
-  reason: document.querySelector<HTMLSpanElement>('#hud-reason')!,
-  arrows: document.querySelector<HTMLSpanElement>('#hud-arrows')!,
+  engine: $('#hud-engine'),
+  device: $('#hud-device'),
+  camera: $('#hud-camera'),
+  tracking: $('#hud-tracking'),
+  reason: $('#hud-reason'),
+  spot: $('#hud-spot'),
+  state: $('#hud-state'),
 }
+const arTimer = $('#ar-timer')
+const arHint = $('#ar-hint')
+const endArBtn = $('#end-ar-btn') as HTMLButtonElement
+const recenterBtn = $('#recenter-btn') as HTMLButtonElement
+const toastEl = $('#toast')
 
-// ---------------------------------------------------------------------------
-// Navigation path configuration — tweak these freely.
-// ---------------------------------------------------------------------------
+const summaryTotal = $('#summary-total')
+const summarySplits = $('#summary-splits')
+const leaderboardList = $('#leaderboard-list')
+const nameForm = $('#name-form') as HTMLFormElement
+const nameInput = $('#name-input') as HTMLInputElement
+const postScoreBtn = $('#post-score-btn') as HTMLButtonElement
+const scoreStatus = $('#score-status')
+const restartBtn = $('#restart-btn') as HTMLButtonElement
 
-const ARROW_COUNT = 5        // Number of arrows in the path.
-const ARROW_SPACING = 1.6    // Distance between arrows (world units).
-const FIRST_ARROW_DIST = 1.4 // Distance from the user to the first arrow.
-const ARROW_HEIGHT = 0.8     // Height of the arrows above the origin plane.
-const ARROW_COLOR = 0x22d3ee // Cyan — pops nicely against most backgrounds.
+const revealSpotName = $('#reveal-spot-name')
+const revealMovie = $('#reveal-movie')
+const revealBlurb = $('#reveal-blurb')
+const revealSplit = $('#reveal-split')
+const revealAsset = $('#reveal-asset')
+const revealAssetLabel = $('#reveal-asset-label')
+const revealKicker = $('#reveal-kicker')
 
-// ---------------------------------------------------------------------------
-// AR state.
-// ---------------------------------------------------------------------------
+// ------------------------------------------------------------------ state
+const hunt: HuntController = createHunt()
+const ar = createArControl()
 
-let XR8: Xr8 | null = null // Set once the engine script has loaded.
-let started = false         // Whether XR8.run() has been called.
+let locationCtrl: LocationController | null = null
+let lastFix: GeoFix | null = null
+let arTarget: FilmSpot | null = null // closest unfound spot the user is inside
+let toastTimer = 0
+let alreadyFoundNotified = false
+let revealFallbackTimer = 0
 
-/** Three.js scene objects, populated when the engine starts the XR scene. */
-let scene: THREE.Scene | null = null
-let renderer: THREE.WebGLRenderer | null = null
+const sim = wantsSimulation()
 
-/** Anchored arrows live in this group. Moving the phone moves the camera, not the group. */
-const arrows = new THREE.Group()
-let arrowsPlaced = false
-
-// --- 3D helpers ------------------------------------------------------------
-
-/** Builds a single arrow mesh pointing along -Z (away from the user). */
-function createArrow(): THREE.Group {
-  const arrow = new THREE.Group()
-
-  const material = new THREE.MeshStandardMaterial({
-    color: ARROW_COLOR,
-    emissive: ARROW_COLOR,
-    emissiveIntensity: 0.45,
-    roughness: 0.35,
-    metalness: 0.1,
-  })
-
-  // Arrow head (cone points +Y by default; rotate -90° about X to point -Z).
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.34, 12), material)
-  head.rotation.x = -Math.PI / 2
-
-  // Arrow shaft.
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.24, 10), material)
-  shaft.rotation.x = -Math.PI / 2
-  shaft.position.z = 0.26
-
-  arrow.add(head, shaft)
-  return arrow
-}
-
-/** Places `ARROW_COUNT` arrows in a straight line in front of the origin. */
-function placeArrowsInFront(): void {
-  for (const child of [...arrows.children]) arrows.remove(child)
-
-  for (let i = 0; i < ARROW_COUNT; i++) {
-    const arrow = createArrow()
-    arrow.position.set(0, ARROW_HEIGHT, -(FIRST_ARROW_DIST + i * ARROW_SPACING))
-    arrows.add(arrow)
-  }
-
-  arrowsPlaced = true
-  updateArrowsHud()
-  hint.hidden = true
-}
-
-// --- Debug HUD helpers -----------------------------------------------------
-
+// ------------------------------------------------------------------ helpers
 const hudValue = (el: HTMLElement, text: string, tone: '' | 'good' | 'warn' | 'bad' = ''): void => {
   el.textContent = text
-  el.classList.remove('good', 'warn', 'bad')
-  if (tone) el.classList.add(tone)
+  el.classList.remove('text-spotlight', 'text-gold', 'text-ember')
+  // Token-matched tone colours for the debug HUD value spans.
+  if (tone === 'good') el.classList.add('text-spotlight')
+  else if (tone === 'warn') el.classList.add('text-gold')
+  else if (tone === 'bad') el.classList.add('text-ember')
 }
 
-function updateArrowsHud(): void {
-  hudValue(hud.arrows, arrowsPlaced ? `${arrows.children.length} placed` : '—')
+const toast = (message: string, ms = 2600): void => {
+  const p = toastEl.querySelector('p')!
+  p.textContent = message
+  toastEl.classList.remove('hidden')
+  window.clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => toastEl.classList.add('hidden'), ms)
 }
 
-function setCameraStatus(payload: unknown): void {
-  // The modern engine passes an object like {status: 'requesting' | 'hasStream';
-  // older builds passed a plain string. Accept both.
-  const status =
-    typeof payload === 'string'
-      ? payload
-      : ((payload as {status?: string} | null | undefined)?.status ?? String(payload))
-
-  const map: Record<string, {label: string; tone: 'good' | 'warn' | 'bad'}> = {
-    requesting: {label: 'Requesting permission…', tone: 'warn'},
-    hasStream: {label: 'Stream acquired', tone: 'warn'},
-    hasVideo: {label: 'Running', tone: 'good'},
-    // Non-mobile debugging session provided by the engine when allowedDevices is ANY.
-    hasDesktop3D: {label: 'Desktop 3D (dev)', tone: 'good'},
-    failed: {label: 'Failed', tone: 'bad'},
-    'not-allowed': {label: 'Permission denied', tone: 'bad'},
-  }
-  const entry = map[status] ?? {label: status, tone: '' as const}
-  hudValue(hud.camera, entry.label, entry.tone)
-
-  // Surface the "move your phone" hint once the feed is live but not tracking yet.
-  hint.hidden = status === 'requesting'
+function showOnlyScreen(name: 'start' | 'hunt' | 'summary'): void {
+  startScreen.classList.toggle('hidden', name !== 'start')
+  huntScreen.classList.toggle('hidden', name !== 'hunt')
+  huntScreen.classList.toggle('flex', name === 'hunt')
+  summaryScreen.classList.toggle('hidden', name !== 'summary')
 }
 
-function setTrackingStatus(reality?: Xr8RealityFrameData): void {
-  const status = reality?.trackingStatus
-  const reason = reality?.trackingReason
-  if (!status) return
-
-  const reasonText = reason && reason !== 'UNSPECIFIED' ? reason : ''
-  hudValue(hud.tracking, status, status === 'NORMAL' ? 'good' : status === 'LIMITED' ? 'warn' : 'bad')
-  hudValue(hud.reason, reasonText || '—')
+function showAr(spot: FilmSpot): void {
+  startScreen.classList.add('hidden')
+  huntScreen.classList.add('hidden')
+  summaryScreen.classList.add('hidden')
+  arChrome.classList.remove('hidden')
+  revealPanel.classList.add('hidden')
+  recenterBtn.hidden = false
+  hudValue(hud.spot, spot.id)
+  hudValue(hud.state, spotStateLabel(spot.id))
+  arHint.textContent = 'Move your phone slowly to lock tracking…'
+  alreadyFoundNotified = false
 }
 
-// --- Camera pipeline modules ----------------------------------------------
+function hideAr(): void {
+  arChrome.classList.add('hidden')
+  revealPanel.classList.add('hidden')
+  huntsActiveHint()
+}
 
-/**
- * 1) Custom scene module: builds the Three.js AR scene and anchors the arrows.
- *    Runs after XR8.Threejs.pipelineModule()'s onStart, so xrScene() is ready.
- */
-const sceneModule = (): Xr8CameraPipelineModule => ({
-  name: 'ar-navigation-scene',
+const spotStateLabel = (spotId: string): string =>
+  hunt.spots.find((s) => s.spot.id === spotId)?.status ?? 'locked'
 
-  onStart: ({canvas: camCanvas}) => {
-    const xrScene = XR8!.Threejs.xrScene()
-    scene = xrScene.scene
-    renderer = xrScene.renderer
+// ------------------------------------------------------------------ meter / bands
+type Band = 0 | 1 | 2 | 3 | 4
 
-    // Transparent AR overlay: only our meshes are drawn on top of the camera feed.
-    renderer.setClearColor(0x000000, 0)
-
-    // Simple lighting so the standard-material arrows read clearly.
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9))
-    const directional = new THREE.DirectionalLight(0xffffff, 0.6)
-    directional.position.set(2, 5, 3)
-    scene.add(directional)
-
-    // The arrow path is anchored in the scene root (world space).
-    scene.add(arrows)
-
-    // Start the camera at the origin looking down -Z ("forward").
-    // XrController treats this pose as the tracking origin on frame 1.
-    if (xrScene.camera) {
-      xrScene.camera.position.set(0, 0, 0)
-      xrScene.camera.quaternion.identity()
-    }
-    XR8!.XrController.updateCameraProjectionMatrix({
-      origin: xrScene.camera.position,
-      facing: xrScene.camera.quaternion,
-    })
-
-    // Prevent scroll / pinch gestures from hijacking the AR view.
-    camCanvas.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false})
+const BAND_UI: Array<{label: string; sub: string; copy: string; tone: string}> = [
+  {
+    label: 'Cold',
+    sub: 'Shivering under the marquee',
+    copy: 'A set is out there somewhere on campus. Pick a direction — the signal will sharpen.',
+    tone: 'text-fog',
   },
-
-  onUpdate: ({processCpuResult}) => {
-    const reality = processCpuResult?.reality as Xr8RealityFrameData | undefined
-    setTrackingStatus(reality)
-
-    // Once SLAM locks in, anchor the arrow path in front of the user.
-    if (reality?.trackingStatus === 'NORMAL' && !arrowsPlaced) {
-      placeArrowsInFront()
-    }
-
-    // Gentle floating animation — the arrows bob together but stay anchored.
-    if (arrowsPlaced && arrows.children.length > 0) {
-      arrows.position.y = Math.sin(performance.now() * 0.0025) * 0.05
-    }
+  {
+    label: 'Chilly',
+    sub: 'Not far from the lobby',
+    copy: "You're in the right neighborhood. Keep wandering — the signal will rise.",
+    tone: 'text-fog',
   },
-})
+  {
+    label: 'Warm',
+    sub: 'Somewhere behind the curtain',
+    copy: 'Getting warmer. Trust your feet — slow and steady.',
+    tone: 'text-gold',
+  },
+  {
+    label: 'Hot',
+    sub: 'Right on the soundstage',
+    copy: 'Very close now. Keep your eyes open.',
+    tone: 'text-spotlight',
+  },
+  {
+    label: "You're close",
+    sub: 'Standing on a set',
+    copy: "You're standing on a set right now.",
+    tone: 'text-spotlight',
+  },
+]
 
-/**
- * 2) HUD module: tracks camera/engine state for the debug overlay.
- */
-const hudModule = (): Xr8CameraPipelineModule => ({
-  name: 'ar-debug-hud',
-  onCameraStatusChange: (status) => setCameraStatus(status),
-})
+let currentBand: Band = 0
 
-// --- Boot ------------------------------------------------------------------
-
-function startNavigation(): void {
-  if (!XR8) {
-    startError.hidden = false
-    startError.textContent = 'AR engine not loaded yet. Please wait and retry.'
-    return
+function setBand(band: Band): void {
+  currentBand = band
+  const ui = BAND_UI[band]
+  signalLabel.textContent = ui.label
+  signalLabel.className = `font-display text-7xl leading-none tracking-wider ${ui.tone}`
+  signalBand.textContent = ui.sub
+  for (const seg of Array.from(signalMeter.children)) {
+    const lit = Number((seg as HTMLElement).dataset.band) <= band
+    seg.classList.toggle('lit', lit)
   }
-  if (started) return
-  started = true
+}
 
-  startButton.disabled = true
-  startButton.textContent = 'Starting…'
+// ------------------------------------------------------------------ proximity
+const bandFromDistance = (d: number): Band => {
+  if (d > 100) return 0
+  if (d > 55) return 1
+  if (d > 25) return 2
+  return 3
+}
 
-  try {
-    // Requests camera permission and starts the camera run loop + SLAM.
-    XR8.run({
-      canvas,
-      allowedDevices: XR8.XrConfig.device().ANY, // ANY allows desktop testing; use MOBILE_AND_HEADSETS for a production lock-down.
-    })
-  } catch (err) {
-    started = false
-    startButton.disabled = false
-    startButton.textContent = 'Start Navigation'
-    const message = err instanceof Error ? err.message : String(err)
-    startError.hidden = false
-    startError.textContent = `Failed to start AR: ${message}`
+/** True when a fix is trustworthy enough to unlock a spot. */
+const reliable = (fix: GeoFix): boolean => fix.simulated || fix.accuracyM <= 60
+const isInside = (fix: GeoFix, spot: FilmSpot): boolean =>
+  reliable(fix) && distanceM(fix, spot.lat, spot.lng) <= spot.radiusM
+
+function evaluateProximity(fix: GeoFix): void {
+  lastFix = fix
+  const unfound = hunt.spots.filter((r) => r.status !== 'found')
+
+  if (unfound.length === 0) {
+    setBand(4)
     return
   }
 
-  startOverlay.classList.add('hidden')
-  recenterButton.disabled = false
-  hint.hidden = false
-  updateArrowsHud()
+  const scored = unfound
+    .map((r) => ({run: r, dist: distanceM(fix, r.spot.lat, r.spot.lng)}))
+    .sort((a, b) => a.dist - b.dist)
+  const nearest = scored[0]
+
+  // Inside any unfound spot's radius → unlock it and offer the camera.
+  if (nearest.dist <= nearest.run.spot.radiusM && reliable(fix)) {
+    arTarget = nearest.run.spot
+    if (nearest.run.status === 'locked') hunt.setUnlocked(nearest.run.spot.id)
+    setBand(4)
+  } else {
+    arTarget = null
+    setBand(bandFromDistance(nearest.dist))
+
+    // Ambiguity rule: only name a spot when it is clearly the closest
+    // (second-closest is >45 m behind). Otherwise stay generic.
+    const second = scored[1]
+    const clear = second === undefined || second.dist - nearest.dist > 45
+    if (clear && nearest.dist <= 160) {
+      signalSpot.textContent = `Closest set on the board: ${nearest.run.spot.name}.`
+      signalSpot.classList.remove('hidden')
+    } else {
+      signalSpot.classList.add('hidden')
+    }
+  }
+
+  if (!reliable(fix)) signalCopy.textContent = 'Position is still fuzzy — hold steady for a sharper read.'
+  else if (currentBand === 4) signalCopy.textContent = `You're standing on a set right now — ${arTarget?.name ?? ''}.`
+  else signalCopy.textContent = BAND_UI[currentBand].copy
 }
 
-function recenter(): void {
-  if (!XR8 || !started) return
+function huntsActiveHint(): void {
+  const running = hunt.status === 'in_progress'
+  openArBtn.classList.toggle('hidden', !running || !arTarget)
+  if (!running) return
 
-  // Reset the world origin + facing to the device's current pose and restart tracking.
-  XR8.XrController.recenter()
-
-  // Clear the old path; it is re-anchored in front of the user once SLAM re-locks.
-  for (const child of [...arrows.children]) arrows.remove(child)
-  arrows.position.y = 0
-  arrowsPlaced = false
-  updateArrowsHud()
-
-  // Subtle haptic confirmation where supported.
-  try {
-    navigator.vibrate?.(15)
-  } catch {
-    /* no-op */
+  if (arTarget) {
+    gpsErrorBtn.classList.add('hidden')
+    huntHint.textContent = "You're standing on a set right now."
+  } else {
+    gpsErrorBtn.classList.add('hidden')
+    huntHint.textContent = 'Keep wandering — the signal will sharpen.'
   }
 }
 
-startButton.addEventListener('click', startNavigation)
-recenterButton.addEventListener('click', recenter)
+function huntsPrompt(mode: 'wander' | 'keep' | 'gps'): void {
+  if (mode === 'gps') {
+    gpsErrorBtn.classList.remove('hidden')
+    huntHint.textContent = 'Location is how we sense the campus. Allow it, then try again.'
+  } else {
+    openArBtn.classList.add('hidden')
+    gpsErrorBtn.classList.add('hidden')
+    huntHint.textContent =
+      mode === 'wander'
+        ? 'Keep wandering — the signal will sharpen.'
+        : "One just went live, but it'll wait. Wander where the signal points."
+  }
+}
 
-// --- Engine loading --------------------------------------------------------
+// ------------------------------------------------------------------ spot list UI
+function renderSpotList(): void {
+  spotList.innerHTML = ''
+  for (const run of hunt.spots) {
+    const li = document.createElement('li')
+    li.className =
+      'glass flex items-center gap-3 rounded-tile px-3.5 py-2.5 motion-safe:transition-colors motion-safe:duration-300'
+    const turn = FILM_SPOTS.indexOf(run.spot) + 1
+    li.innerHTML = `
+      <span class="font-display w-8 shrink-0 text-lg tracking-wider text-fog/50">${String(turn).padStart(2, '0')}</span>
+      <div class="min-w-0 flex-1">
+        <p class="font-display truncate text-xl tracking-wider text-chalk">${run.spot.name}</p>
+        <p class="truncate text-[11px] text-fog">${run.spot.movie.title}</p>
+      </div>
+      <span class="badge"></span>`
+    const badge = li.querySelector('.badge')!
+    if (run.status === 'found') {
+      badge.className = 'badge rounded-full border border-gold/50 bg-gold/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-spotlight'
+      badge.textContent = 'in the can'
+    } else if (run.status === 'unlocked') {
+      badge.className = 'badge rounded-full border border-ember/50 bg-ember/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-gold'
+      badge.textContent = 'live'
+    } else {
+      badge.className = 'badge rounded-full border border-line px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-fog/60'
+      badge.textContent = 'off air'
+    }
+    spotList.appendChild(li)
+  }
+  const found = hunt.spots.filter((s) => s.status === 'found').length
+  setsChip.innerHTML = `Sets <span class="font-semibold text-gold">${found}/${hunt.spots.length}</span>`
+}
 
-// Device summary for the HUD.
+// ------------------------------------------------------------------ timer
+let timerInterval = 0
+function startTimerTicker(): void {
+  window.clearInterval(timerInterval)
+  timerInterval = window.setInterval(() => {
+    const t = formatClock(hunt.elapsedMs())
+    timerChip.textContent = t
+    arTimer.textContent = t
+  }, 100)
+}
+function stopTimerTicker(): void {
+  window.clearInterval(timerInterval)
+}
+
+// ------------------------------------------------------------------ location
+function findLocationTargets(): Array<{lat: number; lng: number}> {
+  return FILM_SPOTS.map((s) => ({lat: s.lat, lng: s.lng}))
+}
+
+function startLocation(): void {
+  const onFix = (fix: GeoFix): void => {
+    gpsErrorBtn.classList.add('hidden')
+    evaluateProximity(fix)
+    huntsActiveHint() // the open-camera CTA may now be live
+  }
+
+  if (sim) {
+    simRail.classList.remove('hidden')
+    simRail.classList.add('flex')
+    locationCtrl = startSimulatedFixer(findLocationTargets(), onFix)
+    return
+  }
+
+  if (!navigator.geolocation) {
+    huntsPrompt('gps')
+    return
+  }
+
+  locationCtrl = startRealLocation(onFix, (code) => {
+    if (code === 1) huntsPrompt('gps')
+  })
+}
+
+/**
+ * Dev/sim: teleport the "GPS" signal to a spot and hold it there. Stops the
+ * auto-drift simulator so manual testing stays deterministic.
+ */
+function manualJump(spot: FilmSpot): void {
+  locationCtrl?.stop()
+  locationCtrl = null
+  evaluateProximity({lat: spot.lat, lng: spot.lng, accuracyM: 5, simulated: true})
+  huntsActiveHint()
+}
+
+// ------------------------------------------------------------------ hunt start/restart
+function beginHunt(): void {
+  hunt.start()
+  startTimerTicker()
+  startLocation()
+  showOnlyScreen('hunt')
+  renderSpotList()
+  huntsActiveHint()
+}
+
+let pendingScore: {name: string; totalTimeMs: number; splits: ScoreEntry['splits']} | null = null
+
+function goToSummary(): void {
+  stopTimerTicker()
+  showOnlyScreen('summary')
+  arTarget = null
+
+  summaryTotal.textContent = formatClock(hunt.elapsedMs())
+
+  const runs = [...hunt.spots].sort((a, b) => (a.foundAtMs ?? 0) - (b.foundAtMs ?? 0))
+  summarySplits.innerHTML = ''
+  for (const run of runs) {
+    if (run.foundAtMs === null) continue
+    const li = document.createElement('li')
+    li.className = 'glass flex items-center gap-3 rounded-tile px-3.5 py-3'
+    li.innerHTML = `
+      <span class="grid h-9 w-9 place-items-center rounded-chip bg-gold/10 font-display text-lg text-gold">${String(FILM_SPOTS.indexOf(run.spot) + 1)}</span>
+      <div class="min-w-0 flex-1">
+        <p class="font-display truncate text-xl tracking-wider text-chalk">${run.spot.name}</p>
+        <p class="truncate text-[11px] text-fog">${run.spot.movie.title}</p>
+      </div>
+      <p class="font-display shrink-0 text-2xl tracking-wider text-spotlight">${formatClock(run.splitMs ?? 0)}</p>`
+    summarySplits.appendChild(li)
+  }
+
+  pendingScore = {
+    name: '',
+    totalTimeMs: hunt.elapsedMs(),
+    splits: hunt.spots
+      .filter((s) => s.foundAtMs !== null && s.splitMs !== null)
+      .map((s) => ({
+        spotId: s.spot.id,
+        spotName: s.spot.name,
+        timeMs: s.splitMs!,
+      })),
+  }
+  renderLeaderboard()
+}
+
+function renderLeaderboard(highlightName?: string): void {
+  leaderboardList.innerHTML = ''
+  for (const [i, entry] of fetchLeaderboard().slice(0, 8).entries()) {
+    const li = document.createElement('li')
+    const highlighted = highlightName !== undefined && entry.name === highlightName
+    li.className =
+      'flex items-center gap-3 px-4 py-2.5 ' +
+      (highlighted ? 'bg-gold/10' : '')
+    li.innerHTML = `
+      <span class="w-6 font-display text-lg text-fog/60">${i + 1}</span>
+      <span class="min-w-0 flex-1 truncate font-semibold text-chalk">${escapeHtml(entry.name)}</span>
+      ${entry.splits.length ? `<span class="text-[10px] font-bold uppercase tracking-widest text-fog">${entry.splits.length}/3 sets</span>` : ''}
+      <span class="font-display text-xl tracking-wider text-spotlight">${formatClock(entry.totalTimeMs)}</span>`
+    leaderboardList.appendChild(li)
+  }
+  nameInput.value = pendingScore?.name ?? ''
+}
+
+// ------------------------------------------------------------------ AR hooks
+const inRange = (): boolean => {
+  if (!lastFix || !arTarget) return false
+  return isInside(lastFix, arTarget)
+}
+
+const arHooks = {
+  inRange,
+  onTracking(reality?: Xr8RealityFrameData): void {
+    const status = reality?.trackingStatus
+    if (status) {
+      hudValue(hud.tracking, status, status === 'NORMAL' ? 'good' : status === 'LIMITED' ? 'warn' : 'bad')
+      hudValue(hud.reason, reality?.trackingReason && reality.trackingReason !== 'UNSPECIFIED' ? reality.trackingReason : '—')
+    }
+    if (status === 'NORMAL') {
+      arHint.textContent = inRange()
+        ? "You're inside the set — hold still, the slate is about to clap."
+        : 'Step back into the set’s glow to trigger the reveal.'
+    } else if (status === 'LIMITED') {
+      arHint.textContent = 'Still finding the room — keep the phone steady.'
+    }
+    // Re-entering an already-found spot: never re-reveal, just say so.
+    const activeSpot = ar.getActiveSpot()
+    if (
+      status === 'NORMAL' &&
+      activeSpot &&
+      spotStateLabel(activeSpot.id) === 'found' &&
+      inRange() &&
+      !alreadyFoundNotified
+    ) {
+      alreadyFoundNotified = true
+      toast("That set's already in the can — enjoy the rerun.")
+    }
+  },
+
+  onCameraStatus(status: unknown): void {
+    const raw = typeof status === 'string' ? status : (status as {status?: string} | null | undefined)?.status ?? String(status)
+    const map: Record<string, {label: string; tone: '' | 'good' | 'warn' | 'bad'}> = {
+      requesting: {label: 'Requesting permission…', tone: 'warn'},
+      hasStream: {label: 'Stream acquired', tone: 'warn'},
+      hasVideo: {label: 'Running', tone: 'warn'},
+      hasDesktop3D: {label: 'Desktop 3D (dev)', tone: 'good'},
+      failed: {label: 'Failed', tone: 'bad'},
+      'not-allowed': {label: 'Permission denied', tone: 'bad'},
+    }
+    const entry = map[raw] ?? {label: raw, tone: '' as const}
+    hudValue(hud.camera, entry.label, entry.tone)
+    if (entry.tone === 'bad') toast('Camera access is needed to catch the reveal.')
+  },
+
+  onReveal(spot: FilmSpot): void {
+    hunt.reveal(spot.id)
+    hudValue(hud.state, 'found', 'good')
+    toast(`Scene found — ${spot.name}.`)
+    // If this was the final set, the continue button becomes "see results".
+    revealContinueBtn.querySelector('span')!.textContent = hunt.allFound() ? 'See your results' : 'Back to the hunt'
+    // Safety net: the panel opens on the in-scene timeline (~1.25 s), but open
+    // it anyway if rendering stalls (helps degraded devices + headless testing).
+    window.clearTimeout(revealFallbackTimer)
+    revealFallbackTimer = window.setTimeout(() => {
+      if (revealPanel.classList.contains('hidden')) openRevealPanel(spot)
+    }, 1800)
+  },
+
+  onPanelOpen(spot: FilmSpot): void {
+    openRevealPanel(spot)
+  },
+
+  onError(message: string): void {
+    toast(`AR hiccup: ${message}`)
+    endArSession()
+  },
+}
+
+function openRevealPanel(spot: FilmSpot): void {
+  window.clearTimeout(revealFallbackTimer)
+  const run = hunt.spots.find((r) => r.spot.id === spot.id)
+  revealSpotName.textContent = spot.name
+  revealMovie.textContent = spot.movie.title
+  revealBlurb.textContent = spot.movie.blurb
+  revealSplit.textContent = formatClock(run?.splitMs ?? 0)
+  revealAsset.style.backgroundColor = spot.asset.color
+  revealAssetLabel.textContent = spot.asset.label
+  revealKicker.textContent = hunt.allFound() ? 'Final scene found' : 'Scene found'
+  revealPanel.classList.remove('hidden')
+}
+
+// ------------------------------------------------------------------ AR session
+function openAr(): void {
+  if (!arTarget) return
+  showAr(arTarget)
+  ar.start(arTarget, arHooks)
+}
+
+function endArSession(): void {
+  window.clearTimeout(revealFallbackTimer)
+  ar.stop()
+  hideAr()
+  if (hunt.allFound()) {
+    goToSummary()
+  } else {
+    showOnlyScreen('hunt')
+  }
+}
+
+// ------------------------------------------------------------------ events
+startButton.addEventListener('click', beginHunt)
+openArBtn.addEventListener('click', openAr)
+endArBtn.addEventListener('click', endArSession)
+recenterBtn.addEventListener('click', () => ar.recenter())
+revealContinueBtn.addEventListener('click', endArSession)
+
+gpsErrorBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) return
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      lastFix = {lat: pos.coords.latitude, lng: pos.coords.longitude, accuracyM: pos.coords.accuracy, simulated: false}
+      evaluateProximity(lastFix)
+      huntsActiveHint()
+    },
+    () => undefined,
+    {enableHighAccuracy: true, timeout: 12000},
+  )
+  toast('Requesting a position fix…')
+})
+
+// Dev/sim: jump straight inside a spot's radius.
+for (const btn of document.querySelectorAll<HTMLButtonElement>('#sim-rail .sim-btn')) {
+  btn.addEventListener('click', () => {
+    const idx = Number(btn.dataset.sim ?? '1') - 1
+    const spot = FILM_SPOTS[Math.min(Math.max(idx, 0), FILM_SPOTS.length - 1)]
+    manualJump(spot)
+  })
+}
+
+nameForm.addEventListener('submit', (e) => {
+  e.preventDefault()
+  if (!pendingScore) return
+  const name = nameInput.value.trim()
+  if (!name) {
+    scoreStatus.textContent = 'The marquee needs a name.'
+    scoreStatus.classList.remove('hidden')
+    return
+  }
+  postScoreBtn.disabled = true
+  postScoreBtn.textContent = 'Posting…'
+  const score = pendingScore
+  const total = score.totalTimeMs
+  const splits = score.splits
+  submitScore(name, total, splits).then(() => {
+    postScoreBtn.disabled = false
+    postScoreBtn.textContent = 'Post'
+    scoreStatus.textContent = `Posted — you're on the marquee, ${name}.`
+    score.name = name
+    renderLeaderboard(name)
+  })
+})
+
+restartBtn.addEventListener('click', () => {
+  window.sessionStorage.removeItem('campus-film-hunt:v1')
+  window.location.reload()
+})
+
+// ------------------------------------------------------------------ debug HUD
 hudValue(hud.device, /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'mobile' : 'desktop')
-
-const onEngineReady = (xr8: Xr8): void => {
-  if (XR8) return // Already initialized.
-  XR8 = xr8
-
-  hudValue(hud.engine, `3D AR v${xr8.version()}`)
-  startButton.disabled = false
-  startButton.textContent = 'Start Navigation'
-
-  // Install the pipeline. Order matters:
-  //   [engine modules] -> [full-window canvas] -> [our custom scene + HUD modules]
-  XR8.addCameraPipelineModules([
-    XR8.GlTextureRenderer.pipelineModule(), // Draws the camera feed to the canvas.
-    XR8.Threejs.pipelineModule(),           // Creates the Three.js AR scene and renders it transparently.
-    XR8.XrController.pipelineModule(),      // SLAM: 6DoF world tracking.
-    fullWindowCanvasModule(),               // Sizes the canvas buffer to fill the phone viewport.
-    sceneModule(),                          // Anchors the arrow path once tracking locks in.
-    hudModule(),                            // Feeds the debug HUD.
-  ])
-}
-
-// The npm helper resolves once the engine's <script> has finished loading.
-XR8Promise.then(onEngineReady)
-
-// Fallback: the package helper can fail if the engine tag is missing; also listen
-// for the engine's own load event.
-window.addEventListener('xrloaded', () => {
-  if (window.XR8) onEngineReady(window.XR8)
+XR8Promise.then((xr8) => hudValue(hud.engine, `3D AR v${xr8.version()}`)).catch(() => {
+  hudValue(hud.engine, 'engine not loaded', 'bad')
 })
 
-// If the engine script never arrives (misconfigured deploy), say so clearly.
-setTimeout(() => {
-  if (!XR8) {
-    startButton.disabled = true
-    hudValue(hud.engine, 'engine not loaded', 'bad')
-    startError.hidden = false
-    startError.textContent =
-      'The 8th Wall engine script did not load. Did you run "npm install" and start Vite? ' +
-      'The engine lives in public/xr8/.'
+// ------------------------------------------------------------------ boot/resume
+function boot(): void {
+  switch (hunt.status) {
+    case 'in_progress':
+      startTimerTicker()
+      startLocation()
+      showOnlyScreen('hunt')
+      renderSpotList()
+      huntsActiveHint()
+      break
+    case 'complete':
+      goToSummary()
+      break
+    default:
+      showOnlyScreen('start')
   }
-}, 15000)
+}
+
+hunt.onChange(() => {
+  renderSpotList()
+  if (hunt.status === 'in_progress') huntsActiveHint()
+})
+
+boot()
+
+// Headless smoke-test / demo hook — dev & ?sim only, so real deployments
+// can't cheat the (stubbed) leaderboard by forcing reveals.
+if (sim || import.meta.env.DEV) {
+  Object.assign(window, {
+    __campushunt: {
+      jump: (spotId: string) => {
+        const spot = FILM_SPOTS.find((s) => s.id === spotId)
+        if (spot) manualJump(spot)
+      },
+      reveal: () => ar.forceReveal(),
+      openAr: () => openAr(),
+    },
+  })
+}
+
+// Small XSS guard for leaderboard names.
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]!)
+}

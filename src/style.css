@@ -1,241 +1,109 @@
-/* ---------------------------------------------------------------------------
-   Campus AR — mobile-first WebAR MVP styles.
---------------------------------------------------------------------------- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --brand: #22d3ee;
-  --brand-dark: #0e7490;
-  --good: #4ade80;
-  --warn: #fbbf24;
-  --bad: #f87171;
-  --ink: #e2e8f0;
-  --panel: rgba(15, 23, 42, 0.72);
-  --panel-border: rgba(148, 163, 184, 0.25);
+/* ===========================================================================
+   Campus Film Hunt — base styles + token-derived component classes.
+   Design tokens live in tailwind.config.js (see DESIGN.md). This file only
+   composes them; it introduces no ad-hoc arbitrary values.
+   =========================================================================== */
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    /* iOS: don't let the browser bounce/pull the viewport while in AR. */
+    position: fixed;
+    inset: 0;
+    background: #070a12;
+    color: #eae4d5;
+    font-family: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* The engine draws the camera feed + transparent AR scene into this canvas. */
+  #camerafeed {
+    touch-action: none;
+  }
+
+  button {
+    font: inherit;
+    border: none;
+    cursor: pointer;
+  }
+
+  /* Visible keyboard focus on every interactive control (accessibility bar). */
+  :focus-visible {
+    outline: 2px solid rgba(243, 185, 63, 0.75);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: rgba(243, 185, 63, 0.3);
+    color: #ffe9ae;
+  }
 }
 
-* {
-  box-sizing: border-box;
-}
+@layer components {
+  /* Accent text: burnished gold gradient, Bebas Neue display reads it best. */
+  .text-gradient-gold {
+    background-image: linear-gradient(100deg, #b97e1e 0%, #f3b93f 45%, #ffe9ae 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-  /* iOS: don't let the browser bounce/pull the viewport while in AR. */
-  position: fixed;
-  inset: 0;
-  background: #020617;
-  color: var(--ink);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
+  /* Translucent panel surface — "backstage glass". */
+  .glass {
+    @apply border border-line bg-screen/80 backdrop-blur-md;
+  }
 
-/* The engine draws the camera feed + transparent AR scene into this canvas. */
-#camerafeed {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  z-index: 0;
-  touch-action: none;
-}
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-chip border border-line bg-screen/70 px-3 py-1 text-[12px] text-fog;
+  }
 
-/* ------------------------------------------------------------------ start */
-#start-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: linear-gradient(160deg, #082f49 0%, #020617 100%);
-  z-index: 30;
-}
+  /* Primary CTA: marquee lamp. */
+  .btn-primary {
+    @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-gold px-6 text-abyss shadow-lamp transition-transform duration-150 motion-safe:active:scale-[0.97] motion-safe:hover:brightness-110;
+  }
+  .btn-primary:disabled {
+    @apply cursor-default opacity-50 shadow-haze;
+  }
 
-#start-overlay.hidden {
-  display: none;
-}
+  /* Quiet secondary / destructive action. */
+  .btn-ghost {
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full border border-line bg-screen/60 px-6 text-chalk shadow-haze transition-colors duration-150 hover:border-gold/40 hover:bg-screen;
+  }
 
-.start-card {
-  width: 100%;
-  max-width: 360px;
-  text-align: center;
-}
+  .error-box {
+    @apply rounded-chip border border-ember/50 bg-ember/10 px-3 py-2 text-[13px] leading-relaxed text-spotlight;
+  }
 
-.start-card h1 {
-  margin: 0 0 8px;
-  font-size: 1.9rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
+  .field {
+    @apply min-h-[52px] rounded-full border border-line bg-screen/70 px-5 text-[15px] font-medium text-chalk placeholder:text-fog/60;
+  }
+  .field:hover,
+  .field:focus {
+    @apply border-gold/50;
+  }
 
-.start-card .tag {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(34, 211, 238, 0.15);
-  border: 1px solid var(--brand);
-  color: var(--brand);
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  vertical-align: middle;
-}
+  /* Heat-meter segment. Lit state is applied from JS. */
+  .segment {
+    @apply h-1.5 flex-1 rounded-full bg-line transition-all duration-500 motion-reduce:transition-none;
+  }
+  .segment.lit {
+    @apply bg-gold shadow-hot;
+  }
 
-.start-card p {
-  margin: 0 0 20px;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: #94a3b8;
-}
-
-.start-card .hint {
-  margin-top: 16px;
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.start-card .error {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(248, 113, 113, 0.12);
-  border: 1px solid rgba(248, 113, 113, 0.4);
-  color: var(--bad);
-  font-size: 0.8rem;
-}
-
-/* --------------------------------------------------------------- buttons */
-button {
-  font: inherit;
-  border: none;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-#start-button {
-  width: 100%;
-  min-height: 54px;
-  border-radius: 14px;
-  background: linear-gradient(90deg, var(--brand), #38bdf8);
-  color: #062a3a;
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  box-shadow: 0 10px 30px rgba(34, 211, 238, 0.35);
-}
-
-#start-button:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-#recenter-button {
-  position: absolute;
-  right: calc(14px + env(safe-area-inset-right));
-  bottom: calc(22px + env(safe-area-inset-bottom));
-  z-index: 20;
-  min-height: 48px;
-  padding: 0 20px;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  color: var(--ink);
-  font-size: 0.9rem;
-  font-weight: 600;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-  display: none;
-}
-
-#recenter-button:not([disabled]) {
-  display: inline-block;
-}
-
-#recenter-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-#recenter-button:active {
-  background: rgba(34, 211, 238, 0.25);
-}
-
-/* -------------------------------------------------------------------- HUD */
-#hud {
-  position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
-  left: 12px;
-  z-index: 25;
-  min-width: 148px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  backdrop-filter: blur(6px);
-  pointer-events: none;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.hud-row {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-}
-
-.hud-key {
-  flex: 0 0 52px;
-  color: #94a3b8;
-  text-transform: uppercase;
-  font-size: 9px;
-  letter-spacing: 0.06em;
-}
-
-.hud-val {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ink);
-}
-
-.hud-val.good {
-  color: var(--good);
-}
-
-.hud-val.warn {
-  color: var(--warn);
-}
-
-.hud-val.bad {
-  color: var(--bad);
-}
-
-/* ---------------------------------------------------------------- hint */
-#hint {
-  position: absolute;
-  left: 50%;
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  z-index: 20;
-  width: max-content;
-  max-width: calc(100% - 32px);
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  backdrop-filter: blur(8px);
-  text-align: center;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--ink);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  .sim-btn {
+    @apply rounded-chip border border-dashed border-gold/40 bg-gold/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-gold/80;
+  }
 }

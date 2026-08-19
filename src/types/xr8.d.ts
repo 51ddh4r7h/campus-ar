@@ -116,6 +116,8 @@ export interface Xr8 {
     allowedDevices?: string
     cameraConfig?: {direction?: string}
   }): void
+  /** Ends the current camera session. A later run() restarts it. */
+  stop(): void
   addCameraPipelineModules(modules: Xr8CameraPipelineModule[]): void
   requiredPermissions(): string[]
   version(): string

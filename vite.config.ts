@@ -1,5 +1,7 @@
 import {cpSync, existsSync} from 'node:fs'
 import {resolve} from 'node:path'
+import autoprefixer from 'autoprefixer'
+import tailwindcss from 'tailwindcss'
 import {defineConfig, type Plugin} from 'vite'
 
 /**
@@ -35,6 +37,12 @@ export default defineConfig({
   base: './',
 
   plugins: [copyEngineBinary()],
+
+  css: {
+    postcss: {
+      plugins: [tailwindcss(), autoprefixer()],
+    },
+  },
 
   server: {
     // Expose on the LAN so a phone on the same network can reach the dev server.

@@ -2,16 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <!-- Mobile-first AR: fit the viewport, disable pinch-zoom/bounce on the camera view. -->
+    <!-- Phone-first: fit the viewport, disable pinch-zoom/bounce on the camera view. -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <title>Campus AR — World Tracking Navigation MVP</title>
-    <meta name="description" content="Markerless World Tracking (SLAM) with anchored Three.js navigation arrows." />
+    <title>Campus Film Hunt — AR scavenger</title>
+    <meta
+      name="description"
+      content="A timed campus scavenger hunt. Find three movie sets, catch the reveal in augmented reality, and put your time on the marquee."
+    />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AD%3C/text%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AC%3C/text%3E%3C/svg%3E"
+    />
+
+    <!-- Cinema type system (DESIGN.md §2): condensed marquee display + warm UI face. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
     />
 
     <!-- ============================================================
@@ -20,55 +31,281 @@
          - Loaded via script tag (it cannot be bundled by Vite).
          - data-preload-chunks="slam" enables World Tracking / SLAM
            (adds XR8.XrController to the global XR8 object).
-         - The files are copied from node_modules/@8thwall/engine-binary/dist
+         - Files are copied from node_modules/@8thwall/engine-binary/dist
            into public/xr8/ by vite.config.ts on startup.
-         - The engine resolves ./xr-slam.js relative to this file's URL.
     ============================================================ -->
     <script src="./xr8/xr.js" async crossorigin="anonymous" data-preload-chunks="slam"></script>
     <script>
-      // Friendly fallback if the engine file fails to load (e.g. no npm install / bad deploy).
+      // Friendly fallback if the engine file fails to load (no npm install / bad deploy).
       window.addEventListener('error', function (e) {
         const t = e.target
         if (t && t.tagName === 'SCRIPT' && /xr[^/]*\.js/.test(t.src || '')) {
-          const el = document.getElementById('engine-error')
-          if (el) el.textContent = 'Failed to load the 8th Wall engine. Check the "engine bridge" path.'
+          const el = document.getElementById('start-error')
+          if (el) el.textContent = 'Failed to load the 8th Wall engine. Re-run "npm install", then try again.'
         }
       })
     </script>
   </head>
-  <body>
-    <!-- Camera feed + AR overlay are drawn into this canvas by the 8th Wall engine. -->
-    <canvas id="camerafeed"></canvas>
 
-    <!-- Fullscreen start screen. Start Navigation both requests camera
-         permission and starts the SLAM / world tracking session. -->
-    <div id="start-overlay">
-      <div class="start-card">
-        <h1>Campus&nbsp;AR <span class="tag">MVP</span></h1>
-        <p>Aim your phone at a flat, well-lit area, then press start.</p>
-        <button id="start-button" type="button">Start Navigation</button>
-        <p id="start-error" class="error" hidden></p>
-        <p class="hint">Requires HTTPS and camera access.</p>
+  <body>
+    <!-- Camera feed + in-world AR render into this canvas (kept in the DOM always). -->
+    <canvas id="camerafeed" class="fixed inset-0 z-0 block h-full w-full touch-none" aria-hidden="true"></canvas>
+
+    <!-- ══════════════════════════════════ START SCREEN ══════════════════════════════════ -->
+    <section id="screen-start" class="fixed inset-0 z-40 overflow-hidden bg-night">
+      <div
+        class="absolute inset-0"
+        aria-hidden="true"
+        style="background: radial-gradient(120% 80% at 50% 0%, rgba(243, 185, 63, 0.14) 0%, rgba(7, 10, 18, 0) 55%), radial-gradient(90% 60% at 85% 100%, rgba(185, 126, 30, 0.12) 0%, rgba(7, 10, 18, 0) 60%)"
+      ></div>
+      <!-- faint marquee light row across the top -->
+      <div class="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-gold/10 to-transparent" aria-hidden="true"></div>
+
+      <div class="relative flex h-full flex-col justify-between px-6 pb-8" style="padding-top: max(2.5rem, env(safe-area-inset-top))">
+        <div class="pt-6">
+          <p class="chip animate-pulse-lamp w-max border-gold/40 bg-gold/10 text-gold">★ Campus Film Society presents</p>
+          <h1 class="mt-5 font-display text-[17vw] leading-[0.86] tracking-wide text-chalk">
+            Find the<br />
+            <span class="text-gradient-gold">movie sets</span>
+          </h1>
+          <p class="mt-5 max-w-[34ch] text-[15px] leading-relaxed text-fog">
+            Three spots on campus once stood in for famous films. Walk the ground — the signal only says how close
+            you are. Find a set, open your camera, and catch the reveal.
+          </p>
+        </div>
+
+        <div>
+          <ul class="mb-6 space-y-2 text-sm text-fog" aria-label="How the hunt works">
+            <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true"></span>3 sets to find — no map, no arrows, just warmth</li>
+            <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true"></span>A single clock runs until all three are found</li>
+            <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true"></span>Your total time goes up on the marquee</li>
+          </ul>
+
+          <button id="start-button" type="button" class="btn-primary w-full">
+            <span class="font-display text-xl tracking-[0.18em]">Start the hunt</span>
+          </button>
+          <p id="start-error" class="error-box mt-3 hidden"></p>
+          <p class="mt-4 text-center text-xs text-fog/70">HTTPS · camera · location access</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════ HUNT / PROXIMITY SCREEN ══════════════════════════════════ -->
+    <section id="screen-hunt" class="fixed inset-0 z-40 hidden flex-col bg-night">
+      <div
+        class="absolute inset-0"
+        aria-hidden="true"
+        style="background: radial-gradient(110% 70% at 50% 0%, rgba(243, 185, 63, 0.1) 0%, rgba(7, 10, 18, 0) 55%)"
+      ></div>
+
+      <div class="relative flex h-full flex-col px-5" style="padding-top: max(1rem, env(safe-area-inset-top))">
+        <!-- top bar -->
+        <header class="flex items-center justify-between pt-safe">
+          <p class="font-display text-lg tracking-[0.22em] text-chalk">Film Hunt</p>
+          <div class="flex items-center gap-2">
+            <span id="sets-chip" class="chip" aria-label="sets collected">Sets <span class="font-semibold text-gold">0/3</span></span>
+            <span id="timer-chip" class="chip font-mono text-spotlight" aria-live="off">00:00.0</span>
+          </div>
+        </header>
+
+        <!-- signal block -->
+        <div class="mt-10">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Signal</p>
+          <div class="mt-1 flex items-end gap-3">
+            <p id="signal-label" class="font-display text-6xl leading-none tracking-wider text-chalk" aria-live="polite">Cold</p>
+            <p id="signal-band" class="pb-1 text-xs font-medium text-fog">Shivering under the marquee</p>
+          </div>
+
+          <div id="signal-meter" class="mt-5 flex gap-1.5" role="img" aria-label="Heat meter">
+            <span class="segment" data-band="0"></span>
+            <span class="segment" data-band="1"></span>
+            <span class="segment" data-band="2"></span>
+            <span class="segment" data-band="3"></span>
+            <span class="segment" data-band="4"></span>
+          </div>
+
+          <p id="signal-copy" class="mt-5 max-w-[38ch] text-[15px] leading-relaxed text-fog" aria-live="polite">
+            A set is out there somewhere on campus. Pick a direction — the signal will sharpen.
+          </p>
+          <p id="signal-spot" class="mt-3 hidden text-sm text-spotlight/80" aria-live="polite"></p>
+        </div>
+
+        <!-- spot list -->
+        <div class="mt-auto pb-[10.5rem]">
+          <p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Your set list</p>
+          <ul id="spot-list" class="space-y-2"></ul>
+        </div>
+
+        <!-- CTA / prompts -->
+        <div class="absolute inset-x-0 bottom-0 z-10 px-5" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom))">
+          <div id="hunt-prompts">
+            <p id="hunt-hint" class="mb-3 text-center text-[13px] text-fog">Keep wandering — the signal will sharpen.</p>
+            <button id="open-ar-btn" type="button" class="btn-primary hidden w-full">
+              <span class="font-display text-xl tracking-[0.18em]">Open camera</span>
+              <span class="text-xs font-semibold uppercase tracking-widest">See the set</span>
+            </button>
+            <button id="gps-error-btn" type="button" class="btn-ghost hidden w-full">
+              <span class="font-display text-lg tracking-[0.18em]">Enable location</span>
+            </button>
+          </div>
+
+          <!-- Dev/sim rail: only rendered when the URL carries ?sim -->
+          <div id="sim-rail" class="mt-3 hidden justify-center gap-2">
+            <button type="button" class="sim-btn" data-sim="1">Jump A</button>
+            <button type="button" class="sim-btn" data-sim="2">Jump B</button>
+            <button type="button" class="sim-btn" data-sim="3">Jump C</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════ AR CHROME ══════════════════════════════════ -->
+    <div id="ar-chrome" class="pointer-events-none fixed inset-0 z-30 hidden">
+      <!-- debug HUD (quiet monospace, token-matched) -->
+      <aside
+        id="debug-hud"
+        class="glass pointer-events-auto absolute left-3 top-[max(1rem,env(safe-area-inset-top))] w-[152px] rounded-chip px-2.5 py-2 font-mono text-[10px] leading-[1.6] text-fog"
+        aria-label="Debug HUD"
+      >
+        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">ENGINE</span><span id="hud-engine" class="truncate text-chalk">loading…</span></div>
+        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">DEVICE</span><span id="hud-device" class="truncate text-chalk">—</span></div>
+        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">CAMERA</span><span id="hud-camera" class="truncate text-chalk">—</span></div>
+        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">TRACKING</span><span id="hud-tracking" class="truncate text-chalk">—</span></div>
+        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">REASON</span><span id="hud-reason" class="truncate text-chalk">—</span></div>
+        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">SPOT</span><span id="hud-spot" class="truncate text-chalk">none</span></div>
+        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">STATE</span><span id="hud-state" class="truncate text-chalk">—</span></div>
+      </aside>
+
+      <!-- end session -->
+      <button
+        id="end-ar-btn"
+        type="button"
+        class="glass pointer-events-auto absolute right-3 top-[max(1rem,env(safe-area-inset-top))] rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-chalk"
+      >
+        ✕ End
+      </button>
+
+      <!-- timer -->
+      <span
+        id="ar-timer"
+        class="glass pointer-events-auto absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] -translate-x-1/2 rounded-full px-3 py-1.5 font-mono text-sm text-spotlight"
+        aria-live="off"
+      >00:00.0</span>
+
+      <!-- bottom hint pill -->
+      <div id="ar-hint" class="glass pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 w-max max-w-[86vw] -translate-x-1/2 rounded-full px-4 py-2 text-center text-[13px] font-medium text-chalk">
+        Move your phone slowly to lock tracking…
+      </div>
+
+      <!-- recenter -->
+      <button
+        id="recenter-btn"
+        type="button"
+        class="glass pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 rounded-full px-3 py-2 text-xs font-semibold text-chalk"
+        hidden
+      >
+        ↺ Reset
+      </button>
+    </div>
+
+    <!-- ══════════════════════════════════ REVEAL PANEL (signature moment) ══════════════════════════════════ -->
+    <div id="reveal-panel" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
+      <div id="reveal-card" class="pointer-events-auto animate-panel-rise overflow-hidden rounded-panel border border-gold/30 bg-abyss/95 shadow-raise backdrop-blur-xl motion-reduce:animate-fade-in">
+        <!-- lamp strip -->
+        <div class="h-1 bg-gradient-to-r from-brass via-gold to-spotlight" aria-hidden="true"></div>
+
+        <div class="px-5 pb-6 pt-4">
+          <p id="reveal-kicker" class="font-display text-base tracking-[0.3em] text-gold">Scene found</p>
+          <h2 id="reveal-spot-name" class="mt-1 font-display text-5xl leading-[0.92] tracking-wide text-spotlight">The Quad</h2>
+
+          <div class="mt-4 border-l-2 border-gold/50 pl-3">
+            <p class="text-[10px] font-bold uppercase tracking-[0.28em] text-fog">Filmed here</p>
+            <p id="reveal-movie" class="mt-0.5 font-display text-2xl tracking-wider text-chalk">The Graduate</p>
+          </div>
+          <p id="reveal-blurb" class="mt-3 text-[14px] leading-relaxed text-fog"></p>
+
+          <div class="mt-5 flex items-center gap-3">
+            <div class="glass flex items-center gap-2 rounded-chip px-3 py-2">
+              <span class="h-6 w-6 rounded-[4px] border border-gold/40" id="reveal-asset" aria-hidden="true"></span>
+              <span class="font-mono text-[10px] leading-tight text-fog" id="reveal-asset-label"></span>
+            </div>
+            <p class="ml-auto text-right">
+              <span class="block text-[10px] font-bold uppercase tracking-[0.24em] text-fog">Found in</span>
+              <span id="reveal-split" class="font-display text-3xl leading-none tracking-wider text-gold">12.6</span>
+            </p>
+          </div>
+
+          <button id="reveal-continue" type="button" class="btn-primary mt-5 w-full">
+            <span class="font-display text-xl tracking-[0.18em]">Back to the hunt</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Small debug HUD with live engine / camera / tracking state. -->
-    <aside id="hud" aria-label="Debug HUD">
-      <div class="hud-row"><span class="hud-key">Engine</span><span class="hud-val" id="hud-engine">loading…</span></div>
-      <div class="hud-row"><span class="hud-key">Device</span><span class="hud-val" id="hud-device">—</span></div>
-      <div class="hud-row"><span class="hud-key">Camera</span><span class="hud-val" id="hud-camera">—</span></div>
-      <div class="hud-row"><span class="hud-key">Tracking</span><span class="hud-val" id="hud-tracking">—</span></div>
-      <div class="hud-row"><span class="hud-key">Reason</span><span class="hud-val" id="hud-reason">—</span></div>
-      <div class="hud-row"><span class="hud-key">Arrows</span><span class="hud-val" id="hud-arrows">—</span></div>
-    </aside>
+    <!-- toast -->
+    <div id="toast" class="pointer-events-none fixed inset-x-0 bottom-[max(6.75rem,env(safe-area-inset-bottom))] z-[60] hidden justify-center px-6" aria-live="polite">
+      <p class="glass rounded-full px-4 py-2 text-center text-[13px] font-semibold text-chalk"></p>
+    </div>
 
-    <!-- Contextual instruction shown once the camera is live but tracking
-         has not locked in yet. -->
-    <div id="hint" hidden>Move your phone slowly to initialize tracking…</div>
+    <!-- ══════════════════════════════════ SUMMARY SCREEN ══════════════════════════════════ -->
+    <section id="screen-summary" class="fixed inset-0 z-40 hidden overflow-y-auto bg-abyss">
+      <div class="relative min-h-full px-5 pb-12" style="padding-top: max(3rem, env(safe-area-inset-top))">
+        <div
+          class="pointer-events-none absolute inset-x-0 top-0 h-44"
+          aria-hidden="true"
+          style="background: radial-gradient(90% 100% at 50% 0%, rgba(243, 185, 63, 0.18) 0%, rgba(4, 6, 11, 0) 70%)"
+        ></div>
 
-    <!-- Recenter button: resets the world origin to the current device pose
-         and re-places the arrow path in front of the user. -->
-    <button id="recenter-button" type="button" disabled>↺ Recenter</button>
+        <div class="relative">
+          <p class="font-display text-lg tracking-[0.3em] text-gold">That's a wrap</p>
+          <h2 class="mt-1 font-display text-6xl leading-[0.9] tracking-wide">
+            <span class="text-gradient-gold">Hunt complete</span>
+          </h2>
+
+          <!-- total -->
+          <div class="glass mt-7 flex items-center justify-between rounded-panel px-5 py-4">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-[0.26em] text-fog">Total time</p>
+              <p id="summary-total" class="mt-1 font-display text-5xl leading-none tracking-wider text-spotlight">12:04</p>
+            </div>
+            <p class="w-max text-right text-xs leading-relaxed text-fog">All three sets<br />in the can.</p>
+          </div>
+
+          <!-- splits -->
+          <p class="mt-8 mb-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Your splits</p>
+          <ul id="summary-splits" class="space-y-2"></ul>
+
+          <!-- name + marquee -->
+          <div class="mt-8">
+            <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Carve your name onto the marquee</p>
+            <form id="name-form" class="flex gap-2">
+              <input
+                id="name-input"
+                type="text"
+                maxlength="18"
+                autocomplete="name"
+                placeholder="Your name"
+                aria-label="Your name for the leaderboard"
+                class="field flex-1"
+              />
+              <button id="post-score-btn" type="submit" class="btn-primary shrink-0 px-5">
+                <span class="font-display text-lg tracking-[0.16em]">Post</span>
+              </button>
+            </form>
+            <p id="score-status" class="mt-2 hidden text-xs text-gold" aria-live="polite"></p>
+          </div>
+
+          <div class="mt-8">
+            <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">The marquee</p>
+            <ul id="leaderboard-list" class="glass divide-y divide-line overflow-hidden rounded-panel"></ul>
+          </div>
+
+          <button id="restart-btn" type="button" class="btn-ghost mt-8 w-full">
+            <span class="font-display text-lg tracking-[0.18em]">Run it back</span>
+          </button>
+        </div>
+      </div>
+    </section>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
