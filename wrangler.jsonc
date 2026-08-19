@@ -1,0 +1,8 @@
+{
+  // Cloudflare Pages project config (used by `wrangler pages deploy`).
+  // The static site lives in ./dist (built by `npm run build`).
+  // Docs: https://developers.cloudflare.com/pages/
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "campus-ar",
+  "pages_build_output_dir": "./dist"
+}

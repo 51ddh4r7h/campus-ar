@@ -172,8 +172,39 @@ Testing tips on the phone:
 
 ## Deployment
 
-Any static HTTPS host works (Netlify, Vercel, GitHub Pages, Cloudflare Pages, S3,
-nginx…). The build is fully static.
+### Cloudflare Pages (recommended)
+
+The project ships with a `wrangler.jsonc` config and a `.node-version` file
+(Cloudflare's CI reads it to pick the exact Node version: 22.16.0, which satisfies
+Vite 8's requirement).
+
+**Option A — Git integration (auto-deploy on every push)**
+
+1. Push this repo to GitHub (done) and open the
+   [Cloudflare Pages dashboard](https://dash.cloudflare.com/).
+2. **Workers & Pages → Create → Pages → Connect to Git → select `51ddh4r7h/campus-ar`**.
+3. In **Build settings**:
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+4. Click **Save and Deploy**.
+5. On first transfer, download and install the **cloudflared** daemon once, then click
+   **Get site**; the production URL is typically `https://campus-ar.pages.dev`.
+
+> The engine binary (`public/xr8/`) is gitignored, so it is **not** in the repo —
+> the Vite build copies it from `node_modules` automatically, so CI builds work from
+> a fresh clone.
+
+**Option B — Wrangler CLI (currently not signed in on this machine)**
+
+```bash
+npx wrangler login                 # opens a browser to authenticate your Cloudflare account
+npm run deploy                     # builds dist/ and uploads it → https://campus-ar.pages.dev
+npm run deploy:preview             # deploy a preview branch (draft URL) instead
+```
+
+### Any other static host
+
+The build is fully static — Netlify, Vercel, GitHub Pages, S3, nginx all work.
 
 ```bash
 npm run build
