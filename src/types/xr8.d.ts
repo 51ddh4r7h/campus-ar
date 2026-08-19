@@ -60,8 +60,18 @@ export interface Xr8ThreejsHandle {
 export interface Xr8CameraPipelineModule {
   name: string
   onStart?: (params: {canvas: HTMLCanvasElement}) => void
+  onAttach?: (params: {
+    canvas: HTMLCanvasElement
+    orientation: number
+    videoWidth: number
+    videoHeight: number
+  }) => void
+  onDetach?: () => void
   onUpdate?: (params: {processCpuResult?: Record<string, unknown>}) => void
   onCameraStatusChange?: (status: unknown) => void
+  onVideoSizeChange?: (params: {videoWidth: number; videoHeight: number}) => void
+  onCanvasSizeChange?: () => void
+  onDeviceOrientationChange?: (params: {orientation: number}) => void
   listeners?: Array<{event: string; process: (args: {name: string; detail: unknown}) => void}>
 }
 
@@ -92,6 +102,10 @@ export interface Xr8 {
   }
   GlTextureRenderer: {
     pipelineModule(): Xr8CameraPipelineModule
+  }
+  XrDevice: {
+    isDeviceBrowserCompatible(opts: {allowedDevices: string}): boolean
+    deviceEstimate(): {model: string; os: string}
   }
   XrConfig: {
     device(): {ANY: string; DESKTOP: string; MOBILE: string; HEADSETS: string; MOBILE_AND_HEADSETS: string}

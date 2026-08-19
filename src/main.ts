@@ -21,6 +21,7 @@
 import {XR8Promise} from '@8thwall/engine-binary'
 import * as THREE from 'three'
 import './style.css'
+import {fullWindowCanvasModule} from './full-window-canvas'
 import type {Xr8, Xr8CameraPipelineModule, Xr8RealityFrameData} from './types/xr8'
 
 // The engine's Threejs pipeline module reads a global THREE object (the official
@@ -297,13 +298,14 @@ const onEngineReady = (xr8: Xr8): void => {
   startButton.textContent = 'Start Navigation'
 
   // Install the pipeline. Order matters:
-  //   [engine modules] -> [our custom scene + HUD modules]
+  //   [engine modules] -> [full-window canvas] -> [our custom scene + HUD modules]
   XR8.addCameraPipelineModules([
-    XR8.GlTextureRenderer.pipelineModule(),   // Draws the camera feed to the canvas.
-    XR8.Threejs.pipelineModule(),             // Creates the Three.js AR scene and renders it transparently.
-    XR8.XrController.pipelineModule(),        // SLAM: 6DoF world tracking.
-    sceneModule(),                            // Anchors the arrow path once tracking locks in.
-    hudModule(),                              // Feeds the debug HUD.
+    XR8.GlTextureRenderer.pipelineModule(), // Draws the camera feed to the canvas.
+    XR8.Threejs.pipelineModule(),           // Creates the Three.js AR scene and renders it transparently.
+    XR8.XrController.pipelineModule(),      // SLAM: 6DoF world tracking.
+    fullWindowCanvasModule(),               // Sizes the canvas buffer to fill the phone viewport.
+    sceneModule(),                          // Anchors the arrow path once tracking locks in.
+    hudModule(),                            // Feeds the debug HUD.
   ])
 }
 
