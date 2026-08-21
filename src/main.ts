@@ -35,9 +35,13 @@ const arChrome = $('#ar-chrome')
 const revealPanel = $('#reveal-panel')
 
 const startButton = $('#start-button') as HTMLButtonElement
+const demoStartBtn = $('#demo-start-btn') as HTMLButtonElement
 const openArBtn = $('#open-ar-btn') as HTMLButtonElement
 const huntHint = $('#hunt-hint')
 const gpsErrorBtn = $('#gps-error-btn') as HTMLButtonElement
+const demoHuntBtn = $('#demo-hunt-btn') as HTMLButtonElement
+const demoChip = $('#demo-chip')
+const envNote = $('#env-note')
 const signalLabel = $('#signal-label')
 const signalBand = $('#signal-band')
 const signalCopy = $('#signal-copy')
@@ -91,8 +95,10 @@ let arTarget: FilmSpot | null = null // closest unfound spot the user is inside
 let toastTimer = 0
 let alreadyFoundNotified = false
 let revealFallbackTimer = 0
+let fixWatchdog = 0
 
-const sim = wantsSimulation()
+// Demo flights reuse the ?sim simulator; the URL param just pre-enables it.
+let simMode = wantsSimulation()
 
 // ------------------------------------------------------------------ helpers
 const hudValue = (el: HTMLElement, text: string, tone: '' | 'good' | 'warn' | 'bad' = ''): void => {
@@ -179,6 +185,16 @@ const BAND_UI: Array<{label: string; sub: string; copy: string; tone: string}> =
 
 let currentBand: Band = 0
 
+/** No fix yet — say so instead of silently sitting on "Cold". */
+function setWaitingSignal(): void {
+  signalLabel.textContent = '···'
+  signalLabel.className = 'font-display text-7xl leading-none tracking-wider text-fog'
+  signalBand.textContent = 'Rolling the establishing shot'
+  signalCopy.textContent = 'Getting a fix on your position — hold tight.'
+  signalSpot.classList.add('hidden')
+  for (const seg of Array.from(signalMeter.children)) seg.classList.remove('lit')
+}
+
 function setBand(band: Band): void {
   currentBand = band
   const ui = BAND_UI[band]
@@ -241,11 +257,16 @@ function evaluateProximity(fix: GeoFix): void {
 
   if (!reliable(fix)) signalCopy.textContent = 'Position is still fuzzy — hold steady for a sharper read.'
   else if (currentBand === 4) signalCopy.textContent = `You're standing on a set right now — ${arTarget?.name ?? ''}.`
+  else if (!fix.simulated && nearest.dist > 2000)
+    signalCopy.textContent = 'The sets are parked on a campus kilometres from here. Run the demo flight to see the hunt.'
   else signalCopy.textContent = BAND_UI[currentBand].copy
 }
 
 function huntsActiveHint(): void {
   const running = hunt.status === 'in_progress'
+  // Demo entry stays available while really hunting (hidden once sim runs
+  // or a set is live — the camera CTA takes the floor).
+  demoHuntBtn.classList.toggle('hidden', !running || simMode || !!arTarget)
   openArBtn.classList.toggle('hidden', !running || !arTarget)
   if (!running) return
 
@@ -261,6 +282,7 @@ function huntsActiveHint(): void {
 function huntsPrompt(mode: 'wander' | 'keep' | 'gps'): void {
   if (mode === 'gps') {
     gpsErrorBtn.classList.remove('hidden')
+    demoHuntBtn.classList.toggle('hidden', simMode)
     huntHint.textContent = 'Location is how we sense the campus. Allow it, then try again.'
   } else {
     openArBtn.classList.add('hidden')
@@ -323,17 +345,23 @@ function findLocationTargets(): Array<{lat: number; lng: number}> {
   return FILM_SPOTS.map((s) => ({lat: s.lat, lng: s.lng}))
 }
 
-function startLocation(): void {
-  const onFix = (fix: GeoFix): void => {
-    gpsErrorBtn.classList.add('hidden')
-    evaluateProximity(fix)
-    huntsActiveHint() // the open-camera CTA may now be live
-  }
+const handleFix = (fix: GeoFix): void => {
+  window.clearTimeout(fixWatchdog)
+  gpsErrorBtn.classList.add('hidden')
+  evaluateProximity(fix)
+  huntsActiveHint() // the open-camera CTA may now be live
+}
 
-  if (sim) {
-    simRail.classList.remove('hidden')
-    simRail.classList.add('flex')
-    locationCtrl = startSimulatedFixer(findLocationTargets(), onFix)
+function showSimChrome(): void {
+  simRail.classList.remove('hidden')
+  simRail.classList.add('flex')
+  demoChip.classList.remove('hidden')
+}
+
+function startLocation(): void {
+  if (simMode) {
+    showSimChrome()
+    locationCtrl = startSimulatedFixer(findLocationTargets(), handleFix)
     return
   }
 
@@ -342,9 +370,39 @@ function startLocation(): void {
     return
   }
 
-  locationCtrl = startRealLocation(onFix, (code) => {
-    if (code === 1) huntsPrompt('gps')
+  // Honest "no data yet" state + a watchdog: if no fix lands in 10 s, offer a
+  // retry and the demo flight instead of sitting silently on "Cold".
+  setWaitingSignal()
+  fixWatchdog = window.setTimeout(() => {
+    if (lastFix === null) {
+      gpsErrorBtn.classList.remove('hidden')
+      huntHint.textContent = 'No position yet — check the location permission, or run the demo flight.'
+      demoHuntBtn.classList.remove('hidden')
+    }
+  }, 10000)
+
+  locationCtrl = startRealLocation(handleFix, (code) => {
+    // 1 = denied, 2 = unavailable, 3 = timeout — all dead ends without help.
+    if (code === 1 || code === 2 || code === 3) {
+      window.clearTimeout(fixWatchdog)
+      huntsPrompt('gps')
+    }
   })
+}
+
+/**
+ * Demo flight: run the same simulated GPS feed the ?sim URL uses, so the full
+ * hunt (warmth → camera → reveal → summary) is demoable far from campus.
+ */
+function startDemoFlight(): void {
+  simMode = true
+  window.clearTimeout(fixWatchdog)
+  locationCtrl?.stop()
+  gpsErrorBtn.classList.add('hidden')
+  showSimChrome()
+  locationCtrl = startSimulatedFixer(findLocationTargets(), handleFix)
+  toast('Demo flight rolling — follow the signal to each set.', 3200)
+  huntsActiveHint()
 }
 
 /**
@@ -532,6 +590,11 @@ function endArSession(): void {
 
 // ------------------------------------------------------------------ events
 startButton.addEventListener('click', beginHunt)
+demoStartBtn.addEventListener('click', () => {
+  beginHunt()
+  startDemoFlight()
+})
+demoHuntBtn.addEventListener('click', startDemoFlight)
 openArBtn.addEventListener('click', openAr)
 endArBtn.addEventListener('click', endArSession)
 recenterBtn.addEventListener('click', () => ar.recenter())
@@ -594,6 +657,16 @@ XR8Promise.then((xr8) => hudValue(hud.engine, `3D AR v${xr8.version()}`)).catch(
   hudValue(hud.engine, 'engine not loaded', 'bad')
 })
 
+// In-app browsers (social-app webviews, custom tabs) frequently block
+// geolocation and camera — warn before the hunt dead-ends.
+const inAppBrowser =
+  /FBAN|FBAV|FBSV|Instagram|Discord|Line\/|Snapchat|musical_ly|Bytedance|Twitter|TikTok/i.test(navigator.userAgent)
+if (inAppBrowser) {
+  envNote.textContent =
+    'Heads up: in-app browsers often block camera + GPS. Open this link in Chrome or Safari for the full hunt.'
+  envNote.classList.remove('hidden')
+}
+
 // ------------------------------------------------------------------ boot/resume
 function boot(): void {
   switch (hunt.status) {
@@ -619,9 +692,9 @@ hunt.onChange(() => {
 
 boot()
 
-// Headless smoke-test / demo hook — dev & ?sim only, so real deployments
+// Headless smoke-test / demo hook — dev & sim only, so real deployments
 // can't cheat the (stubbed) leaderboard by forcing reveals.
-if (sim || import.meta.env.DEV) {
+if (simMode || import.meta.env.DEV) {
   Object.assign(window, {
     __campushunt: {
       jump: (spotId: string) => {

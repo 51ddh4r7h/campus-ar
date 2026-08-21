@@ -84,7 +84,11 @@
           <button id="start-button" type="button" class="btn-primary w-full">
             <span class="font-display text-xl tracking-[0.18em]">Start the hunt</span>
           </button>
+          <button id="demo-start-btn" type="button" class="btn-ghost mt-3 w-full">
+            <span class="text-xs font-semibold uppercase tracking-[0.2em]">Not on campus? Watch the demo flight</span>
+          </button>
           <p id="start-error" class="error-box mt-3 hidden"></p>
+          <p id="env-note" class="error-box mt-3 hidden"></p>
           <p class="mt-4 text-center text-xs text-fog/70">HTTPS · camera · location access</p>
         </div>
       </div>
@@ -103,6 +107,7 @@
         <header class="flex items-center justify-between pt-safe">
           <p class="font-display text-lg tracking-[0.22em] text-chalk">Film Hunt</p>
           <div class="flex items-center gap-2">
+            <span id="demo-chip" class="chip hidden border-ember/60 bg-ember/10 text-gold">Demo</span>
             <span id="sets-chip" class="chip" aria-label="sets collected">Sets <span class="font-semibold text-gold">0/3</span></span>
             <span id="timer-chip" class="chip font-mono text-spotlight" aria-live="off">00:00.0</span>
           </div>
@@ -146,6 +151,9 @@
             </button>
             <button id="gps-error-btn" type="button" class="btn-ghost hidden w-full">
               <span class="font-display text-lg tracking-[0.18em]">Enable location</span>
+            </button>
+            <button id="demo-hunt-btn" type="button" class="btn-ghost mt-2 hidden w-full">
+              <span class="text-xs font-semibold uppercase tracking-[0.2em]">Not on campus? Run the demo flight</span>
             </button>
           </div>
 

@@ -124,6 +124,43 @@ try {
   // 10. Environment assertions: block engine-only noise, fail on our module errors.
   const ours = moduleErrors.filter((e) => /campus-ar|main\.ts|hunt\.js|reveal\.js|leaderboard|location\.js/.test(e))
   check('no app-module console errors', ours.length === 0, ours.join(' | ').slice(0, 300))
+
+  // ── Scenario 2: the "stranger with a link" path — NO ?sim, geolocation
+  // denied (headless default). The hunt must stay demoable via the visible
+  // demo-flight button. This is the exact flow that used to dead-end on Cold.
+  const page2 = await browser.newPage({viewport: {width: 390, height: 844}})
+  const prodUrl = BASE.replace(/[?&](sim|simulate)=?/, '').replace(/\?$/, '')
+  await page2.goto(prodUrl, {waitUntil: 'domcontentloaded'})
+  try {
+    await page2.click('#start-button')
+    await page2.waitForFunction(() => !document.getElementById('screen-hunt').classList.contains('hidden'))
+    // No fix yet (permission denied fast) → honest waiting state or retry prompt,
+    // and the demo entry must be reachable either way.
+    await page2.waitForSelector('#demo-hunt-btn', {state: 'visible', timeout: 12000})
+    check('prod: demo-flight entry visible without ?sim', true)
+    const label = await page2.textContent('#signal-label')
+    check(
+      'prod: honest no-fix signal state',
+      label?.includes('···') || (await page2.locator('#gps-error-btn').isVisible()),
+      label ?? '',
+    )
+
+    await page2.click('#demo-hunt-btn')
+    await page2.waitForFunction(() => !document.getElementById('demo-chip').classList.contains('hidden'))
+    check('prod: demo chip shown', true)
+    await page2.waitForFunction(
+      () => document.getElementById('signal-label').textContent.includes("You're close"),
+      null,
+      {timeout: 20000},
+    )
+    check('prod: demo flight walks signal to a set', true)
+    check('prod: open-camera CTA appears from demo', await page2.locator('#open-ar-btn').isVisible())
+    check('prod: sim rail available for demos', !(await hidden(page2, '#sim-rail')))
+  } catch (err) {
+    check('prod demo flight completed', false, String(err))
+  } finally {
+    await page2.close()
+  }
 } catch (err) {
   check('e2e script completed', false, String(err))
 } finally {

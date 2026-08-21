@@ -111,11 +111,21 @@ spots and shows a **jump rail** on the hunt screen. Perfect for demos:
 http://localhost:5173/?sim
 ```
 
+**No URL tricks needed:** the start screen has a **"Not on campus? Watch the demo
+flight"** button, and the hunt screen offers **"Run the demo flight"** whenever
+you're hunting with real GPS (e.g. you're kilometres from the sets). Both run the
+same simulator — full flow works anywhere, and a `Demo` chip marks the run.
+
 - The signal starts **Cold**, then warms until each spot unlocks — no walking.
+- With real GPS, a fix that never lands shows an honest `···` waiting state; after
+  10 s you get a retry prompt instead of a silent dead end.
+- Kilometres from every set? The copy says so outright and points at the demo.
+- In-app browsers (Instagram/Discord/etc.) get a warning to reopen in Chrome/Safari.
 - Headless/e2e controls are exposed on `window.__campushunt` in **dev/`?sim` only**
   (never in production builds): `jump(spotId)`, `reveal()`, `openAr()`.
 - Automated check: `node scripts/e2e-smoke.mjs` (starts the whole flow in
-  headless Chromium against the running dev server).
+  headless Chromium against the running dev server — including the no-`?sim`
+  demo-flight path).
 
 ---
 
