@@ -173,6 +173,26 @@ export function createHunt(): HuntController {
       return spots.every((s) => s.status === 'found')
     },
 
+    /** Found spots ordered by reveal time — the summary's split rows. */
+    splits() {
+      return [...spots]
+        .filter((s) => s.foundAtMs !== null && s.splitMs !== null)
+        .sort((a, b) => (a.foundAtMs ?? 0) - (b.foundAtMs ?? 0))
+        .map((r) => ({index: FILM_SPOTS.indexOf(r.spot) + 1, spot: r.spot, ms: r.splitMs!}))
+    },
+
+    /** Split for one spot (0 when not yet found) — the reveal panel's clock. */
+    splitFor(spotId: string): number {
+      return spots.find((s) => s.spot.id === spotId)?.splitMs ?? 0
+    },
+
+    /** The score payload the marquee persists. */
+    scoreSplits(): SplitEntry[] {
+      return spots
+        .filter((s) => s.foundAtMs !== null && s.splitMs !== null)
+        .map((s) => ({spotId: s.spot.id, spotName: s.spot.name, timeMs: s.splitMs!}))
+    },
+
     onChange(cb: () => void) {
       listeners.push(cb)
       return () => {
@@ -195,6 +215,12 @@ export interface HuntController {
   setUnlocked(spotId: string): void
   reveal(spotId: string): void
   allFound(): boolean
+  /** Found spots ordered by reveal time — the summary's split rows. */
+  splits(): Array<{index: number; spot: FilmSpot; ms: number}>
+  /** Split for one spot (0 when not yet found) — the reveal panel's clock. */
+  splitFor(spotId: string): number
+  /** The score payload the marquee persists. */
+  scoreSplits(): SplitEntry[]
   onChange(cb: () => void): () => void
 }
 

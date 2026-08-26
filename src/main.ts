@@ -294,13 +294,7 @@ function goToSummary(): void {
   pendingScore = {
     name: '',
     totalTimeMs: hunt.elapsedMs(),
-    splits: hunt.spots
-      .filter((s) => s.foundAtMs !== null && s.splitMs !== null)
-      .map((s) => ({
-        spotId: s.spot.id,
-        spotName: s.spot.name,
-        timeMs: s.splitMs!,
-      })),
+    splits: hunt.scoreSplits(),
   }
   renderMarquee()
 }
@@ -309,15 +303,12 @@ function renderMarquee(highlightName?: string): void {
   summary.render(
     {
       totalMs: hunt.elapsedMs(),
-      splits: [...hunt.spots]
-        .filter((r) => r.foundAtMs !== null && r.splitMs !== null)
-        .sort((a, b) => (a.foundAtMs ?? 0) - (b.foundAtMs ?? 0))
-        .map((r) => ({
-          index: FILM_SPOTS.indexOf(r.spot) + 1,
-          name: r.spot.name,
-          movie: r.spot.movie.title,
-          ms: r.splitMs ?? 0,
-        })),
+      splits: hunt.splits().map((s) => ({
+        index: s.index,
+        name: s.spot.name,
+        movie: s.spot.movie.title,
+        ms: s.ms,
+      })),
       entries: fetchLeaderboard().slice(0, 8),
     },
     highlightName,
@@ -399,11 +390,10 @@ const arHooks = {
 
 function openRevealPanel(spot: FilmSpot): void {
   window.clearTimeout(revealFallbackTimer)
-  const run = hunt.spots.find((r) => r.spot.id === spot.id)
   revealSpotName.textContent = spot.name
   revealMovie.textContent = spot.movie.title
   revealBlurb.textContent = spot.movie.blurb
-  revealSplit.textContent = formatClock(run?.splitMs ?? 0)
+  revealSplit.textContent = formatClock(hunt.splitFor(spot.id))
   revealAsset.style.backgroundColor = spot.asset.color
   revealAssetLabel.textContent = spot.asset.label
   revealKicker.textContent = hunt.allFound() ? 'Final scene found' : 'Scene found'
