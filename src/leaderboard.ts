@@ -26,10 +26,23 @@ const MOCK_SCORES: ScoreEntry[] = [
   {name: 'Sofia', totalTimeMs: 6 * 60000 + 16000, splits: [], timestamp: Date.now() - 86400000},
 ]
 
+/** True when the decoded value carries the full marquee-entry contract. */
+const isScoreEntry = (value: Partial<ScoreEntry> | null | undefined): value is ScoreEntry =>
+  value !== null &&
+  value !== undefined &&
+  typeof value.name === 'string' &&
+  typeof value.totalTimeMs === 'number' &&
+  typeof value.timestamp === 'number' &&
+  Array.isArray(value.splits)
+
+const isScoreEntryList = (value: Partial<ScoreEntry>[] | null | undefined): value is ScoreEntry[] =>
+  Array.isArray(value) && value.every(isScoreEntry)
+
 const load = (): ScoreEntry[] => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    const stored = raw ? (JSON.parse(raw) as ScoreEntry[]) : []
+    const parsed = raw ? JSON.parse(raw) : []
+    const stored = isScoreEntryList(parsed) ? parsed : []
     return [...MOCK_SCORES, ...stored].sort((a, b) => a.totalTimeMs - b.totalTimeMs)
   } catch {
     return [...MOCK_SCORES]

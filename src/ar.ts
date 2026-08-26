@@ -15,7 +15,7 @@ import * as THREE from 'three'
 import {fullWindowCanvasModule} from './full-window-canvas'
 import type {FilmSpot} from './data/spots'
 import {createRevealDevice, type RevealDevice} from './reveal'
-import type {Xr8, Xr8CameraPipelineModule, Xr8RealityFrameData, Xr8ThreejsHandle} from './types/xr8'
+import type {Xr8, Xr8CameraPipelineModule, Xr8RealityFrameData, Xr8ThreejsHandle, XrCameraStatusData} from './types/xr8'
 
 // The engine's Threejs pipeline module reads a global THREE object (the official
 // example does the same). Must be set before XR8.Threejs.pipelineModule() runs.
@@ -26,7 +26,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#camerafeed')!
 export interface ArHooks {
   /** Every frame with the tracking reality frame. */
   onTracking(reality?: Xr8RealityFrameData): void
-  onCameraStatus(status: unknown): void
+  onCameraStatus(status: XrCameraStatusData): void
   /** Fired the instant the reveal triggers (mark the spot found, HUD, toast). */
   onReveal(spot: FilmSpot): void
   /** Fired ~1.25 s later, when the clapperboard presents — open the DOM panel. */
@@ -110,6 +110,8 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     renderer.setClearColor(0x000000, 0)
 
     // Install stage lighting once per scene lifecycle.
+    // SAFETY: scene.userData is engine-provided storage; `stageLit` is a key
+    // this module owns and the only one it reads back.
     const meta = scene.userData as {stageLit?: boolean}
     if (!meta.stageLit) {
       scene.add(new THREE.AmbientLight(0xffffff, 1.05))
@@ -134,7 +136,7 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
   },
 
   onUpdate: ({processCpuResult}) => {
-    const reality = processCpuResult?.reality as Xr8RealityFrameData | undefined
+    const reality = processCpuResult?.reality
     const session = active
     if (session) session.hooks.onTracking(reality)
 
@@ -193,9 +195,9 @@ export const createArControl = (): ArControl => ({
           allowedDevices: xr8.XrConfig.device().ANY, // ANY lets desktop dev-servers test; tighten at prod.
         })
       })
-      .catch((err: unknown) => {
+      .catch((cause: unknown) => {
         active = null
-        hooks.onError(err instanceof Error ? err.message : String(err))
+        hooks.onError(cause instanceof Error ? cause.message : String(cause))
       })
   },
 

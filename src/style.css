@@ -16,6 +16,7 @@
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
+    color-scheme: dark;
     /* iOS: don't let the browser bounce/pull the viewport while in AR. */
     position: fixed;
     inset: 0;
@@ -97,7 +98,7 @@
 
   /* Heat-meter segment. Lit state is applied from JS. */
   .segment {
-    @apply h-1.5 flex-1 rounded-full bg-line transition-all duration-500 motion-reduce:transition-none;
+    @apply h-1.5 flex-1 rounded-full bg-line transition-[background-color,box-shadow] duration-500 motion-reduce:transition-none;
   }
   .segment.lit {
     @apply bg-gold shadow-hot;

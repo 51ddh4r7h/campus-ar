@@ -5,9 +5,10 @@
     <!-- Phone-first: fit the viewport, disable pinch-zoom/bounce on the camera view. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>Campus Film Hunt — AR scavenger</title>
+    <meta name="theme-color" content="#070a12" />
     <meta
       name="description"
       content="A timed campus scavenger hunt. Find three movie sets, catch the reveal in augmented reality, and put your time on the marquee."
@@ -63,8 +64,8 @@
 
       <div class="relative flex h-full flex-col justify-between px-6 pb-8" style="padding-top: max(2.5rem, env(safe-area-inset-top))">
         <div class="pt-6">
-          <p class="chip animate-pulse-lamp w-max border-gold/40 bg-gold/10 text-gold">★ Campus Film Society presents</p>
-          <h1 class="mt-5 font-display text-[17vw] leading-[0.86] tracking-wide text-chalk">
+          <p class="chip motion-safe:animate-pulse-lamp w-max border-gold/40 bg-gold/10 text-gold">★ Campus Film Society presents</p>
+          <h1 class="mt-5 text-balance font-display text-[17vw] leading-[0.86] tracking-wide text-chalk">
             Find the<br />
             <span class="text-gradient-gold">movie sets</span>
           </h1>
@@ -105,7 +106,7 @@
       <div class="relative flex h-full flex-col px-5" style="padding-top: max(1rem, env(safe-area-inset-top))">
         <!-- top bar -->
         <header class="flex items-center justify-between pt-safe">
-          <p class="font-display text-lg tracking-[0.22em] text-chalk">Film Hunt</p>
+          <h1 class="font-display text-lg tracking-[0.22em] text-chalk">Film Hunt</h1>
           <div class="flex items-center gap-2">
             <span id="demo-chip" class="chip hidden border-ember/60 bg-ember/10 text-gold">Demo</span>
             <span id="sets-chip" class="chip" aria-label="sets collected">Sets <span class="font-semibold text-gold">0/3</span></span>
@@ -217,7 +218,7 @@
     </div>
 
     <!-- ══════════════════════════════════ REVEAL PANEL (signature moment) ══════════════════════════════════ -->
-    <div id="reveal-panel" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
+    <div id="reveal-panel" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))" aria-live="polite">
       <div id="reveal-card" class="pointer-events-auto animate-panel-rise overflow-hidden rounded-panel border border-gold/30 bg-abyss/95 shadow-raise backdrop-blur-xl motion-reduce:animate-fade-in">
         <!-- lamp strip -->
         <div class="h-1 bg-gradient-to-r from-brass via-gold to-spotlight" aria-hidden="true"></div>
@@ -265,10 +266,10 @@
         ></div>
 
         <div class="relative">
-          <p class="font-display text-lg tracking-[0.3em] text-gold">That's a wrap</p>
-          <h2 class="mt-1 font-display text-6xl leading-[0.9] tracking-wide">
+          <p class="font-display text-lg tracking-[0.3em] text-gold">That’s a wrap</p>
+          <h1 class="mt-1 text-balance font-display text-6xl leading-[0.9] tracking-wide">
             <span class="text-gradient-gold">Hunt complete</span>
-          </h2>
+          </h1>
 
           <!-- total -->
           <div class="glass mt-7 flex items-center justify-between rounded-panel px-5 py-4">
@@ -290,9 +291,11 @@
               <input
                 id="name-input"
                 type="text"
+                name="name"
                 maxlength="18"
                 autocomplete="name"
-                placeholder="Your name"
+                autocapitalize="words"
+                placeholder="Your name…"
                 aria-label="Your name for the leaderboard"
                 class="field flex-1"
               />

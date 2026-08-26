@@ -32,13 +32,8 @@ page.on('console', (msg) => {
   if (msg.type() === 'error') moduleErrors.push(`console: ${msg.text()}`)
 })
 
-const assertVisible = async (sel, notHidden = true) => ({
-  ok: (await page.locator(sel).count()) > 0 && !(await hidden(page, sel)) === notHidden,
-})
-
 try {
   await page.goto(BASE, {waitUntil: 'domcontentloaded'})
-
   // 1. Start screen.
   check('start screen renders', !(await hidden(page, '#screen-start')))
   check('title copy present', (await page.textContent('h1'))?.includes('movie sets') ?? false)
@@ -67,7 +62,7 @@ try {
 
   // 5. Enter spot A's radius → unlock + CTA.
   await page.evaluate(() => window.__campushunt.jump('the-quad'))
-  await page.waitForFunction(() => document.getElementById('signal-label').textContent.includes("You're close"))
+  await page.waitForFunction(() => document.getElementById('signal-label').textContent.includes("You’re close"))
   check('band reaches You’re close', true)
   check('meter fully lit', (await page.locator('#signal-meter .segment.lit').count()) === 5)
   check('open-camera CTA visible', await page.locator('#open-ar-btn').isVisible())
@@ -149,7 +144,7 @@ try {
     await page2.waitForFunction(() => !document.getElementById('demo-chip').classList.contains('hidden'))
     check('prod: demo chip shown', true)
     await page2.waitForFunction(
-      () => document.getElementById('signal-label').textContent.includes("You're close"),
+      () => document.getElementById('signal-label').textContent.includes("You’re close"),
       null,
       {timeout: 20000},
     )

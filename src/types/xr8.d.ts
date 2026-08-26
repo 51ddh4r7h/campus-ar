@@ -53,7 +53,21 @@ export interface Xr8ThreejsHandle {
   camera: THREE.PerspectiveCamera
   renderer: THREE.WebGLRenderer
   cameraTexture?: THREE.Texture
-  layerScenes?: Record<string, unknown>
+  layerScenes?: Record<string, THREE.Scene>
+}
+
+/** Per-frame payload for `onCameraStatusChange` — a bare string or a detail object. */
+export interface XrCameraStatusDetail {
+  status?: string
+  reason?: string
+  video?: {videoWidth: number; videoHeight: number}
+}
+
+export type XrCameraStatusData = string | XrCameraStatusDetail | null | undefined
+
+/** The `processCpuResult` bag handed to onUpdate, keyed by pipeline module. */
+export interface Xr8ProcessCpuResult {
+  reality?: Xr8RealityFrameData
 }
 
 /** A single camera pipeline module. See https://8thwall.org/docs/api/engine/camerapipelinemodule */
@@ -67,8 +81,8 @@ export interface Xr8CameraPipelineModule {
     videoHeight: number
   }) => void
   onDetach?: () => void
-  onUpdate?: (params: {processCpuResult?: Record<string, unknown>}) => void
-  onCameraStatusChange?: (status: unknown) => void
+  onUpdate?: (params: {processCpuResult?: Xr8ProcessCpuResult}) => void
+  onCameraStatusChange?: (status: XrCameraStatusData) => void
   onVideoSizeChange?: (params: {videoWidth: number; videoHeight: number}) => void
   onCanvasSizeChange?: () => void
   onDeviceOrientationChange?: (params: {orientation: number}) => void

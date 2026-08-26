@@ -37,13 +37,23 @@ interface PersistedState {
   foundAt: Record<string, number>
 }
 
+/** True when the decoded value carries the full persisted-hunt contract. */
+const isPersistedState = (value: Partial<PersistedState> | null | undefined): value is PersistedState =>
+  value !== null &&
+  value !== undefined &&
+  typeof value.status === 'string' &&
+  typeof value.startTimeMs === 'number' &&
+  (value.endTimeMs === null || typeof value.endTimeMs === 'number') &&
+  typeof value.foundAt === 'object' &&
+  value.foundAt !== null &&
+  Object.values(value.foundAt).every(Number.isFinite)
+
 const loadPersisted = (): PersistedState | null => {
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as PersistedState
-    if (!parsed.status || typeof parsed.startTimeMs !== 'number') return null
-    return parsed
+    const parsed = JSON.parse(raw)
+    return isPersistedState(parsed) ? parsed : null
   } catch {
     return null
   }

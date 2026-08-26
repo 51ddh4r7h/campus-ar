@@ -23,9 +23,12 @@ import {
   type GeoFix,
   type LocationController,
 } from './location'
-import type {Xr8RealityFrameData} from './types/xr8'
+import type {Xr8RealityFrameData, XrCameraStatusData} from './types/xr8'
+import {isCameraStatusDetail} from './camera-status'
 
 // ------------------------------------------------------------------ DOM
+// SAFETY: index.html ships every id referenced below with the matching tag;
+// the single cast here owns that invariant for all $<T> call sites.
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id.replace(/^#/, '')) as T
 
 const startScreen = $('#screen-start')
@@ -34,12 +37,12 @@ const summaryScreen = $('#screen-summary')
 const arChrome = $('#ar-chrome')
 const revealPanel = $('#reveal-panel')
 
-const startButton = $('#start-button') as HTMLButtonElement
-const demoStartBtn = $('#demo-start-btn') as HTMLButtonElement
-const openArBtn = $('#open-ar-btn') as HTMLButtonElement
+const startButton = $<HTMLButtonElement>('#start-button')
+const demoStartBtn = $<HTMLButtonElement>('#demo-start-btn')
+const openArBtn = $<HTMLButtonElement>('#open-ar-btn')
 const huntHint = $('#hunt-hint')
-const gpsErrorBtn = $('#gps-error-btn') as HTMLButtonElement
-const demoHuntBtn = $('#demo-hunt-btn') as HTMLButtonElement
+const gpsErrorBtn = $<HTMLButtonElement>('#gps-error-btn')
+const demoHuntBtn = $<HTMLButtonElement>('#demo-hunt-btn')
 const demoChip = $('#demo-chip')
 const envNote = $('#env-note')
 const signalLabel = $('#signal-label')
@@ -51,7 +54,7 @@ const spotList = $('#spot-list')
 const setsChip = $('#sets-chip')
 const timerChip = $('#timer-chip')
 const simRail = $('#sim-rail')
-const revealContinueBtn = $('#reveal-continue') as HTMLButtonElement
+const revealContinueBtn = $<HTMLButtonElement>('#reveal-continue')
 
 const hud = {
   engine: $('#hud-engine'),
@@ -64,18 +67,18 @@ const hud = {
 }
 const arTimer = $('#ar-timer')
 const arHint = $('#ar-hint')
-const endArBtn = $('#end-ar-btn') as HTMLButtonElement
-const recenterBtn = $('#recenter-btn') as HTMLButtonElement
+const endArBtn = $<HTMLButtonElement>('#end-ar-btn')
+const recenterBtn = $<HTMLButtonElement>('#recenter-btn')
 const toastEl = $('#toast')
 
 const summaryTotal = $('#summary-total')
 const summarySplits = $('#summary-splits')
 const leaderboardList = $('#leaderboard-list')
-const nameForm = $('#name-form') as HTMLFormElement
-const nameInput = $('#name-input') as HTMLInputElement
-const postScoreBtn = $('#post-score-btn') as HTMLButtonElement
+const nameForm = $<HTMLFormElement>('#name-form')
+const nameInput = $<HTMLInputElement>('#name-input')
+const postScoreBtn = $<HTMLButtonElement>('#post-score-btn')
 const scoreStatus = $('#score-status')
-const restartBtn = $('#restart-btn') as HTMLButtonElement
+const restartBtn = $<HTMLButtonElement>('#restart-btn')
 
 const revealSpotName = $('#reveal-spot-name')
 const revealMovie = $('#reveal-movie')
@@ -101,6 +104,21 @@ let fixWatchdog = 0
 let simMode = wantsSimulation()
 
 // ------------------------------------------------------------------ helpers
+type CameraStatusUi = {label: string; tone: '' | 'good' | 'warn' | 'bad'}
+
+/** Engine status codes this app renders specially; everything else passes through raw. */
+const CAMERA_STATUS_UI = {
+  requesting: {label: 'Requesting permission…', tone: 'warn'},
+  hasStream: {label: 'Stream acquired', tone: 'warn'},
+  hasVideo: {label: 'Running', tone: 'warn'},
+  hasDesktop3D: {label: 'Desktop 3D (dev)', tone: 'good'},
+  failed: {label: 'Failed', tone: 'bad'},
+  'not-allowed': {label: 'Permission denied', tone: 'bad'},
+} satisfies Record<string, CameraStatusUi>
+
+type CameraStatusKey = keyof typeof CAMERA_STATUS_UI
+const isCameraStatusKey = (value: string): value is CameraStatusKey => value in CAMERA_STATUS_UI
+
 const hudValue = (el: HTMLElement, text: string, tone: '' | 'good' | 'warn' | 'bad' = ''): void => {
   el.textContent = text
   el.classList.remove('text-spotlight', 'text-gold', 'text-ember')
@@ -160,7 +178,7 @@ const BAND_UI: Array<{label: string; sub: string; copy: string; tone: string}> =
   {
     label: 'Chilly',
     sub: 'Not far from the lobby',
-    copy: "You're in the right neighborhood. Keep wandering — the signal will rise.",
+    copy: "You’re in the right neighborhood. Keep wandering — the signal will rise.",
     tone: 'text-fog',
   },
   {
@@ -176,9 +194,9 @@ const BAND_UI: Array<{label: string; sub: string; copy: string; tone: string}> =
     tone: 'text-spotlight',
   },
   {
-    label: "You're close",
+    label: "You’re close",
     sub: 'Standing on a set',
-    copy: "You're standing on a set right now.",
+    copy: "You’re standing on a set right now.",
     tone: 'text-spotlight',
   },
 ]
@@ -201,8 +219,8 @@ function setBand(band: Band): void {
   signalLabel.textContent = ui.label
   signalLabel.className = `font-display text-7xl leading-none tracking-wider ${ui.tone}`
   signalBand.textContent = ui.sub
-  for (const seg of Array.from(signalMeter.children)) {
-    const lit = Number((seg as HTMLElement).dataset.band) <= band
+  for (const seg of signalMeter.querySelectorAll<HTMLElement>('.segment')) {
+    const lit = Number(seg.dataset.band) <= band
     seg.classList.toggle('lit', lit)
   }
 }
@@ -256,7 +274,7 @@ function evaluateProximity(fix: GeoFix): void {
   }
 
   if (!reliable(fix)) signalCopy.textContent = 'Position is still fuzzy — hold steady for a sharper read.'
-  else if (currentBand === 4) signalCopy.textContent = `You're standing on a set right now — ${arTarget?.name ?? ''}.`
+  else if (currentBand === 4) signalCopy.textContent = `You’re standing on a set right now — ${arTarget?.name ?? ''}.`
   else if (!fix.simulated && nearest.dist > 2000)
     signalCopy.textContent = 'The sets are parked on a campus kilometres from here. Run the demo flight to see the hunt.'
   else signalCopy.textContent = BAND_UI[currentBand].copy
@@ -272,7 +290,7 @@ function huntsActiveHint(): void {
 
   if (arTarget) {
     gpsErrorBtn.classList.add('hidden')
-    huntHint.textContent = "You're standing on a set right now."
+    huntHint.textContent = "You’re standing on a set right now."
   } else {
     gpsErrorBtn.classList.add('hidden')
     huntHint.textContent = 'Keep wandering — the signal will sharpen.'
@@ -290,7 +308,7 @@ function huntsPrompt(mode: 'wander' | 'keep' | 'gps'): void {
     huntHint.textContent =
       mode === 'wander'
         ? 'Keep wandering — the signal will sharpen.'
-        : "One just went live, but it'll wait. Wander where the signal points."
+        : "One just went live, but it’ll wait. Wander where the signal points."
   }
 }
 
@@ -499,7 +517,7 @@ const arHooks = {
     }
     if (status === 'NORMAL') {
       arHint.textContent = inRange()
-        ? "You're inside the set — hold still, the slate is about to clap."
+        ? "You’re inside the set — hold still, the slate is about to clap."
         : 'Step back into the set’s glow to trigger the reveal.'
     } else if (status === 'LIMITED') {
       arHint.textContent = 'Still finding the room — keep the phone steady.'
@@ -514,21 +532,13 @@ const arHooks = {
       !alreadyFoundNotified
     ) {
       alreadyFoundNotified = true
-      toast("That set's already in the can — enjoy the rerun.")
+      toast("That set’s already in the can — enjoy the rerun.")
     }
   },
 
-  onCameraStatus(status: unknown): void {
-    const raw = typeof status === 'string' ? status : (status as {status?: string} | null | undefined)?.status ?? String(status)
-    const map: Record<string, {label: string; tone: '' | 'good' | 'warn' | 'bad'}> = {
-      requesting: {label: 'Requesting permission…', tone: 'warn'},
-      hasStream: {label: 'Stream acquired', tone: 'warn'},
-      hasVideo: {label: 'Running', tone: 'warn'},
-      hasDesktop3D: {label: 'Desktop 3D (dev)', tone: 'good'},
-      failed: {label: 'Failed', tone: 'bad'},
-      'not-allowed': {label: 'Permission denied', tone: 'bad'},
-    }
-    const entry = map[raw] ?? {label: raw, tone: '' as const}
+  onCameraStatus(status: XrCameraStatusData): void {
+    const raw = (isCameraStatusDetail(status) ? status.status : status) ?? 'unknown'
+    const entry = isCameraStatusKey(raw) ? CAMERA_STATUS_UI[raw] : {label: raw, tone: '' as const}
     hudValue(hud.camera, entry.label, entry.tone)
     if (entry.tone === 'bad') toast('Camera access is needed to catch the reveal.')
   },
@@ -640,7 +650,7 @@ nameForm.addEventListener('submit', (e) => {
   submitScore(name, total, splits).then(() => {
     postScoreBtn.disabled = false
     postScoreBtn.textContent = 'Post'
-    scoreStatus.textContent = `Posted — you're on the marquee, ${name}.`
+    scoreStatus.textContent = `Posted — you’re on the marquee, ${name}.`
     score.name = name
     renderLeaderboard(name)
   })

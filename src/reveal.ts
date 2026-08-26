@@ -29,10 +29,7 @@ export interface RevealDevice {
 }
 
 export function createRevealDevice(scene: THREE.Scene): RevealDevice {
-  const prefersReduced =
-    typeof window !== 'undefined' && window.matchMedia
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false
+  const prefersReduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
   // ------------------------------------------------------------------ slate
   const slate = new THREE.Group()

@@ -50,7 +50,7 @@ export const FILM_SPOTS: FilmSpot[] = [
     radiusM: 15,
     movie: {
       title: 'The Graduate',
-      blurb: "Benjamin's sprint to the chapel steps began here, three takes before the crew called 'cut'.",
+      blurb: "Benjamin’s sprint to the chapel steps began here, three takes before the crew called 'cut'.",
     },
     asset: {color: '#FFE9AE', label: 'clip-steps-rosettes-02'},
   },
@@ -62,7 +62,7 @@ export const FILM_SPOTS: FilmSpot[] = [
     radiusM: 15,
     movie: {
       title: 'Legally Blonde',
-      blurb: "Elle's grand courthouse entrance swept through this court while the extras hid behind the fountain.",
+      blurb: "Elle’s grand courthouse entrance swept through this court while the extras hid behind the fountain.",
     },
     asset: {color: '#D94838', label: 'clip-court-pink-03'},
   },

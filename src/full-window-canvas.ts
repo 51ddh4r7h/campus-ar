@@ -10,18 +10,26 @@
  * whole viewport.
  */
 import type {Xr8CameraPipelineModule} from './types/xr8'
+import {isCameraStatusDetail} from './camera-status'
 
 /** Creates a camera pipeline module that keeps the canvas covering the whole window. */
+
+/** Body style fields this module stashes before overriding and restores on detach. */
+interface BodyStylePair {
+  backgroundColor: string
+  overflowY: string
+}
+
 export const fullWindowCanvasModule = (): Xr8CameraPipelineModule => {
   let canvas: HTMLCanvasElement | null = null
 
   const videoSize = {w: 0, h: 0}
   let orientation = 0
 
-  const originalBodyStyle = {backgroundColor: 'initial', overflowY: 'initial'} as {
-  backgroundColor: string
-  overflowY: string
-}
+  const originalBodyStyle: BodyStylePair = {
+    backgroundColor: 'initial',
+    overflowY: 'initial',
+  }
   const originalHtmlOverflow = 'initial'
 
   const canvasStyle: Partial<CSSStyleDeclaration> = {
@@ -145,11 +153,8 @@ export const fullWindowCanvasModule = (): Xr8CameraPipelineModule => {
     },
 
     onCameraStatusChange: (payload) => {
-      const {status, video} = (payload ?? {}) as {
-        status?: string
-        video?: {videoWidth: number; videoHeight: number}
-      }
-      if (status !== 'hasVideo') return
+      if (!isCameraStatusDetail(payload) || payload.status !== 'hasVideo') return
+      const video = payload.video
       if (video?.videoWidth && video?.videoHeight) {
         videoSize.w = video.videoWidth
         videoSize.h = video.videoHeight
