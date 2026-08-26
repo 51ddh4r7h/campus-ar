@@ -139,7 +139,8 @@ try {
   await page.waitForFunction(() => !document.getElementById('reveal-panel').classList.contains('hidden'), null, {timeout: 4000})
   check('reveal panel for Central Library', (await page.textContent('#reveal-spot-name'))?.trim() === 'Central Library')
   await page.click('#reveal-continue')
-  await page.waitForTimeout(400)
+  await page.waitForFunction(() => document.getElementById('reveal-panel').classList.contains('hidden'), null, {timeout: 4000})
+  await page.waitForTimeout(200)
   // Back to dashboard for remaining reveals.
   if (await page.locator('#ar-chrome:not(.hidden)').count() > 0) {
     await page.click('#end-ar-btn')
@@ -161,7 +162,8 @@ try {
     await page.waitForFunction(() => !document.getElementById('reveal-panel').classList.contains('hidden'), null, {timeout: 4000})
     check(`reveal panel for ${name}`, (await page.textContent('#reveal-spot-name'))?.trim() === name)
     await page.click('#reveal-continue')
-    await page.waitForTimeout(400)
+    await page.waitForFunction(() => document.getElementById('reveal-panel').classList.contains('hidden'), null, {timeout: 4000})
+    await page.waitForTimeout(200)
     if (id !== 'auditorium') {
       await page.click('#end-ar-btn')
       await page.waitForFunction(() => !document.getElementById('screen-hunt').classList.contains('hidden'))

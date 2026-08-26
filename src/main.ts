@@ -607,11 +607,21 @@ endArBtn.addEventListener('click', () => {
   haptics.tick()
   exitAr() // ✕ → dashboard; the hunt keeps running
 })
-// The set-list button mirrors ✕ (both land on the planning screen).
-$<HTMLButtonElement>('#ar-setlist-btn').addEventListener('click', () => {
+// SETS now toggles the sheet over the live camera — slider + set list in one view.
+const toggleSheet = (): void => {
+  const isHidden = huntScreenEl.classList.contains('hidden')
+  if (isHidden) {
+    huntScreenEl.classList.remove('hidden')
+    huntScreenEl.classList.add('flex')
+  } else {
+    huntScreenEl.classList.add('hidden')
+    huntScreenEl.classList.remove('flex')
+  }
   haptics.tick()
-  exitAr()
-})
+}
+$<HTMLButtonElement>('#ar-setlist-btn').addEventListener('click', toggleSheet)
+// Tapping the sheet handle also collapses it
+document.querySelector('#screen-hunt .h-1.w-10')?.addEventListener('click', toggleSheet)
 recenterBtn.addEventListener('click', () => ar.recenter())
 revealContinueBtn.addEventListener('click', () => {
   haptics.tick()

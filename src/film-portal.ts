@@ -26,7 +26,7 @@ export interface FilmPortal {
   show(spot: FilmSpot): void
   hide(): void
   setSignal(level: PortalSignal): void
-  tick(nowMs: number): void
+  tick(nowMs: number, cameraPos?: THREE.Vector3): void
   dispose(): void
 }
 
@@ -41,6 +41,7 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
     color: CREAM,
     metalness: 0.15,
     roughness: 0.55,
+    transparent: true,
   })
   const accentMat = new THREE.MeshStandardMaterial({
     color: MUTED_GOLD,
@@ -48,6 +49,7 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
     roughness: 0.4,
     emissive: MUTED_GOLD,
     emissiveIntensity: 0,
+    transparent: true,
   })
 
   const W = 1.32
@@ -84,10 +86,10 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
   backing.position.z = -0.02
   group.add(backing)
 
-  // ── screen: film still / clip inside the frame
+  // ── screen: cinemascope film still / clip inside the doorway
   const canvas = document.createElement('canvas')
-  canvas.width = 512
-  canvas.height = 720 // portrait for doorway frame
+  canvas.width = 640
+  canvas.height = 268 // 2.39:1 scope
   const ctx = canvas.getContext('2d')!
   const contentTexture = new THREE.CanvasTexture(canvas)
   contentTexture.colorSpace = THREE.SRGBColorSpace
@@ -116,8 +118,9 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
     transparent: true,
     opacity: 1,
   })
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.1, H - 0.22), screenMat)
-  screen.position.z = 0.015
+  // Cinemascope screen — centered in the doorway at eye level
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.48), screenMat)
+  screen.position.set(0, 0.18, 0.02)
   group.add(screen)
 
   // Ground shadow under the portal feet
@@ -140,69 +143,53 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
 
   // ── drawing helpers
   const drawStill = (spot: FilmSpot): void => {
-    ctx.clearRect(0, 0, 512, 720)
-    // vignetted film still background — dark with subtle warm top
-    const grad = ctx.createLinearGradient(0, 0, 0, 720)
+    ctx.clearRect(0, 0, 640, 268)
+    // vignetted scope background
+    const grad = ctx.createLinearGradient(0, 0, 0, 268)
     grad.addColorStop(0, '#1a1f2e')
     grad.addColorStop(0.5, '#0f141e')
     grad.addColorStop(1, '#0b0e16')
     ctx.fillStyle = grad
-    ctx.fillRect(0, 0, 512, 720)
-    // faint film grain dots for texture (cheap, static)
+    ctx.fillRect(0, 0, 640, 268)
     ctx.fillStyle = 'rgba(255,255,255,0.04)'
-    for (let i = 0; i < 180; i++) {
-      const x = Math.random() * 512
-      const y = Math.random() * 720
+    for (let i = 0; i < 120; i++) {
+      const x = Math.random() * 640
+      const y = Math.random() * 268
       ctx.fillRect(x, y, 1, 1)
     }
-    // year badge top
     ctx.textAlign = 'center'
     ctx.fillStyle = 'rgba(216,196,160,0.9)'
-    ctx.font = '11px "Instrument Sans", system-ui, sans-serif'
-    ctx.fillText('FILMED HERE  •  CAMPUS  SET', 256, 48)
-    // title — large, cream
+    ctx.font = '9px "Instrument Sans", system-ui, sans-serif'
+    ctx.fillText('FILMED HERE  •  CAMPUS  SET', 320, 42)
     ctx.fillStyle = '#F0E6D3'
-    let size = 54
+    let size = 42
     const title = spot.name.toUpperCase()
     do {
       ctx.font = `700 ${size}px "Instrument Sans", system-ui, sans-serif`
-      size -= 3
-    } while (ctx.measureText(title).width > 440 && size > 28)
-    ctx.fillText(title, 256, 360)
-    // thin rule
+      size -= 2
+    } while (ctx.measureText(title).width > 520 && size > 22)
+    ctx.fillText(title, 320, 132)
     ctx.strokeStyle = 'rgba(216,196,160,0.35)'
     ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.moveTo(180, 384)
-    ctx.lineTo(332, 384)
+    ctx.moveTo(250, 150)
+    ctx.lineTo(390, 150)
     ctx.stroke()
-    // movie below rule
     ctx.fillStyle = 'rgba(234,228,213,0.9)'
-    ctx.font = '18px "Instrument Sans", system-ui, sans-serif'
-    ctx.fillText(spot.movie.title, 256, 412)
-    // blurb — clamp to 3 lines, centered
-    ctx.fillStyle = 'rgba(234,228,213,0.55)'
-    ctx.font = '12px "Instrument Sans", system-ui, sans-serif'
-    const words = spot.movie.blurb.split(' ')
-    let line = ''
-    let y = 452
-    const maxW = 380
-    for (const w of words) {
-      const test = line ? `${line} ${w}` : w
-      if (ctx.measureText(test).width > maxW && line) {
-        ctx.fillText(line, 256, y)
-        y += 18
-        line = w
-        if (y > 520) break
-      } else {
-        line = test
-      }
+    ctx.font = '15px "Instrument Sans", system-ui, sans-serif'
+    ctx.fillText(spot.movie.title, 320, 174)
+    ctx.fillStyle = 'rgba(234,228,213,0.5)'
+    ctx.font = '11px "Instrument Sans", system-ui, sans-serif'
+    // single-line blurb, truncated
+    let blurb = spot.movie.blurb
+    if (ctx.measureText(blurb).width > 560) {
+      while (ctx.measureText(`${blurb}…`).width > 560 && blurb.length > 20) blurb = blurb.slice(0, -1)
+      blurb += '…'
     }
-    if (line && y <= 520) ctx.fillText(line, 256, y)
-    // bottom meta
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'
-    ctx.font = '10px ui-monospace, monospace'
-    ctx.fillText(`${spot.id.toUpperCase()}  •  WALK AROUND ME`, 256, 680)
+    ctx.fillText(blurb, 320, 206)
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'
+    ctx.font = '8px ui-monospace, monospace'
+    ctx.fillText(`${spot.id.toUpperCase()}  •  WALK AROUND ME`, 320, 248)
     contentTexture.needsUpdate = true
   }
 
@@ -212,6 +199,13 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
   let targetOpacity = 0
   let currentOpacity = 0
   let spawnTime = 0
+  let spawned = false
+
+  const placeAround = (cameraPos: THREE.Vector3): void => {
+    const forward = new THREE.Vector3(0, 0, -1)
+    group.position.set(cameraPos.x + forward.x * 1.7, -0.42, cameraPos.z + forward.z * 1.7)
+    spawned = true
+  }
 
   const applySignal = (): void => {
     // COLD/WARM: hidden, HOT: fade in, YOU'RE CLOSE: solid, FOUND: hold solid
@@ -237,6 +231,7 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
       screenMat.needsUpdate = true
       videoReady = false
       videoFailed = false
+      spawned = false
       const wanted = spot.asset.videoUrl ?? ''
       if (wanted && videoSrc !== wanted) {
         videoSrc = wanted
@@ -263,7 +258,9 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
       ;(accentMat as THREE.MeshStandardMaterial).emissiveIntensity = intensity
     },
 
-    tick(nowMs: number) {
+    tick(nowMs: number, cameraPos?: THREE.Vector3) {
+      if (!spawned && currentSpot !== null && cameraPos) placeAround(cameraPos)
+
       // Swap canvas → video once the clip is ready (seamless).
       if (videoReady && !videoFailed && screenMat.map !== videoTexture) {
         screenMat.map = videoTexture

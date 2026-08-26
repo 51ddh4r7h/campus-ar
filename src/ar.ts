@@ -208,7 +208,7 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     }
 
     revealDevice?.tick(now)
-    portal?.tick(now)
+    if (xrSceneRef) portal?.tick(now, xrSceneRef.camera.position)
     if (arWorld && xrSceneRef) {
       arWorld.tick(now, xrSceneRef.camera.position)
       projectLabel(xrSceneRef.camera)
