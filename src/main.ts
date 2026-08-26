@@ -1,8 +1,10 @@
 /**
- * Campus Film Hunt — app orchestrator.
+ * Campus Film Hunt — app orchestrator (wiring only).
  *
- * Torches the "navigation" concept from Phase 1 (no arrows, no directions) and
- * replaces it with a *coarse proximity gate* + the AR clapperboard reveal.
+ * Owns: screen switching, the AR session lifecycle + hooks, location-source
+ * selection (real / demo / jump), the reveal panel, and event bindings.
+ * Pixels live in hunt-screen.ts / summary-screen.ts; rules live in
+ * proximity.ts / heat.ts / reveal-gate.ts; state lives in hunt.ts.
  *
  * Flow: start screen → hunt (GPS warmth only) → open camera inside a spot's
  * radius → tracking locks + ≥2 s inside → reveal (3D slate + info panel) →
@@ -12,22 +14,23 @@
 import './style.css'
 import {XR8Promise} from '@8thwall/engine-binary'
 import {createArControl} from './ar'
+import {isCameraStatusDetail} from './camera-status'
 import {fireConfetti} from './confetti'
 import {FILM_SPOTS, type FilmSpot} from './data/spots'
-import {bandFromHeat, glide, heatFromDistance} from './heat'
 import {createHunt, formatClock, type HuntController} from './hunt'
+import {createHuntScreen} from './hunt-screen'
 import {haptics} from './haptics'
 import {fetchLeaderboard, submitScore, type ScoreEntry} from './leaderboard'
 import {
-  distanceM,
   startRealLocation,
   startSimulatedFixer,
   wantsSimulation,
   type GeoFix,
   type LocationController,
 } from './location'
+import {evaluateProximity, isInside} from './proximity'
+import {createSummaryScreen} from './summary-screen'
 import type {Xr8RealityFrameData, XrCameraStatusData} from './types/xr8'
-import {isCameraStatusDetail} from './camera-status'
 
 // ------------------------------------------------------------------ DOM
 // SAFETY: index.html ships every id referenced below with the matching tag;
@@ -35,28 +38,18 @@ import {isCameraStatusDetail} from './camera-status'
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id.replace(/^#/, '')) as T
 
 const startScreen = $('#screen-start')
-const huntScreen = $('#screen-hunt')
-const summaryScreen = $('#screen-summary')
+const huntScreenEl = $('#screen-hunt')
+const summaryScreenEl = $('#screen-summary')
 const arChrome = $('#ar-chrome')
 const revealPanel = $('#reveal-panel')
 
 const startButton = $<HTMLButtonElement>('#start-button')
 const demoStartBtn = $<HTMLButtonElement>('#demo-start-btn')
 const openArBtn = $<HTMLButtonElement>('#open-ar-btn')
-const huntHint = $('#hunt-hint')
 const gpsErrorBtn = $<HTMLButtonElement>('#gps-error-btn')
 const demoHuntBtn = $<HTMLButtonElement>('#demo-hunt-btn')
 const demoChip = $('#demo-chip')
 const envNote = $('#env-note')
-const signalLabel = $('#signal-label')
-const signalBand = $('#signal-band')
-const signalCopy = $('#signal-copy')
-const signalSpot = $('#signal-spot')
-const signalRadar = $('#signal-radar')
-const heatThumb = $('#heat-thumb')
-const spotList = $('#spot-list')
-const setsChip = $('#sets-chip')
-const timerChip = $('#timer-chip')
 const simRail = $('#sim-rail')
 const revealContinueBtn = $<HTMLButtonElement>('#reveal-continue')
 
@@ -74,14 +67,6 @@ const arHint = $('#ar-hint')
 const endArBtn = $<HTMLButtonElement>('#end-ar-btn')
 const recenterBtn = $<HTMLButtonElement>('#recenter-btn')
 const toastEl = $('#toast')
-
-const summaryTotal = $('#summary-total')
-const summarySplits = $('#summary-splits')
-const leaderboardList = $('#leaderboard-list')
-const nameForm = $<HTMLFormElement>('#name-form')
-const nameInput = $<HTMLInputElement>('#name-input')
-const postScoreBtn = $<HTMLButtonElement>('#post-score-btn')
-const scoreStatus = $('#score-status')
 const restartBtn = $<HTMLButtonElement>('#restart-btn')
 
 const revealSpotName = $('#reveal-spot-name')
@@ -97,6 +82,8 @@ const revealKicker = $('#reveal-kicker')
 // ------------------------------------------------------------------ state
 const hunt: HuntController = createHunt()
 const ar = createArControl()
+const screen = createHuntScreen()
+const summary = createSummaryScreen()
 
 let locationCtrl: LocationController | null = null
 let lastFix: GeoFix | null = null
@@ -144,15 +131,18 @@ const toast = (message: string, ms = 2600): void => {
 
 function showOnlyScreen(name: 'start' | 'hunt' | 'summary'): void {
   startScreen.classList.toggle('hidden', name !== 'start')
-  huntScreen.classList.toggle('hidden', name !== 'hunt')
-  huntScreen.classList.toggle('flex', name === 'hunt')
-  summaryScreen.classList.toggle('hidden', name !== 'summary')
+  huntScreenEl.classList.toggle('hidden', name !== 'hunt')
+  huntScreenEl.classList.toggle('flex', name === 'hunt')
+  summaryScreenEl.classList.toggle('hidden', name !== 'summary')
 }
+
+const spotStateLabel = (spotId: string): string =>
+  hunt.spots.find((s) => s.spot.id === spotId)?.status ?? 'locked'
 
 function showAr(spot: FilmSpot): void {
   startScreen.classList.add('hidden')
-  huntScreen.classList.add('hidden')
-  summaryScreen.classList.add('hidden')
+  huntScreenEl.classList.add('hidden')
+  summaryScreenEl.classList.add('hidden')
   arChrome.classList.remove('hidden')
   revealPanel.classList.add('hidden')
   recenterBtn.hidden = false
@@ -165,205 +155,37 @@ function showAr(spot: FilmSpot): void {
 function hideAr(): void {
   arChrome.classList.add('hidden')
   revealPanel.classList.add('hidden')
-  huntsActiveHint()
+  refreshPrompts()
 }
 
-const spotStateLabel = (spotId: string): string =>
-  hunt.spots.find((s) => s.spot.id === spotId)?.status ?? 'locked'
-
-// ------------------------------------------------------------------ meter / bands
-type Band = 0 | 1 | 2 | 3 | 4
-
-const BAND_UI: Array<{label: string; sub: string; copy: string; tone: string}> = [
-  {
-    label: 'Cold',
-    sub: 'Shivering under the marquee',
-    copy: 'A set is out there somewhere on campus. Pick a direction — the signal will sharpen.',
-    tone: 'text-fog',
-  },
-  {
-    label: 'Chilly',
-    sub: 'Not far from the lobby',
-    copy: "You’re in the right neighborhood. Keep wandering — the signal will rise.",
-    tone: 'text-fog',
-  },
-  {
-    label: 'Warm',
-    sub: 'Somewhere behind the curtain',
-    copy: 'Getting warmer. Trust your feet — slow and steady.',
-    tone: 'text-gold',
-  },
-  {
-    label: 'Hot',
-    sub: 'Right on the soundstage',
-    copy: 'Very close now. Keep your eyes open.',
-    tone: 'text-spotlight',
-  },
-  {
-    label: "You’re close",
-    sub: 'Standing on a set',
-    copy: "You’re standing on a set right now.",
-    tone: 'text-spotlight',
-  },
-]
-
-let currentBand: Band = 0
-let heat = 0 // gliding display value (0–100)
-let targetHeat = 0
-
-/** No fix yet — say so instead of silently sitting on "Cold". */
-function setWaitingSignal(): void {
-  heat = 0
-  targetHeat = 0
-  heatThumb.style.left = '0%'
-  signalLabel.textContent = '···'
-  signalLabel.className = 'font-display text-7xl leading-none tracking-wider text-fog'
-  signalBand.textContent = 'Rolling the establishing shot'
-  signalCopy.textContent = 'Getting a fix on your position — hold tight.'
-  signalSpot.classList.add('hidden')
-}
-
-function setRadarSpeed(): void {
-  const duration = 2.6 - (heat / 100) * 1.9 // 2.6 s cold → 0.7 s blazing
-  for (const ring of signalRadar.querySelectorAll<HTMLElement>('.radar-ring')) {
-    ring.style.animationDuration = `${duration.toFixed(2)}s`
-  }
-}
-
-/** Glide thumb + radar toward target heat; called from the 100 ms ticker. */
-function tickHeatUI(): void {
-  heat = glide(heat, targetHeat)
-  heatThumb.style.left = `${heat.toFixed(1)}%`
-  heatThumb.classList.toggle('is-blazing', heat > 85)
-  setRadarSpeed()
-}
-
-function setBand(band: Band): void {
-  const rising = band > currentBand
-  currentBand = band
-  const ui = BAND_UI[band]
-  signalLabel.textContent = ui.label
-  signalLabel.className = `font-display text-7xl leading-none tracking-wider ${ui.tone}`
-  signalBand.textContent = ui.sub
-  if (rising) haptics.tick() // band crossed upward — feel the warm-up
-}
-
-// ------------------------------------------------------------------ proximity
-
-/** True when a fix is trustworthy enough to unlock a spot. */
-const reliable = (fix: GeoFix): boolean => fix.simulated || fix.accuracyM <= 60
-const isInside = (fix: GeoFix, spot: FilmSpot): boolean =>
-  reliable(fix) && distanceM(fix, spot.lat, spot.lng) <= spot.radiusM
-
-function evaluateProximity(fix: GeoFix): void {
+// ------------------------------------------------------------------ proximity → screen
+function applyFix(fix: GeoFix): void {
   lastFix = fix
-  const unfound = hunt.spots.filter((r) => r.status !== 'found')
+  const verdict = evaluateProximity(fix, hunt.spots)
 
-  if (unfound.length === 0) {
-    setBand(4)
-    return
-  }
-
-  const scored = unfound
-    .map((r) => ({run: r, dist: distanceM(fix, r.spot.lat, r.spot.lng)}))
-    .sort((a, b) => a.dist - b.dist)
-  const nearest = scored[0]
-
-  // Inside any unfound spot's radius → unlock it and offer the camera.
-  if (nearest.dist <= nearest.run.spot.radiusM && reliable(fix)) {
-    arTarget = nearest.run.spot
-    if (nearest.run.status === 'locked') {
-      hunt.setUnlocked(nearest.run.spot.id)
+  if (verdict.insideSpot) {
+    arTarget = verdict.insideSpot
+    const run = hunt.spots.find((r) => r.spot.id === verdict.insideSpot?.id)
+    if (run && run.status === 'locked') {
+      hunt.setUnlocked(run.spot.id)
       haptics.unlock()
     }
-    targetHeat = 100
-    setBand(4)
   } else {
     arTarget = null
-    targetHeat = heatFromDistance(nearest.dist, nearest.run.spot.radiusM)
-    setBand(bandFromHeat(targetHeat))
-
-    // Ambiguity rule: only name a spot when it is clearly the closest
-    // (second-closest is >45 m behind). Otherwise stay generic.
-    const second = scored[1]
-    const clear = second === undefined || second.dist - nearest.dist > 45
-    if (clear && nearest.dist <= 160) {
-      signalSpot.textContent = `Closest set on the board: ${nearest.run.spot.name}.`
-      signalSpot.classList.remove('hidden')
-    } else {
-      signalSpot.classList.add('hidden')
-    }
   }
 
-  if (!reliable(fix)) signalCopy.textContent = 'Position is still fuzzy — hold steady for a sharper read.'
-  else if (currentBand === 4) signalCopy.textContent = `You’re standing on a set right now — ${arTarget?.name ?? ''}.`
-  else if (!fix.simulated && nearest.dist > 2000)
-    signalCopy.textContent = 'The sets are parked on a campus kilometres from here. Run the demo flight to see the hunt.'
-  else signalCopy.textContent = BAND_UI[currentBand].copy
+  screen.renderVerdict(verdict)
 }
 
-function huntsActiveHint(): void {
-  const running = hunt.status === 'in_progress'
-  // Demo entry stays available while really hunting (hidden once sim runs
-  // or a set is live — the camera CTA takes the floor).
-  demoHuntBtn.classList.toggle('hidden', !running || simMode || !!arTarget)
-  openArBtn.classList.toggle('hidden', !running || !arTarget)
-  if (!running) return
-
-  if (arTarget) {
-    gpsErrorBtn.classList.add('hidden')
-    huntHint.textContent = "You’re standing on a set right now."
-  } else {
-    gpsErrorBtn.classList.add('hidden')
-    huntHint.textContent = 'Keep wandering — the signal will sharpen.'
-  }
+function refreshPrompts(): void {
+  screen.showPrompts({running: hunt.status === 'in_progress', arTarget, simMode})
 }
 
-function huntsPrompt(mode: 'wander' | 'keep' | 'gps'): void {
-  if (mode === 'gps') {
-    gpsErrorBtn.classList.remove('hidden')
-    demoHuntBtn.classList.toggle('hidden', simMode)
-    huntHint.textContent = 'Location is how we sense the campus. Allow it, then try again.'
-  } else {
-    openArBtn.classList.add('hidden')
-    gpsErrorBtn.classList.add('hidden')
-    huntHint.textContent =
-      mode === 'wander'
-        ? 'Keep wandering — the signal will sharpen.'
-        : "One just went live, but it’ll wait. Wander where the signal points."
-  }
-}
-
-// ------------------------------------------------------------------ spot list UI
-function renderSpotList(): void {
-  spotList.innerHTML = ''
-  for (const run of hunt.spots) {
-    const li = document.createElement('li')
-    li.className =
-      'glass flex items-center gap-3 rounded-tile px-3.5 py-2.5 motion-safe:transition-colors motion-safe:duration-300'
-    const turn = FILM_SPOTS.indexOf(run.spot) + 1
-    li.innerHTML = `
-      <span class="font-display w-8 shrink-0 text-lg tracking-wider text-fog/50">${String(turn).padStart(2, '0')}</span>
-      <div class="min-w-0 flex-1">
-        <p class="font-display truncate text-xl tracking-wider text-chalk">${run.spot.name}</p>
-        <p class="truncate text-[11px] text-fog">${run.spot.movie.title}</p>
-      </div>
-      <span class="badge"></span>`
-    const badge = li.querySelector('.badge')!
-    if (run.status === 'found') {
-      badge.className = 'badge rounded-full border border-gold/50 bg-gold/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-spotlight'
-      badge.textContent = 'in the can'
-    } else if (run.status === 'unlocked') {
-      badge.className = 'badge rounded-full border border-ember/50 bg-ember/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-gold'
-      badge.textContent = 'live'
-    } else {
-      badge.className = 'badge rounded-full border border-line px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-fog/60'
-      badge.textContent = 'off air'
-    }
-    spotList.appendChild(li)
-  }
-  const found = hunt.spots.filter((s) => s.status === 'found').length
-  setsChip.innerHTML = `Sets <span class="font-semibold text-gold">${found}/${hunt.spots.length}</span>`
+const handleFix = (fix: GeoFix): void => {
+  window.clearTimeout(fixWatchdog)
+  screen.hideGpsError()
+  applyFix(fix)
+  refreshPrompts() // the open-camera CTA may now be live
 }
 
 // ------------------------------------------------------------------ timer
@@ -372,9 +194,9 @@ function startTimerTicker(): void {
   window.clearInterval(timerInterval)
   timerInterval = window.setInterval(() => {
     const t = formatClock(hunt.elapsedMs())
-    timerChip.textContent = t
+    screen.setTimer(t)
     arTimerValue.textContent = t
-    tickHeatUI()
+    screen.tickDisplay()
   }, 100)
 }
 function stopTimerTicker(): void {
@@ -384,13 +206,6 @@ function stopTimerTicker(): void {
 // ------------------------------------------------------------------ location
 function findLocationTargets(): Array<{lat: number; lng: number}> {
   return FILM_SPOTS.map((s) => ({lat: s.lat, lng: s.lng}))
-}
-
-const handleFix = (fix: GeoFix): void => {
-  window.clearTimeout(fixWatchdog)
-  gpsErrorBtn.classList.add('hidden')
-  evaluateProximity(fix)
-  huntsActiveHint() // the open-camera CTA may now be live
 }
 
 function showSimChrome(): void {
@@ -407,26 +222,22 @@ function startLocation(): void {
   }
 
   if (!navigator.geolocation) {
-    huntsPrompt('gps')
+    screen.prompt('gps', simMode)
     return
   }
 
   // Honest "no data yet" state + a watchdog: if no fix lands in 10 s, offer a
   // retry and the demo flight instead of sitting silently on "Cold".
-  setWaitingSignal()
+  screen.setWaiting()
   fixWatchdog = window.setTimeout(() => {
-    if (lastFix === null) {
-      gpsErrorBtn.classList.remove('hidden')
-      huntHint.textContent = 'No position yet — check the location permission, or run the demo flight.'
-      demoHuntBtn.classList.remove('hidden')
-    }
+    if (lastFix === null) screen.prompt('nofix', simMode)
   }, 10000)
 
   locationCtrl = startRealLocation(handleFix, (code) => {
     // 1 = denied, 2 = unavailable, 3 = timeout — all dead ends without help.
     if (code === 1 || code === 2 || code === 3) {
       window.clearTimeout(fixWatchdog)
-      huntsPrompt('gps')
+      screen.prompt('gps', simMode)
     }
   })
 }
@@ -439,11 +250,11 @@ function startDemoFlight(): void {
   simMode = true
   window.clearTimeout(fixWatchdog)
   locationCtrl?.stop()
-  gpsErrorBtn.classList.add('hidden')
+  screen.hideGpsError()
   showSimChrome()
   locationCtrl = startSimulatedFixer(findLocationTargets(), handleFix)
   toast('Demo flight rolling — follow the signal to each set.', 3200)
-  huntsActiveHint()
+  refreshPrompts()
 }
 
 /**
@@ -453,8 +264,7 @@ function startDemoFlight(): void {
 function manualJump(spot: FilmSpot): void {
   locationCtrl?.stop()
   locationCtrl = null
-  evaluateProximity({lat: spot.lat, lng: spot.lng, accuracyM: 5, simulated: true})
-  huntsActiveHint()
+  handleFix({lat: spot.lat, lng: spot.lng, accuracyM: 5, simulated: true})
 }
 
 // ------------------------------------------------------------------ hunt start/restart
@@ -463,8 +273,8 @@ function beginHunt(): void {
   startTimerTicker()
   startLocation()
   showOnlyScreen('hunt')
-  renderSpotList()
-  huntsActiveHint()
+  screen.renderSpotList(hunt.spots)
+  refreshPrompts()
 }
 
 let pendingScore: {name: string; totalTimeMs: number; splits: ScoreEntry['splits']} | null = null
@@ -475,24 +285,6 @@ function goToSummary(): void {
   arTarget = null
   fireConfetti()
   haptics.fanfare()
-
-  summaryTotal.textContent = formatClock(hunt.elapsedMs())
-
-  const runs = [...hunt.spots].sort((a, b) => (a.foundAtMs ?? 0) - (b.foundAtMs ?? 0))
-  summarySplits.innerHTML = ''
-  for (const run of runs) {
-    if (run.foundAtMs === null) continue
-    const li = document.createElement('li')
-    li.className = 'glass flex items-center gap-3 rounded-tile px-3.5 py-3'
-    li.innerHTML = `
-      <span class="grid h-9 w-9 place-items-center rounded-chip bg-gold/10 font-display text-lg text-gold">${String(FILM_SPOTS.indexOf(run.spot) + 1)}</span>
-      <div class="min-w-0 flex-1">
-        <p class="font-display truncate text-xl tracking-wider text-chalk">${run.spot.name}</p>
-        <p class="truncate text-[11px] text-fog">${run.spot.movie.title}</p>
-      </div>
-      <p class="font-display shrink-0 text-2xl tracking-wider text-spotlight">${formatClock(run.splitMs ?? 0)}</p>`
-    summarySplits.appendChild(li)
-  }
 
   pendingScore = {
     name: '',
@@ -505,25 +297,27 @@ function goToSummary(): void {
         timeMs: s.splitMs!,
       })),
   }
-  renderLeaderboard()
+  renderMarquee()
 }
 
-function renderLeaderboard(highlightName?: string): void {
-  leaderboardList.innerHTML = ''
-  for (const [i, entry] of fetchLeaderboard().slice(0, 8).entries()) {
-    const li = document.createElement('li')
-    const highlighted = highlightName !== undefined && entry.name === highlightName
-    li.className =
-      'flex items-center gap-3 px-4 py-2.5 ' +
-      (highlighted ? 'bg-gold/10' : '')
-    li.innerHTML = `
-      <span class="w-6 font-display text-lg text-fog/60">${i + 1}</span>
-      <span class="min-w-0 flex-1 truncate font-semibold text-chalk">${escapeHtml(entry.name)}</span>
-      ${entry.splits.length ? `<span class="text-[10px] font-bold uppercase tracking-widest text-fog">${entry.splits.length}/3 sets</span>` : ''}
-      <span class="font-display text-xl tracking-wider text-spotlight">${formatClock(entry.totalTimeMs)}</span>`
-    leaderboardList.appendChild(li)
-  }
-  nameInput.value = pendingScore?.name ?? ''
+function renderMarquee(highlightName?: string): void {
+  summary.render(
+    {
+      totalMs: hunt.elapsedMs(),
+      splits: [...hunt.spots]
+        .filter((r) => r.foundAtMs !== null && r.splitMs !== null)
+        .sort((a, b) => (a.foundAtMs ?? 0) - (b.foundAtMs ?? 0))
+        .map((r) => ({
+          index: FILM_SPOTS.indexOf(r.spot) + 1,
+          name: r.spot.name,
+          movie: r.spot.movie.title,
+          ms: r.splitMs ?? 0,
+        })),
+      entries: fetchLeaderboard().slice(0, 8),
+    },
+    highlightName,
+  )
+  summary.setPendingName(pendingScore?.name ?? '')
 }
 
 // ------------------------------------------------------------------ AR hooks
@@ -542,7 +336,7 @@ const arHooks = {
     }
     if (status === 'NORMAL') {
       arHint.textContent = inRange()
-        ? "You’re inside the set — hold still, the slate is about to clap."
+        ? 'You’re inside the set — hold still, the slate is about to clap.'
         : 'Step back into the set’s glow to trigger the reveal.'
     } else if (status === 'LIMITED') {
       arHint.textContent = 'Still finding the room — keep the phone steady.'
@@ -557,7 +351,7 @@ const arHooks = {
       !alreadyFoundNotified
     ) {
       alreadyFoundNotified = true
-      toast("That set’s already in the can — enjoy the rerun.")
+      toast('That set’s already in the can — enjoy the rerun.')
     }
   },
 
@@ -676,9 +470,7 @@ gpsErrorBtn.addEventListener('click', () => {
   if (!navigator.geolocation) return
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      lastFix = {lat: pos.coords.latitude, lng: pos.coords.longitude, accuracyM: pos.coords.accuracy, simulated: false}
-      evaluateProximity(lastFix)
-      huntsActiveHint()
+      handleFix({lat: pos.coords.latitude, lng: pos.coords.longitude, accuracyM: pos.coords.accuracy, simulated: false})
     },
     () => undefined,
     {enableHighAccuracy: true, timeout: 12000},
@@ -695,27 +487,12 @@ for (const btn of document.querySelectorAll<HTMLButtonElement>('#sim-rail .sim-b
   })
 }
 
-nameForm.addEventListener('submit', (e) => {
-  e.preventDefault()
-  if (!pendingScore) return
-  const name = nameInput.value.trim()
-  if (!name) {
-    scoreStatus.textContent = 'The marquee needs a name.'
-    scoreStatus.classList.remove('hidden')
-    return
-  }
-  postScoreBtn.disabled = true
-  postScoreBtn.textContent = 'Posting…'
-  const score = pendingScore
-  const total = score.totalTimeMs
-  const splits = score.splits
-  submitScore(name, total, splits).then(() => {
-    postScoreBtn.disabled = false
-    postScoreBtn.textContent = 'Post'
-    scoreStatus.textContent = `Posted — you’re on the marquee, ${name}.`
-    score.name = name
-    renderLeaderboard(name)
-  })
+summary.bindPostForm(async (name) => {
+  if (!pendingScore) return false
+  await submitScore(name, pendingScore.totalTimeMs, pendingScore.splits)
+  pendingScore.name = name
+  renderMarquee(name)
+  return true
 })
 
 restartBtn.addEventListener('click', () => {
@@ -746,8 +523,8 @@ function boot(): void {
       startTimerTicker()
       startLocation()
       showOnlyScreen('hunt')
-      renderSpotList()
-      huntsActiveHint()
+      screen.renderSpotList(hunt.spots)
+      refreshPrompts()
       break
     case 'complete':
       goToSummary()
@@ -758,8 +535,8 @@ function boot(): void {
 }
 
 hunt.onChange(() => {
-  renderSpotList()
-  if (hunt.status === 'in_progress') huntsActiveHint()
+  screen.renderSpotList(hunt.spots)
+  if (hunt.status === 'in_progress') refreshPrompts()
 })
 
 boot()
@@ -777,9 +554,4 @@ if (simMode || import.meta.env.DEV) {
       openAr: () => openAr(),
     },
   })
-}
-
-// Small XSS guard for leaderboard names.
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]!)
 }
