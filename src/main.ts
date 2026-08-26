@@ -18,7 +18,7 @@ import {isCameraStatusDetail} from './camera-status'
 import {fireConfetti} from './confetti'
 import {FILM_SPOTS, type FilmSpot, spotById} from './data/spots'
 import {createHunt, formatClock, type HuntController} from './hunt'
-import {createHuntScreen} from './hunt-screen'
+import {bandLabel, createHuntScreen} from './hunt-screen'
 import {haptics} from './haptics'
 import {fetchLeaderboard, submitScore, type ScoreEntry} from './leaderboard'
 import {
@@ -43,6 +43,19 @@ const summaryScreenEl = $('#screen-summary')
 const arChrome = $('#ar-chrome')
 const revealPanel = $('#reveal-panel')
 
+// AR hunt surface
+const debugHud = $('#debug-hud')
+const reticle = $('#ar-reticle')
+const calibrationBox = $('#ar-calibration')
+const calibrationTitle = $('#ar-calibration-title')
+const calibrationSub = $('#ar-calibration-sub')
+const lostOverlay = $('#ar-lost')
+const lockedFlash = $('#ar-locked-flash')
+const arSignalWord = $('#ar-signal-word')
+const arHeatFill = $('#ar-heat-fill')
+const arProgress = $('#ar-progress')
+const arProgressCount = $('#ar-progress-count')
+
 const startButton = $<HTMLButtonElement>('#start-button')
 const demoStartBtn = $<HTMLButtonElement>('#demo-start-btn')
 const openArBtn = $<HTMLButtonElement>('#open-ar-btn')
@@ -63,7 +76,6 @@ const hud = {
   state: $('#hud-state'),
 }
 const arTimerValue = $('#ar-timer-value')
-const arHint = $('#ar-hint')
 const endArBtn = $<HTMLButtonElement>('#end-ar-btn')
 const recenterBtn = $<HTMLButtonElement>('#recenter-btn')
 const toastEl = $('#toast')
@@ -140,23 +152,72 @@ function showOnlyScreen(name: 'start' | 'hunt' | 'summary'): void {
 const spotStateLabel = (spotId: string): string =>
   hunt.spots.find((s) => s.spot.id === spotId)?.status ?? 'locked'
 
-function showAr(spot: FilmSpot): void {
+// ------------------------------------------------------------------ AR hunt flow (spec §5, §8)
+let worldLocked = false
+let lastNormalAt = 0
+let lockedFlashTimer = 0
+
+function setReticle(state: 'searching' | 'tracking' | 'nearby' | 'reveal'): void {
+  reticle.dataset.state = state
+}
+
+/** The camera becomes the application (spec §5): hide screens, open AR. */
+function enterAr(): void {
   startScreen.classList.add('hidden')
   huntScreenEl.classList.add('hidden')
   summaryScreenEl.classList.add('hidden')
   arChrome.classList.remove('hidden')
   revealPanel.classList.add('hidden')
-  recenterBtn.hidden = false
-  hudValue(hud.spot, spot.id)
-  hudValue(hud.state, spotStateLabel(spot.id))
-  arHint.textContent = 'Move your phone slowly to lock tracking…'
+
+  // Debug HUD stays behind the dev/sim flag (spec §25).
+  debugHud.classList.toggle('hidden', !(import.meta.env.DEV || simMode))
+
+  // Calibration state A — camera starting (spec §8).
+  worldLocked = false
+  setReticle('searching')
+  calibrationTitle.textContent = 'STARTING CAMERA'
+  calibrationSub.textContent = 'Give the app a moment — the viewfinder will guide you.'
+  calibrationBox.classList.remove('hidden')
+  lostOverlay.classList.add('hidden')
+
   alreadyFoundNotified = false
+  ar.start(arHooks)
 }
 
-function hideAr(): void {
+/** ✕ — leave the camera; the hunt keeps running on the dashboard. */
+function exitAr(): void {
+  ar.stop()
   arChrome.classList.add('hidden')
   revealPanel.classList.add('hidden')
+  window.clearTimeout(lockedFlashTimer)
+  if (hunt.allFound()) {
+    goToSummary()
+    return
+  }
+  showOnlyScreen('hunt')
   refreshPrompts()
+}
+
+function flashWorldLocked(): void {
+  lockedFlash.classList.remove('hidden')
+  lockedFlash.classList.add('flex')
+  window.clearTimeout(lockedFlashTimer)
+  lockedFlashTimer = window.setTimeout(() => {
+    lockedFlash.classList.add('hidden')
+    lockedFlash.classList.remove('flex')
+  }, 1400)
+}
+
+/** Film-reel progress dots + take counter (spec §21). */
+function renderProgress(): void {
+  const found = hunt.spots.filter((s) => s.status === 'found').length
+  arProgress.innerHTML = hunt.spots
+    .map(
+      (s) =>
+        `<span class="reel-dot${s.status === 'found' ? ' lit' : ''}" aria-hidden="true"></span>`,
+    )
+    .join('')
+  arProgressCount.textContent = `${String(found).padStart(2, '0')}/${String(hunt.spots.length).padStart(2, '0')}`
 }
 
 // ------------------------------------------------------------------ proximity → screen
@@ -179,6 +240,19 @@ function applyFix(fix: GeoFix): void {
   }
 
   screen.renderVerdict(verdict)
+
+  // Signal-reactive AR + the in-camera signal chip (spec §15).
+  ar.setSignal(verdict.band)
+  arSignalWord.textContent = bandLabel(verdict.band).toUpperCase()
+  arHeatFill.style.width = `${verdict.heat.toFixed(0)}%`
+  arSignalWord.classList.toggle('text-gold', verdict.band >= 2)
+  arSignalWord.classList.toggle('text-spotlight', verdict.band >= 3)
+  const labelSpot = targetSpot ?? verdict.namedSpot
+  ar.setLabel(
+    labelSpot ? labelSpot.name.toUpperCase() : '',
+    verdict.band >= 4 ? 'ON SET' : verdict.band >= 3 ? 'HOT' : verdict.band >= 2 ? 'WARM' : 'SIGNAL',
+  )
+  if (verdict.band >= 3 && worldLocked) setReticle('nearby')
 }
 
 function refreshTargetPicker(): void {
@@ -285,10 +359,8 @@ function beginHunt(): void {
   hunt.start()
   startTimerTicker()
   startLocation()
-  showOnlyScreen('hunt')
-  screen.renderSpotList(hunt.spots)
-  refreshTargetPicker()
-  refreshPrompts()
+  renderProgress()
+  enterAr()
 }
 
 let pendingScore: {name: string; totalTimeMs: number; splits: ScoreEntry['splits']} | null = null
@@ -333,21 +405,43 @@ const inRange = (): boolean => {
 
 const arHooks = {
   inRange,
+  revealSpot: (): FilmSpot | null => arTarget,
+
   onTracking(reality?: Xr8RealityFrameData): void {
     const status = reality?.trackingStatus
     if (status) {
       hudValue(hud.tracking, status, status === 'NORMAL' ? 'good' : status === 'LIMITED' ? 'warn' : 'bad')
       hudValue(hud.reason, reality?.trackingReason && reality.trackingReason !== 'UNSPECIFIED' ? reality.trackingReason : '—')
     }
+
+    // Calibration + tracking-loss UX in player language (spec §8, §24).
     if (status === 'NORMAL') {
-      arHint.textContent = inRange()
-        ? 'You’re inside the set — hold still, the slate is about to clap.'
-        : 'Step back into the set’s glow to trigger the reveal.'
-    } else if (status === 'LIMITED') {
-      arHint.textContent = 'Still finding the room — keep the phone steady.'
+      lastNormalAt = performance.now()
+      if (!worldLocked) {
+        // State C — world locked (spec §8).
+        worldLocked = true
+        calibrationBox.classList.add('hidden')
+        lostOverlay.classList.add('hidden')
+        flashWorldLocked()
+        setReticle(arTarget ? 'nearby' : 'tracking')
+        ar.setLabel(
+          (targetSpot ?? hunt.spots.find((r) => r.status !== 'found')?.spot)?.name.toUpperCase() ?? '',
+          'SIGNAL',
+        )
+      } else {
+        if (!lostOverlay.classList.contains('hidden')) {
+          lostOverlay.classList.add('hidden')
+          flashWorldLocked()
+        }
+        setReticle(arTarget ? 'nearby' : 'tracking')
+      }
+    } else if (worldLocked && performance.now() - lastNormalAt > 2000) {
+      lostOverlay.classList.remove('hidden')
+      setReticle('searching')
     }
+
     // Re-entering an already-found spot: never re-reveal, just say so.
-    const activeSpot = ar.getActiveSpot()
+    const activeSpot = arTarget
     if (
       status === 'NORMAL' &&
       activeSpot &&
@@ -371,6 +465,7 @@ const arHooks = {
     hunt.reveal(spot.id)
     hudValue(hud.state, 'found', 'good')
     haptics.clap()
+    setReticle('reveal')
     // The chosen target just wrapped → fall back to auto-nearest.
     if (targetSpot?.id === spot.id) {
       targetSpot = null
@@ -381,6 +476,7 @@ const arHooks = {
     void arChrome.offsetWidth // restart the animation
     arChrome.classList.add('motion-safe:animate-shake')
     window.setTimeout(() => arChrome.classList.remove('motion-safe:animate-shake'), 420)
+    renderProgress()
     toast(`Scene found — ${spot.name}.`)
     // If this was the final set, the continue button becomes "see results".
     revealContinueBtn.querySelector('span')!.textContent = hunt.allFound() ? 'See your results' : 'Back to the hunt'
@@ -398,7 +494,7 @@ const arHooks = {
 
   onError(message: string): void {
     toast(`AR hiccup: ${message}`)
-    endArSession()
+    exitAr()
   },
 }
 
@@ -432,21 +528,9 @@ function openRevealPanel(spot: FilmSpot): void {
 }
 
 // ------------------------------------------------------------------ AR session
+// The dashboard's "Return to camera" — re-enter the live AR hunt.
 function openAr(): void {
-  if (!arTarget) return
-  showAr(arTarget)
-  ar.start(arTarget, arHooks)
-}
-
-function endArSession(): void {
-  window.clearTimeout(revealFallbackTimer)
-  ar.stop()
-  hideAr()
-  if (hunt.allFound()) {
-    goToSummary()
-  } else {
-    showOnlyScreen('hunt')
-  }
+  enterAr()
 }
 
 // ------------------------------------------------------------------ events
@@ -473,12 +557,24 @@ openArBtn.addEventListener('click', () => {
 })
 endArBtn.addEventListener('click', () => {
   haptics.tick()
-  endArSession()
+  exitAr() // ✕ → dashboard; the hunt keeps running
+})
+// The set-list button mirrors ✕ (both land on the planning screen).
+$<HTMLButtonElement>('#ar-setlist-btn').addEventListener('click', () => {
+  haptics.tick()
+  exitAr()
 })
 recenterBtn.addEventListener('click', () => ar.recenter())
 revealContinueBtn.addEventListener('click', () => {
   haptics.tick()
-  endArSession()
+  window.clearTimeout(revealFallbackTimer)
+  revealPanel.classList.add('hidden')
+  if (hunt.allFound()) {
+    goToSummary()
+  } else {
+    // AR spectacle first, information second — then straight back to hunting.
+    setReticle(arTarget ? 'nearby' : 'tracking')
+  }
 })
 
 gpsErrorBtn.addEventListener('click', () => {
@@ -542,11 +638,14 @@ if (inAppBrowser) {
 function boot(): void {
   switch (hunt.status) {
     case 'in_progress':
+      // Resume onto the planning screen — one tap on "Return to camera"
+      // re-enters the live AR hunt (and re-asks camera permission politely).
       startTimerTicker()
       startLocation()
       showOnlyScreen('hunt')
       screen.renderSpotList(hunt.spots)
       refreshTargetPicker()
+      renderProgress()
       refreshPrompts()
       break
     case 'complete':
@@ -560,6 +659,7 @@ function boot(): void {
 hunt.onChange(() => {
   screen.renderSpotList(hunt.spots)
   refreshTargetPicker()
+  renderProgress()
   if (hunt.status === 'in_progress') refreshPrompts()
 })
 

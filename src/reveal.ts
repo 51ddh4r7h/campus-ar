@@ -13,6 +13,7 @@ const NIGHT = 0x0d1320
 const BRASS = 0xb97e1e
 const GOLD = 0xf3b93f
 const CHALK = 0xeae4d5
+const CREAM = 0xffe9ae
 
 type Phase = 'idle' | 'rise' | 'clap' | 'flash' | 'present' | 'done'
 
@@ -171,6 +172,82 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
   scene.add(slate)
   slate.add(clipScreen)
 
+  // ── FilmFrame title card: cinematic history inserted into the room (§18).
+  const cardCanvas = document.createElement('canvas')
+  cardCanvas.width = 512
+  cardCanvas.height = 288
+  const cardCtx = cardCanvas.getContext('2d')!
+  const cardTexture = new THREE.CanvasTexture(cardCanvas)
+  cardTexture.colorSpace = THREE.SRGBColorSpace
+  const cardMaterial = new THREE.MeshBasicMaterial({map: cardTexture, transparent: true, opacity: 0})
+  const card = new THREE.Mesh(new THREE.PlaneGeometry(1.02, 0.574), cardMaterial)
+  card.position.set(0, 0.72, 0.08)
+  card.visible = false
+  slate.add(card)
+
+  const drawCard = (s: FilmSpot): void => {
+    const ctx = cardCtx
+    ctx.fillStyle = '#0B0E16'
+    ctx.fillRect(0, 0, 512, 288)
+    ctx.strokeStyle = '#EAE4D5'
+    ctx.lineWidth = 10
+    ctx.strokeRect(9, 9, 494, 270)
+    ctx.strokeStyle = 'rgba(243, 185, 63, 0.85)'
+    ctx.lineWidth = 2
+    ctx.strokeRect(30, 30, 452, 228)
+    ctx.textAlign = 'center'
+    ctx.fillStyle = '#F3B93F'
+    ctx.font = '26px "Bebas Neue", Impact, sans-serif'
+    ctx.fillText('F I L M E D   H E R E', 256, 84)
+    let size = 62
+    ctx.fillStyle = '#FFE9AE'
+    do {
+      ctx.font = `${size}px "Bebas Neue", Impact, sans-serif`
+      size -= 4
+    } while (ctx.measureText(s.name.toUpperCase()).width > 430 && size > 30)
+    ctx.fillText(s.name.toUpperCase(), 256, 158)
+    ctx.fillStyle = '#EAE4D5'
+    ctx.font = '32px "Bebas Neue", Impact, sans-serif'
+    ctx.fillText(s.movie.title.toUpperCase(), 256, 214)
+    cardTexture.needsUpdate = true
+  }
+
+  // ── film-strip particles: burst outward on the clap (§17 step 5).
+  interface Strip {
+    mesh: THREE.Mesh
+    vel: THREE.Vector3
+    spin: number
+    life: number
+  }
+  const strips: Strip[] = []
+  const stripGeo = new THREE.PlaneGeometry(0.02, 0.075)
+  for (let i = 0; i < 24; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: i % 3 === 0 ? CREAM : GOLD,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+    })
+    const strip = new THREE.Mesh(stripGeo, mat)
+    strip.visible = false
+    slate.add(strip)
+    strips.push({mesh: strip, vel: new THREE.Vector3(), spin: 0, life: 0})
+  }
+
+  const burstStrips = (): void => {
+    for (const strip of strips) {
+      const angle = Math.random() * Math.PI * 2
+      const speed = 0.5 + Math.random() * 0.9
+      strip.vel.set(Math.cos(angle) * speed, 0.8 + Math.random() * 0.7, Math.sin(angle) * speed * 0.4)
+      strip.spin = (Math.random() - 0.5) * 6
+      strip.life = 1
+      strip.mesh.position.set(0, 0.45, 0.05)
+      strip.mesh.rotation.set(0, 0, Math.random() * Math.PI)
+      strip.mesh.visible = true
+      ;(strip.mesh.material as THREE.MeshBasicMaterial).opacity = 1
+    }
+  }
+
   // ---------------------------------------------------------------- timeline
   let phase: Phase = 'idle'
   let startedAt = 0
@@ -196,8 +273,12 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
       flash.material.opacity = 0
       clipScreen.visible = false
       ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = 0
+      card.visible = false
+      cardMaterial.opacity = 0
+      for (const strip of strips) strip.mesh.visible = false
       clipReady = false
       clipFailed = false
+      drawCard(s)
       const wanted = s.asset.videoUrl ?? ''
       if (wanted && clipSrc !== wanted) {
         clipSrc = wanted
@@ -216,6 +297,9 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
       flash.material.opacity = 0
       clipScreen.visible = false
       ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = 0
+      card.visible = false
+      cardMaterial.opacity = 0
+      for (const strip of strips) strip.mesh.visible = false
       clipVideo.pause()
       spot = null
     },
@@ -252,12 +336,23 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
           else a = CLOSED_ANGLE
           arm.rotation.x = a
           if (t >= 300) {
+            burstStrips()
             phase = 'flash'
             startedAt = nowMs
           }
           break
         }
         case 'flash': {
+          // Film strips fly outward with gravity, fading as they land.
+          for (const strip of strips) {
+            if (!strip.mesh.visible) continue
+            strip.vel.y -= 0.004 * 16
+            strip.mesh.position.addScaledVector(strip.vel, 1)
+            strip.mesh.rotation.x += strip.spin
+            strip.life -= 16 / 900
+            ;(strip.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, strip.life)
+            if (strip.life <= 0) strip.mesh.visible = false
+          }
           const p = t / 320
           flash.material.opacity = Math.max(0, Math.sin(Math.PI * p)) * 0.9
           if (p >= 1 && !openedCalled) {
@@ -267,8 +362,19 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
           break
         }
         case 'present': {
+          // Strips keep flying while the board presents.
+          for (const strip of strips) {
+            if (!strip.mesh.visible) continue
+            strip.vel.y -= 0.004 * 16
+            strip.mesh.position.addScaledVector(strip.vel, 1)
+            strip.mesh.rotation.x += strip.spin
+            strip.life -= 16 / 900
+            ;(strip.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, strip.life)
+            if (strip.life <= 0) strip.mesh.visible = false
+          }
           // The board presents: cone blooms, soft float, panel opens. The
-          // movie clip screen (if the clip loaded) fades in behind the board.
+          // movie clip screen (if the clip loaded) fades in behind the board,
+          // and the FilmFrame title card rises above it.
           const p = Math.min(1, t / 1600)
           cone.material.opacity = 0.08 + 0.42 * easeOutQuad(p)
           ring.material.opacity = 0.05 + 0.22 * easeOutQuad(p)
@@ -282,6 +388,12 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
             const cp = Math.min(1, t / 700)
             ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = easeOutQuad(cp)
             clipScreen.position.y = 0.18 + 0.06 * easeOutQuad(cp)
+          }
+          if (t > 250) {
+            card.visible = true
+            const kp = Math.min(1, (t - 250) / 650)
+            cardMaterial.opacity = easeOutQuad(kp)
+            card.position.y = 0.72 + 0.05 * easeOutQuad(kp)
           }
           if (!openedCalled && t >= OPEN_AT) {
             openedCalled = true

@@ -1,19 +1,21 @@
 /**
- * AR session manager (8th Wall Engine + Three.js).
+ * AR session manager (8th Wall Engine + Three.js) — the camera IS the app.
  *
- * Wrap-up of Phase 1's tracking pipeline, reworked:
- *  - The arrow trail is GONE — no more anchored waypoints.
- *  - The pipeline is registered ONCE; each "open camera" runs a fresh
- *    `XR8.run()`, and closing runs `XR8.stop()`, per the engine's documented
- *    lifecycle (run → stop → run is supported; modules dedupe by name).
- *  - The scene module owns the reveal device and the "inside for ≥2 s with
- *    tracking NORMAL" reveal trigger.
+ * The pipeline is registered ONCE; the hunt runs a single long-lived
+ * `XR8.run()` session (run → stop → run is supported; modules dedupe by name).
+ * The session is spot-agnostic: the reveal gate asks `hooks.revealSpot()` when
+ * it fires, so the game layer (main.ts) decides what is revealable.
+ *
+ * Owns the world→screen bridge:
+ *  - ARWorld (film reel, ground shadow, set markers) — spec §11–13
+ *  - the projected spatial label (spec §14)
+ *  - signal-state forwarding to the world layer (spec §15)
  */
-
 import {XR8Promise} from '@8thwall/engine-binary'
 import * as THREE from 'three'
 import {fullWindowCanvasModule} from './full-window-canvas'
 import type {FilmSpot} from './data/spots'
+import {createArWorld, type ArWorld} from './ar-world'
 import {createRevealDevice, type RevealDevice} from './reveal'
 import {createRevealGate, type RevealGate} from './reveal-gate'
 import {haptics} from './haptics'
@@ -25,16 +27,20 @@ window.THREE = THREE
 
 const canvas = document.querySelector<HTMLCanvasElement>('#camerafeed')!
 
+export type SignalLevel = 0 | 1 | 2 | 3 | 4
+
 export interface ArHooks {
   /** Every frame with the tracking reality frame. */
   onTracking(reality?: Xr8RealityFrameData): void
   onCameraStatus(status: XrCameraStatusData): void
+  /** The spot the reveal gate should reveal when it fires (null → nothing). */
+  revealSpot(): FilmSpot | null
   /** Fired the instant the reveal triggers (mark the spot found, HUD, toast). */
   onReveal(spot: FilmSpot): void
   /** Fired ~1.25 s later, when the clapperboard presents — open the DOM panel. */
   onPanelOpen(spot: FilmSpot): void
   onError(message: string): void
-  /** True while the GPS fix is inside the active spot's radius. */
+  /** True while the GPS fix is inside the revealable spot's radius. */
   inRange(): boolean
 }
 
@@ -58,14 +64,13 @@ function installModules(xr8: Xr8): void {
     xr8.Threejs.pipelineModule(),           // Creates the Three.js AR scene + renders transparently.
     xr8.XrController.pipelineModule(),      // SLAM: 6DoF world tracking.
     fullWindowCanvasModule(),               // Sizes the canvas buffer to fill the viewport.
-    sceneModule(),                          // Owns the reveal device + inside-for-2s trigger.
+    sceneModule(),                          // Owns the AR world + reveal device + reveal gate.
     hudModule(),                            // Feeds camera status to the debug HUD.
   ])
 }
 
 // ---------------------------------------------------------------- session
 interface ActiveSession {
-  spot: FilmSpot
   hooks: ArHooks
   revealed: boolean
   /** Owns the "inside for ≥2 s with NORMAL tracking" rule. */
@@ -75,14 +80,20 @@ interface ActiveSession {
 let active: ActiveSession | null = null
 let lastFrameAt = 0
 let revealDevice: RevealDevice | null = null
+let arWorld: ArWorld | null = null
+let xrSceneRef: Xr8ThreejsHandle | null = null
+let currentSignal: SignalLevel = 0
+const labelState = {name: '', sub: ''}
 
 const triggerReveal = (): void => {
   const session = active
   if (!session || session.revealed) return
+  const spot = session.hooks.revealSpot()
+  if (!spot) return
   session.revealed = true
   session.gate.reset()
-  revealDevice?.show(session.spot)
-  session.hooks.onReveal(session.spot)
+  revealDevice?.show(spot)
+  session.hooks.onReveal(spot)
 }
 
 function setupCamera(xrScene: Xr8ThreejsHandle): void {
@@ -97,6 +108,39 @@ function setupCamera(xrScene: Xr8ThreejsHandle): void {
   })
 }
 
+// ---------------------------------------------------------------- spatial label
+const labelEl = {root: null as HTMLElement | null, name: null as HTMLElement | null, sub: null as HTMLElement | null}
+const projection = new THREE.Vector3()
+
+function projectLabel(camera: THREE.Camera): void {
+  if (labelEl.root === null) {
+    labelEl.root = document.getElementById('ar-label')
+    labelEl.name = document.getElementById('ar-label-name')
+    labelEl.sub = document.getElementById('ar-label-state')
+  }
+  const root = labelEl.root
+  if (!root || !arWorld) return
+
+  const show = currentSignal >= 1 && !active?.revealed && labelState.name !== ''
+  if (!show) {
+    root.classList.add('hidden')
+    return
+  }
+  arWorld.anchor.getWorldPosition(projection)
+  projection.project(camera)
+  if (projection.z >= 1) {
+    root.classList.add('hidden')
+    return
+  }
+  const x = (projection.x * 0.5 + 0.5) * window.innerWidth
+  const y = (-projection.y * 0.5 + 0.5) * window.innerHeight
+  root.style.left = `${x.toFixed(1)}px`
+  root.style.top = `${y.toFixed(1)}px`
+  root.classList.remove('hidden')
+  if (labelEl.name) labelEl.name.textContent = labelState.name
+  if (labelEl.sub) labelEl.sub.textContent = labelState.sub
+}
+
 // ---------------------------------------------------------------- modules
 const sceneModule = (): Xr8CameraPipelineModule => ({
   name: 'campus-ar-scene',
@@ -106,6 +150,7 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     const xrScene = XR8.Threejs.xrScene()
     const scene = xrScene.scene
     const renderer = xrScene.renderer
+    xrSceneRef = xrScene
 
     // Transparent AR overlay: only our meshes draw over the camera feed.
     renderer.setClearColor(0x000000, 0)
@@ -127,7 +172,10 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
 
     setupCamera(xrScene)
 
-    // Fresh reveal device for this session (anchored in world space).
+    // Fresh AR world + reveal device for this session (anchored in world space).
+    arWorld?.reset()
+    if (!arWorld) arWorld = createArWorld(scene)
+    arWorld.setSignal(currentSignal)
     if (revealDevice) revealDevice.reset()
     revealDevice = createRevealDevice(scene)
     revealDevice.onOpen = (spot) => active?.hooks.onPanelOpen(spot)
@@ -155,6 +203,10 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     }
 
     revealDevice?.tick(now)
+    if (arWorld && xrSceneRef) {
+      arWorld.tick(now, xrSceneRef.camera.position)
+      projectLabel(xrSceneRef.camera)
+    }
   },
 })
 
@@ -165,8 +217,8 @@ const hudModule = (): Xr8CameraPipelineModule => ({
 
 // ------------------------------------------------------------------- api
 export interface ArControl {
-  /** Opens the camera and starts world tracking for the given spot. */
-  start(spot: FilmSpot, hooks: ArHooks): void
+  /** Opens the camera and starts the long-lived hunt session. */
+  start(hooks: ArHooks): void
   /** Closes the camera session. Safe to call when nothing is running. */
   stop(): void
   /** Resets the world origin to the device's current pose. */
@@ -174,14 +226,21 @@ export interface ArControl {
   /** Dev/sim hook: force the reveal without waiting for tracking NORMAL. */
   forceReveal(): void
   getActiveSpot(): FilmSpot | null
+  /** Signal-reactive AR: 0 cold → 4 on-set (spec §15). */
+  setSignal(level: SignalLevel): void
+  /** Spatial label content for the world-anchored reel. */
+  setLabel(name: string, sub: string): void
 }
 
 export const createArControl = (): ArControl => ({
-  start(spot, hooks) {
+  start(hooks) {
     if (running) this.stop()
 
-    active = {spot, hooks, revealed: false, gate: createRevealGate()}
+    active = {hooks, revealed: false, gate: createRevealGate()}
     lastFrameAt = 0
+    currentSignal = 0
+    labelState.name = ''
+    labelState.sub = ''
 
     bootEngine()
       .then((xr8) => {
@@ -201,6 +260,7 @@ export const createArControl = (): ArControl => ({
 
   stop() {
     active = null
+    labelEl.root?.classList.add('hidden')
     if (running && XR8) {
       try {
         XR8.stop()
@@ -215,6 +275,7 @@ export const createArControl = (): ArControl => ({
     if (!running || !XR8) return
     try {
       XR8.XrController.recenter()
+      if (arWorld && xrSceneRef) arWorld.recenter(xrSceneRef.camera.position)
       haptics.tick()
     } catch {
       /* no-op */
@@ -226,6 +287,16 @@ export const createArControl = (): ArControl => ({
   },
 
   getActiveSpot() {
-    return active?.spot ?? null
+    return active?.hooks.revealSpot() ?? null
+  },
+
+  setSignal(level) {
+    currentSignal = level
+    arWorld?.setSignal(level)
+  },
+
+  setLabel(name, sub) {
+    labelState.name = name
+    labelState.sub = sub
   },
 })

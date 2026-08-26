@@ -164,8 +164,8 @@
           <div id="hunt-prompts">
             <p id="hunt-hint" class="mb-3 text-center text-[13px] text-fog">Keep wandering — the signal will sharpen.</p>
             <button id="open-ar-btn" type="button" class="btn-primary hidden w-full">
-              <span class="font-display text-xl tracking-[0.18em]">Open camera</span>
-              <span class="text-xs font-semibold uppercase tracking-widest">See the set</span>
+              <span class="font-display text-xl tracking-[0.18em]">Return to camera</span>
+              <span class="text-xs font-semibold uppercase tracking-widest">The hunt is live</span>
             </button>
             <button id="gps-error-btn" type="button" class="btn-ghost hidden w-full">
               <span class="font-display text-lg tracking-[0.18em]">Enable location</span>
@@ -185,12 +185,98 @@
       </div>
     </section>
 
-    <!-- ══════════════════════════════════ AR CHROME ══════════════════════════════════ -->
+    <!-- ══════════════════════════════════ AR HUNT — the camera is the app ══════════════════════════════════ -->
     <div id="ar-chrome" class="pointer-events-none fixed inset-0 z-30 hidden">
-      <!-- debug HUD (quiet monospace, token-matched) -->
+      <!-- cinematic layers: vignette + grain (below UI, above camera) -->
+      <div class="ar-vignette absolute inset-0" aria-hidden="true"></div>
+      <div class="ar-grain absolute inset-0" aria-hidden="true"></div>
+
+      <!-- top HUD: title + film progress + timecode -->
+      <div
+        class="absolute inset-x-0 top-0 flex items-start justify-between px-4"
+        style="padding-top: max(0.9rem, env(safe-area-inset-top))"
+      >
+        <p class="font-display text-lg tracking-[0.22em] text-chalk drop-shadow-[0_1px_2px_rgba(4,6,11,0.9)]">Film Hunt</p>
+        <div class="flex flex-col items-end gap-1">
+          <div class="flex items-center gap-2">
+            <span id="ar-progress" class="flex items-center gap-1" aria-label="sets found"></span>
+            <span id="ar-progress-count" class="font-mono text-[11px] tabular-nums text-chalk/90">01/05</span>
+          </div>
+          <span id="ar-timer-value" class="font-mono text-[11px] tabular-nums text-spotlight/90">00:00.0</span>
+        </div>
+      </div>
+
+      <!-- viewfinder reticle: searching / tracking / nearby / reveal -->
+      <div
+        id="ar-reticle"
+        class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        data-state="searching"
+        aria-hidden="true"
+      >
+        <span class="reticle-corner tl"></span>
+        <span class="reticle-corner tr"></span>
+        <span class="reticle-corner bl"></span>
+        <span class="reticle-corner br"></span>
+        <span class="reticle-plus">+</span>
+      </div>
+
+      <!-- calibration copy -->
+      <div id="ar-calibration" class="absolute inset-x-0 top-[60%] px-6 text-center">
+        <p id="ar-calibration-title" class="font-display text-2xl tracking-[0.3em] text-chalk drop-shadow-[0_1px_2px_rgba(4,6,11,0.9)]">STARTING CAMERA</p>
+        <p id="ar-calibration-sub" class="mt-1.5 text-xs leading-relaxed text-chalk/70">Give the app a moment — the viewfinder will guide you.</p>
+      </div>
+
+      <!-- spatial label (projected from the world-anchored film reel) -->
+      <div id="ar-label" class="absolute left-0 top-0 hidden -translate-x-1/2 -translate-y-[130%] text-center" aria-hidden="true">
+        <p id="ar-label-name" class="font-display text-sm tracking-[0.24em] text-chalk drop-shadow-[0_1px_2px_rgba(4,6,11,0.9)]"></p>
+        <p id="ar-label-state" class="font-mono text-[10px] uppercase tracking-[0.2em] text-gold"></p>
+      </div>
+
+      <!-- tracking lost -->
+      <div id="ar-lost" class="absolute inset-0 hidden bg-night/55 backdrop-blur-[2px]">
+        <div class="absolute inset-x-0 top-[36%] px-6 text-center">
+          <p class="font-display text-2xl tracking-[0.3em] text-chalk">TRACKING LOST</p>
+          <p class="mt-2 text-xs leading-relaxed text-chalk/75">Move your phone slowly across a textured surface.</p>
+        </div>
+      </div>
+
+      <!-- world-locked flash -->
+      <div id="ar-locked-flash" class="absolute inset-0 hidden items-center justify-center">
+        <p class="font-display text-3xl tracking-[0.35em] text-gold drop-shadow-[0_2px_8px_rgba(4,6,11,0.9)]">WORLD LOCKED</p>
+      </div>
+
+      <!-- bottom HUD: compact signal + viewfinder controls -->
+      <div
+        class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 px-4"
+        style="padding-bottom: max(1rem, env(safe-area-inset-bottom))"
+      >
+        <div class="signal-chip pointer-events-auto">
+          <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-fog">Signal</p>
+          <p id="ar-signal-word" class="font-display text-2xl leading-none tracking-wider text-fog">COLD</p>
+          <div class="mt-1.5 h-1 w-28 overflow-hidden rounded-full bg-line">
+            <div id="ar-heat-fill" class="h-full rounded-full bg-gold transition-[width] duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+        <div class="pointer-events-auto flex items-center gap-2">
+          <button id="ar-setlist-btn" type="button" class="ar-circle-btn" aria-label="Open the set list">
+            <span class="text-base leading-none">▤</span>
+            <span class="text-[8px] tracking-[0.14em]">SETS</span>
+          </button>
+          <button id="recenter-btn" type="button" class="ar-circle-btn" aria-label="Recenter the world">
+            <span class="text-lg leading-none">↻</span>
+            <span class="text-[8px] tracking-[0.14em]">RECENTER</span>
+          </button>
+          <button id="end-ar-btn" type="button" class="ar-circle-btn" aria-label="Exit to the set list">
+            <span class="text-base leading-none">✕</span>
+            <span class="text-[8px] tracking-[0.14em]">EXIT</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- debug HUD — dev/sim only, never production -->
       <aside
         id="debug-hud"
-        class="glass pointer-events-auto absolute left-3 top-[max(1rem,env(safe-area-inset-top))] w-[152px] rounded-chip px-2.5 py-2 font-mono text-[10px] leading-[1.6] text-fog"
+        class="glass pointer-events-auto absolute left-3 top-[max(3.4rem,env(safe-area-inset-top))] hidden w-[152px] rounded-chip px-2.5 py-2 font-mono text-[10px] leading-[1.6] text-fog"
         aria-label="Debug HUD"
       >
         <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">ENGINE</span><span id="hud-engine" class="truncate text-chalk">loading…</span></div>
@@ -201,37 +287,6 @@
         <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">SPOT</span><span id="hud-spot" class="truncate text-chalk">none</span></div>
         <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">STATE</span><span id="hud-state" class="truncate text-chalk">—</span></div>
       </aside>
-
-      <!-- end session -->
-      <button
-        id="end-ar-btn"
-        type="button"
-        class="glass pointer-events-auto absolute right-3 top-[max(1rem,env(safe-area-inset-top))] rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-chalk"
-      >
-        ✕ End
-      </button>
-
-      <!-- timer + REC -->
-      <span
-        id="ar-timer"
-        class="glass pointer-events-auto absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] flex -translate-x-1/2 items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-sm text-spotlight"
-        aria-live="off"
-      ><span class="rec-dot" aria-hidden="true"></span><span id="ar-timer-value">00:00.0</span></span>
-
-      <!-- bottom hint pill -->
-      <div id="ar-hint" class="glass pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-1/2 w-max max-w-[86vw] -translate-x-1/2 rounded-full px-4 py-2 text-center text-[13px] font-medium text-chalk">
-        Move your phone slowly to lock tracking…
-      </div>
-
-      <!-- recenter -->
-      <button
-        id="recenter-btn"
-        type="button"
-        class="glass pointer-events-auto absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-3 rounded-full px-3 py-2 text-xs font-semibold text-chalk"
-        hidden
-      >
-        ↺ Reset
-      </button>
     </div>
 
     <!-- ══════════════════════════════════ REVEAL PANEL (signature moment) ══════════════════════════════════ -->

@@ -57,6 +57,9 @@ export interface HuntPromptState {
   simMode: boolean
 }
 
+/** The display word for a band (shared with the in-AR signal chip). */
+export const bandLabel = (band: 0 | 1 | 2 | 3 | 4): string => BAND_UI[band]?.label ?? ''
+
 export function createHuntScreen() {
   const signalLabel = $('#signal-label')
   const signalBand = $('#signal-band')
@@ -199,10 +202,11 @@ export function createHuntScreen() {
 
   /** Prompt-button visibility + footer hint for the current hunt state. */
   function showPrompts(state: HuntPromptState): void {
-    // Demo entry stays available while really hunting (hidden once sim runs
-    // or a set is live — the camera CTA takes the floor).
-    demoHuntBtn.classList.toggle('hidden', !state.running || state.simMode || !!state.arTarget)
-    openArBtn.classList.toggle('hidden', !state.running || !state.arTarget)
+    // The camera is the app — the dashboard's primary action always returns
+    // to it while the hunt is live.
+    openArBtn.classList.toggle('hidden', !state.running)
+    // Demo entry stays available while really hunting (hidden once sim runs).
+    demoHuntBtn.classList.toggle('hidden', !state.running || state.simMode)
     if (!state.running) return
 
     if (state.arTarget) {
