@@ -28,24 +28,37 @@ export interface ProximityVerdict {
   band: HeatBand
   /** Spot whose radius the player stands in (reliable fix), else null. */
   insideSpot: FilmSpot | null
-  /** Spot to name in copy — only when clearly closest (45 m rule, ≤160 m). */
+  /** Spot to name in copy — the chosen target, or the clearly-closest set. */
   namedSpot: FilmSpot | null
+  /** True when namedSpot was explicitly chosen (copy says "Target set"). */
+  targeted: boolean
   /** Fix too fuzzy to trust — copy asks for a steadier read. */
   fuzzy: boolean
   /** Nearest set is kilometres away (real GPS) — copy suggests the demo. */
   farAway: boolean
 }
 
-export const evaluateProximity = (fix: GeoFix, runs: SpotRun[]): ProximityVerdict => {
+/**
+ * Evaluate warmth. Without a target, heat tracks the nearest unfound spot
+ * (auto mode). With a target, everything — heat, band, unlock, copy — tracks
+ * that chosen set only.
+ */
+export const evaluateProximity = (
+  fix: GeoFix,
+  runs: SpotRun[],
+  targetSpot?: FilmSpot | null,
+): ProximityVerdict => {
   const unfound = runs.filter((r) => r.status !== 'found')
   if (unfound.length === 0) {
-    return {heat: 100, band: 4, insideSpot: null, namedSpot: null, fuzzy: false, farAway: false}
+    return {heat: 100, band: 4, insideSpot: null, namedSpot: null, targeted: false, fuzzy: false, farAway: false}
   }
 
-  const scored = unfound
+  const pool = targetSpot ? unfound.filter((r) => r.spot.id === targetSpot.id) : unfound
+  const scored = (pool.length > 0 ? pool : unfound)
     .map((r) => ({run: r, dist: distanceM(fix, r.spot.lat, r.spot.lng)}))
     .sort((a, b) => a.dist - b.dist)
   const nearest = scored[0]!
+  const targeted = targetSpot !== null && targetSpot !== undefined && pool.length > 0
 
   if (nearest.dist <= nearest.run.spot.radiusM && reliable(fix)) {
     return {
@@ -53,14 +66,16 @@ export const evaluateProximity = (fix: GeoFix, runs: SpotRun[]): ProximityVerdic
       band: 4,
       insideSpot: nearest.run.spot,
       namedSpot: nearest.run.spot,
+      targeted,
       fuzzy: false,
       farAway: false,
     }
   }
 
-  // Ambiguity rule: only name a spot when the second-closest is >45 m behind.
+  // Ambiguity rule (auto mode only): name a spot when the second-closest is
+  // >45 m behind. A chosen target is always named.
   const second = scored[1]
-  const clear = second === undefined || second.dist - nearest.dist > 45
+  const clear = targeted || second === undefined || second.dist - nearest.dist > 45
   const heat = heatFromDistance(nearest.dist, nearest.run.spot.radiusM)
 
   return {
@@ -68,6 +83,7 @@ export const evaluateProximity = (fix: GeoFix, runs: SpotRun[]): ProximityVerdic
     band: bandFromHeat(heat),
     insideSpot: null,
     namedSpot: clear && nearest.dist <= 160 ? nearest.run.spot : null,
+    targeted,
     fuzzy: !reliable(fix),
     farAway: !fix.simulated && nearest.dist > 2000,
   }

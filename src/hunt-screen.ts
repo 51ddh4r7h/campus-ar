@@ -67,6 +67,7 @@ export function createHuntScreen() {
   const spotList = $('#spot-list')
   const setsChip = $('#sets-chip')
   const timerChip = $('#timer-chip')
+  const targetSelect = $<HTMLSelectElement>('#target-select')
   const huntHint = $('#hunt-hint')
   const openArBtn = $('#open-ar-btn')
   const gpsErrorBtn = $('#gps-error-btn')
@@ -111,7 +112,9 @@ export function createHuntScreen() {
     setBand(verdict.band)
 
     if (verdict.namedSpot) {
-      signalSpot.textContent = `Closest set on the board: ${verdict.namedSpot.name}.`
+      signalSpot.textContent = verdict.targeted
+        ? `Target set: ${verdict.namedSpot.name}.`
+        : `Closest set on the board: ${verdict.namedSpot.name}.`
       signalSpot.classList.remove('hidden')
     } else {
       signalSpot.classList.add('hidden')
@@ -135,17 +138,41 @@ export function createHuntScreen() {
     setRadarSpeed()
   }
 
+  /**
+   * Rebuild the target dropdown: an auto option (nearest unfound) plus every
+   * unfound set. Found sets drop off automatically. `selectedId` '' = auto.
+   */
+  function renderTargetPicker(runs: SpotRun[], selectedId: string): void {
+    const unfound = runs.filter((r) => r.status !== 'found')
+    const previous = selectedId
+    targetSelect.innerHTML = ''
+
+    const auto = document.createElement('option')
+    auto.value = ''
+    auto.textContent = 'Auto — nearest set'
+    targetSelect.appendChild(auto)
+    for (const run of unfound) {
+      const option = document.createElement('option')
+      option.value = run.spot.id
+      option.textContent = `${run.spot.name} · ${run.spot.movie.title}`
+      targetSelect.appendChild(option)
+    }
+
+    const stillListed = unfound.some((r) => r.spot.id === previous)
+    targetSelect.value = stillListed ? previous : ''
+  }
+
   function renderSpotList(runs: SpotRun[]): void {
     spotList.innerHTML = ''
     for (const run of runs) {
       const li = document.createElement('li')
       li.className =
-        'glass flex items-center gap-3 rounded-tile px-3.5 py-2.5 motion-safe:transition-colors motion-safe:duration-300'
+        'glass flex items-center gap-2.5 rounded-tile px-3 py-2 motion-safe:transition-colors motion-safe:duration-300'
       const turn = FILM_SPOTS.indexOf(run.spot) + 1
       li.innerHTML = `
-        <span class="font-display w-8 shrink-0 text-lg tracking-wider text-fog/50">${String(turn).padStart(2, '0')}</span>
+        <span class="font-display w-7 shrink-0 text-base tracking-wider text-fog/50">${String(turn).padStart(2, '0')}</span>
         <div class="min-w-0 flex-1">
-          <p class="font-display truncate text-xl tracking-wider text-chalk">${run.spot.name}</p>
+          <p class="font-display truncate text-lg tracking-wider text-chalk">${run.spot.name}</p>
           <p class="truncate text-[11px] text-fog">${run.spot.movie.title}</p>
         </div>
         <span class="badge"></span>`
@@ -210,7 +237,17 @@ export function createHuntScreen() {
     gpsErrorBtn.classList.add('hidden')
   }
 
-  return {setWaiting, renderVerdict, tickDisplay, renderSpotList, setTimer, showPrompts, prompt, hideGpsError}
+  return {
+    setWaiting,
+    renderVerdict,
+    tickDisplay,
+    renderTargetPicker,
+    renderSpotList,
+    setTimer,
+    showPrompts,
+    prompt,
+    hideGpsError,
+  }
 }
 
 export type HuntScreen = ReturnType<typeof createHuntScreen>

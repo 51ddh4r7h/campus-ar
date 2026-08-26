@@ -96,6 +96,22 @@
     @apply border-gold/50;
   }
 
+  /* Target-set dropdown (native select, token-skinned for dark mode). */
+  .select {
+    @apply w-full appearance-none rounded-chip border border-line bg-screen px-4 py-3 pr-10 text-[15px] font-medium text-chalk;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238B93A5' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.9rem center;
+  }
+  .select:hover,
+  .select:focus {
+    @apply border-gold/50;
+  }
+  .select option {
+    background-color: #101624;
+    color: #eae4d5;
+  }
+
   /* Continuous heat track: thumb glides along the cold→hot gradient. */
   .heat-thumb {
     left: 0%;

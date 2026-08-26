@@ -16,7 +16,7 @@ import {XR8Promise} from '@8thwall/engine-binary'
 import {createArControl} from './ar'
 import {isCameraStatusDetail} from './camera-status'
 import {fireConfetti} from './confetti'
-import {FILM_SPOTS, type FilmSpot} from './data/spots'
+import {FILM_SPOTS, type FilmSpot, spotById} from './data/spots'
 import {createHunt, formatClock, type HuntController} from './hunt'
 import {createHuntScreen} from './hunt-screen'
 import {haptics} from './haptics'
@@ -88,6 +88,7 @@ const summary = createSummaryScreen()
 let locationCtrl: LocationController | null = null
 let lastFix: GeoFix | null = null
 let arTarget: FilmSpot | null = null // closest unfound spot the user is inside
+let targetSpot: FilmSpot | null = null // the set the player chose to hunt (null = auto)
 let toastTimer = 0
 let alreadyFoundNotified = false
 let revealFallbackTimer = 0
@@ -161,7 +162,10 @@ function hideAr(): void {
 // ------------------------------------------------------------------ proximity → screen
 function applyFix(fix: GeoFix): void {
   lastFix = fix
-  const verdict = evaluateProximity(fix, hunt.spots)
+  // A stale target (just found) falls back to auto-nearest.
+  if (targetSpot && spotStateLabel(targetSpot.id) === 'found') targetSpot = null
+
+  const verdict = evaluateProximity(fix, hunt.spots, targetSpot)
 
   if (verdict.insideSpot) {
     arTarget = verdict.insideSpot
@@ -175,6 +179,10 @@ function applyFix(fix: GeoFix): void {
   }
 
   screen.renderVerdict(verdict)
+}
+
+function refreshTargetPicker(): void {
+  screen.renderTargetPicker(hunt.spots, targetSpot?.id ?? '')
 }
 
 function refreshPrompts(): void {
@@ -279,6 +287,7 @@ function beginHunt(): void {
   startLocation()
   showOnlyScreen('hunt')
   screen.renderSpotList(hunt.spots)
+  refreshTargetPicker()
   refreshPrompts()
 }
 
@@ -362,6 +371,11 @@ const arHooks = {
     hunt.reveal(spot.id)
     hudValue(hud.state, 'found', 'good')
     haptics.clap()
+    // The chosen target just wrapped → fall back to auto-nearest.
+    if (targetSpot?.id === spot.id) {
+      targetSpot = null
+      if (!hunt.allFound()) toast('Target wrapped — the slider now tracks the nearest set.')
+    }
     // Clap impact: shake the AR frame (reduced-motion users get none).
     arChrome.classList.remove('motion-safe:animate-shake')
     void arChrome.offsetWidth // restart the animation
@@ -457,20 +471,37 @@ openArBtn.addEventListener('click', () => {
   haptics.tick()
   openAr()
 })
-endArBtn.addEventListener('click', endArSession)
+endArBtn.addEventListener('click', () => {
+  haptics.tick()
+  endArSession()
+})
 recenterBtn.addEventListener('click', () => ar.recenter())
-revealContinueBtn.addEventListener('click', endArSession)
+revealContinueBtn.addEventListener('click', () => {
+  haptics.tick()
+  endArSession()
+})
 
 gpsErrorBtn.addEventListener('click', () => {
+  haptics.tick()
   // One-shot fresh fix through the active source — no parallel API path.
   if (!locationCtrl) return
   locationCtrl.refix()
   toast('Requesting a position fix…')
 })
 
+// Target picker: re-aim the slider the moment a set is chosen.
+const targetSelect = $<HTMLSelectElement>('#target-select')
+targetSelect.addEventListener('change', () => {
+  haptics.tick()
+  targetSpot = targetSelect.value ? (spotById(targetSelect.value) ?? null) : null
+  if (lastFix) applyFix(lastFix) // slider re-aims instantly, no GPS wait
+  refreshPrompts()
+})
+
 // Dev/sim: jump straight inside a spot's radius.
 for (const btn of document.querySelectorAll<HTMLButtonElement>('#sim-rail .sim-btn')) {
   btn.addEventListener('click', () => {
+    haptics.tick()
     const idx = Number(btn.dataset.sim ?? '1') - 1
     const spot = FILM_SPOTS[Math.min(Math.max(idx, 0), FILM_SPOTS.length - 1)]
     manualJump(spot)
@@ -486,6 +517,7 @@ summary.bindPostForm(async (name) => {
 })
 
 restartBtn.addEventListener('click', () => {
+  haptics.tick()
   window.sessionStorage.removeItem('campus-film-hunt:v1')
   window.location.reload()
 })
@@ -514,6 +546,7 @@ function boot(): void {
       startLocation()
       showOnlyScreen('hunt')
       screen.renderSpotList(hunt.spots)
+      refreshTargetPicker()
       refreshPrompts()
       break
     case 'complete':
@@ -526,6 +559,7 @@ function boot(): void {
 
 hunt.onChange(() => {
   screen.renderSpotList(hunt.spots)
+  refreshTargetPicker()
   if (hunt.status === 'in_progress') refreshPrompts()
 })
 

@@ -18,16 +18,20 @@ trail is gone.
 
 ```
 Start screen → Hunt (GPS warmth, no directions)
-  → inside a spot's radius → "Open camera"
+  → pick a Target set from the dropdown (or leave "Auto — nearest set")
+  → inside the target's radius → "Open camera"
   → tracking NORMAL + inside for ≥2 s → REVEAL
-    (in-world clapperboard claps + spotlight + info panel + split time)
-  × 3 → Summary (total time, splits, name entry → stubbed leaderboard)
+    (in-world clapperboard claps + spotlight + movie clip + info panel)
+  × 5 → Summary (total time, splits, name entry → stubbed leaderboard)
 ```
 
+- **Targeted hunt:** the "Target set" dropdown re-aims the heat slider, the
+  radar, and the camera CTA at the chosen set (default: auto-nearest). When a
+  chosen target is found, the picker falls back to auto.
 - **No arrows, no waypoints, no turn-by-turn.** The proximity gate only says how
-  *warm* you are (bands: >100 m Cold · 55–100 Chilly · 25–55 Warm · <25 Hot ·
-  inside the radius). If more than one spot is plausibly close, the signal stays
-  ambiguous and won't name a nearest spot.
+  *warm* you are (continuous heat 0–100 on a slider; band words: Cold · Chilly ·
+  Warm · Hot · You're close). In auto mode, if more than one spot is plausibly
+  close, the signal stays ambiguous and won't name a nearest spot.
 - **Timer** is wall-clock based (`Date.now()`), persists across background /
   foreground / brief tracking loss, and survives a mid-hunt reload
   (sessionStorage).

@@ -96,12 +96,30 @@ try {
   await page.waitForFunction(() => document.getElementById('screen-hunt').classList.contains('hidden') === false)
   check('back on hunt screen', true)
   check('spot A now in the can', ((await page.textContent('#spot-list li:first-child .badge'))?.includes('in the can') ?? false))
+  check('target picker drops found sets', (await page.locator('#target-select option').count()) === 5)
 
-  // 7. Spots 2–5.
+  // 7. Targeted hunt: choose a set → slider re-aims to IT, not the nearest.
+  await page.selectOption('#target-select', 'library')
+  await page.waitForFunction(
+    () => Number(document.getElementById('heat-thumb').style.left.replace('%', '')) < 45,
+    null,
+    {timeout: 4000},
+  )
+  check('choosing a target re-aims the slider', true)
+  await page.evaluate(() => window.__campushunt.jump('library'))
+  await page.waitForFunction(() => document.getElementById('signal-label').textContent.includes("You’re close"))
+  check('targeted set unlocks + CTA', await page.locator('#open-ar-btn').isVisible())
+  await page.click('#open-ar-btn')
+  await page.evaluate(() => window.__campushunt.reveal())
+  await page.waitForFunction(() => !document.getElementById('reveal-panel').classList.contains('hidden'), null, {timeout: 4000})
+  check('reveal panel for Central Library', (await page.textContent('#reveal-spot-name'))?.trim() === 'Central Library')
+  await page.click('#reveal-continue')
+  await page.waitForTimeout(400)
+
+  // 8. Remaining sets (auto mode again — the chosen target just wrapped).
   for (const [id, name] of [
     ['aqua-point', 'Aqua Point'],
     ['fountain', 'The Fountain'],
-    ['library', 'Central Library'],
     ['auditorium', 'Auditorium'],
   ]) {
     await page.evaluate((spotId) => window.__campushunt.jump(spotId), id)
@@ -114,14 +132,14 @@ try {
     await page.waitForTimeout(400)
   }
 
-  // 8. Summary.
+  // 9. Summary.
   await page.waitForFunction(() => !document.getElementById('screen-summary').classList.contains('hidden'))
   check('summary screen shown', true)
   const total = await page.textContent('#summary-total')
   check('total time rendered', (total?.trim()?.length ?? 0) > 0, total)
   check('5 split rows', (await page.locator('#summary-splits li').count()) === 5)
 
-  // 9. Name entry → stub leaderboard.
+  // 10. Name entry → stub leaderboard.
   await page.fill('#name-input', 'Zed')
   await page.click('#post-score-btn')
   await page.waitForFunction(() => document.getElementById('leaderboard-list').textContent.includes('Zed'))
@@ -130,7 +148,7 @@ try {
   check('Zed ranked on marquee', leaderboardNames.some((n) => n.includes('Zed')))
   check('submission status shown', ((await page.textContent('#score-status'))?.includes('Posted') ?? false))
 
-  // 10. Environment assertions: block engine-only noise, fail on our module errors.
+  // 11. Environment assertions: block engine-only noise, fail on our module errors.
   const ours = moduleErrors.filter((e) => /campus-ar|main\.ts|hunt\.js|reveal\.js|leaderboard|location\.js/.test(e))
   check('no app-module console errors', ours.length === 0, ours.join(' | ').slice(0, 300))
 
