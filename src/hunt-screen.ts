@@ -93,6 +93,8 @@ export function createHuntScreen() {
     const ui = BAND_UI[band]
     signalLabel.textContent = ui.label
     signalLabel.className = `font-display text-7xl leading-none tracking-wider ${ui.tone}`
+    signalLabel.classList.toggle('heat-warm', band === 2)
+    signalLabel.classList.toggle('heat-hot', band >= 3)
     signalBand.textContent = ui.sub
     if (rising) haptics.tick() // band crossed upward — feel the warm-up
   }

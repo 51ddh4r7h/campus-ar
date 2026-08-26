@@ -56,12 +56,49 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
 
   const clipTexture = new THREE.VideoTexture(clipVideo)
   clipTexture.colorSpace = THREE.SRGBColorSpace
+  // Cinemascope — 2.39:1 reads as cinema, not phone video. Letterbox handled
+  // by the bezel backing: the video is the inset, black bars are the backing.
   const clipScreen = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 0.9),
+    new THREE.PlaneGeometry(1.92, 0.80),
     new THREE.MeshBasicMaterial({map: clipTexture, transparent: true, opacity: 0, toneMapped: false}),
   )
-  clipScreen.position.set(0, 0.18, -0.35)
+  clipScreen.position.set(0, 0.18, -0.335)
   clipScreen.visible = false
+  // Bezel: dark frame slightly larger than the scope screen
+  const bezel = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.08, 0.92),
+    new THREE.MeshBasicMaterial({color: 0x0b0e16, transparent: true, opacity: 0, side: THREE.DoubleSide}),
+  )
+  bezel.position.set(0, 0.18, -0.345)
+  bezel.visible = false
+  // Soft glow bleeding from screen edges into the room
+  const screenGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.6, 1.15),
+    new THREE.MeshBasicMaterial({
+      color: 0xd8c4a0,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  )
+  screenGlow.position.set(0, 0.18, -0.355)
+  screenGlow.visible = false
+  // Floor glow ellipse — sells that the screen occupies space
+  const floorGlow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.85, 32),
+    new THREE.MeshBasicMaterial({
+      color: 0xd8c4a0,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  )
+  floorGlow.rotation.x = -Math.PI / 2
+  floorGlow.position.set(0, -0.62, 0.15)
+  floorGlow.visible = false
 
   // ------------------------------------------------------------------ slate
   const slate = new THREE.Group()
@@ -171,6 +208,9 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
 
   scene.add(slate)
   slate.add(clipScreen)
+  slate.add(bezel)
+  slate.add(screenGlow)
+  slate.add(floorGlow)
 
   // ── FilmFrame title card: cinematic history inserted into the room (§18).
   const cardCanvas = document.createElement('canvas')
@@ -273,6 +313,12 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
       flash.material.opacity = 0
       clipScreen.visible = false
       ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = 0
+      bezel.visible = false
+      ;(bezel.material as THREE.MeshBasicMaterial).opacity = 0
+      screenGlow.visible = false
+      ;(screenGlow.material as THREE.MeshBasicMaterial).opacity = 0
+      floorGlow.visible = false
+      ;(floorGlow.material as THREE.MeshBasicMaterial).opacity = 0
       card.visible = false
       cardMaterial.opacity = 0
       for (const strip of strips) strip.mesh.visible = false
@@ -297,6 +343,12 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
       flash.material.opacity = 0
       clipScreen.visible = false
       ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = 0
+      bezel.visible = false
+      ;(bezel.material as THREE.MeshBasicMaterial).opacity = 0
+      screenGlow.visible = false
+      ;(screenGlow.material as THREE.MeshBasicMaterial).opacity = 0
+      floorGlow.visible = false
+      ;(floorGlow.material as THREE.MeshBasicMaterial).opacity = 0
       card.visible = false
       cardMaterial.opacity = 0
       for (const strip of strips) strip.mesh.visible = false
@@ -381,11 +433,17 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
           if (clipReady && !clipFailed) {
             if (!clipScreen.visible) {
               clipScreen.visible = true
+              bezel.visible = true
+              screenGlow.visible = true
+              floorGlow.visible = true
               clipVideo.play().catch(() => undefined)
             }
             const cp = Math.min(1, t / 700)
             ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = easeOutQuad(cp)
             clipScreen.position.y = 0.18 + 0.06 * easeOutQuad(cp)
+            ;(bezel.material as THREE.MeshBasicMaterial).opacity = easeOutQuad(cp)
+            ;(screenGlow.material as THREE.MeshBasicMaterial).opacity = easeOutQuad(cp) * 0.25
+            ;(floorGlow.material as THREE.MeshBasicMaterial).opacity = easeOutQuad(cp) * 0.20
           }
           if (t > 250) {
             card.visible = true

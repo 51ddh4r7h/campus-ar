@@ -53,6 +53,9 @@ const lostOverlay = $('#ar-lost')
 const lockedFlash = $('#ar-locked-flash')
 const arSignalWord = $('#ar-signal-word')
 const arHeatFill = $('#ar-heat-fill')
+const arHeatThumb = $('#ar-heat-thumb')
+const arRadar = $('#ar-radar')
+const arSignalCopy = $('#ar-signal-copy')
 const arProgress = $('#ar-progress')
 const arProgressCount = $('#ar-progress-count')
 
@@ -247,8 +250,21 @@ function applyFix(fix: GeoFix): void {
   ar.setSignal(verdict.band)
   arSignalWord.textContent = bandLabel(verdict.band).toUpperCase()
   arHeatFill.style.width = `${verdict.heat.toFixed(0)}%`
-  arSignalWord.classList.toggle('text-gold', verdict.band >= 2)
-  arSignalWord.classList.toggle('text-spotlight', verdict.band >= 3)
+  arHeatThumb.style.left = `${verdict.heat.toFixed(1)}%`
+  arHeatThumb.classList.toggle('is-blazing', verdict.heat > 85)
+  if (arRadar) {
+    const d = 2.6 - (verdict.heat / 100) * 1.9
+    for (const ring of arRadar.querySelectorAll<HTMLElement>('.radar-ring')) ring.style.animationDuration = `${d.toFixed(2)}s`
+  }
+  if (verdict.fuzzy) arSignalCopy.textContent = 'Position is still fuzzy — hold steady for a sharper read.'
+  else if (verdict.band === 4) arSignalCopy.textContent = verdict.insideSpot ? `You’re standing on a set right now — ${verdict.insideSpot.name}.` : 'That’s a wrap — every set is in the can.'
+  else if (verdict.farAway) arSignalCopy.textContent = 'The sets are parked on a campus kilometres from here. Run the demo flight to see the hunt.'
+  else if (verdict.band === 0) arSignalCopy.textContent = 'A set is out there somewhere on campus. Pick a direction — the signal will sharpen.'
+  else if (verdict.band === 1) arSignalCopy.textContent = 'You’re in the right neighborhood. Keep wandering — the signal will rise.'
+  else if (verdict.band === 2) arSignalCopy.textContent = 'Getting warmer. Trust your feet — slow and steady.'
+  else arSignalCopy.textContent = 'Very close now. Keep your eyes open.'
+  arSignalWord.classList.toggle('heat-warm', verdict.band === 2)
+  arSignalWord.classList.toggle('heat-hot', verdict.band >= 3)
   const labelSpot = targetSpot ?? verdict.namedSpot
   ar.setLabel(
     labelSpot ? labelSpot.name.toUpperCase() : '',
@@ -325,6 +341,10 @@ function startLocation(): void {
   // Honest "no data yet" state + a watchdog: if no fix lands in 10 s, offer a
   // retry and the demo flight instead of sitting silently on "Cold".
   screen.setWaiting()
+  arHeatThumb.style.left = '0%'
+  arHeatFill.style.width = '0%'
+  arSignalCopy.textContent = 'Getting a fix on your position — hold tight.'
+  arSignalWord.textContent = '···'
   fixWatchdog = window.setTimeout(() => {
     if (lastFix === null) screen.prompt('nofix', simMode)
   }, 10000)

@@ -107,8 +107,8 @@
       </div>
     </section>
 
-    <!-- ══════════════════════════════════ HUNT / PROXIMITY SCREEN ══════════════════════════════════ -->
-    <section id="screen-hunt" class="fixed inset-0 z-40 hidden flex-col bg-night">
+    <!-- ══════════════════════════════════ HUNT / PROXIMITY SCREEN — glass sheet over camera ══════════════════════════════════ -->
+    <section id="screen-hunt" class="fixed inset-0 z-40 hidden flex-col bg-[#070A12]/55 backdrop-blur-xl">
       <div
         class="absolute inset-0"
         aria-hidden="true"
@@ -138,17 +138,17 @@
 
             <div class="mt-4 flex items-center gap-4">
               <!-- sonar radar: rings beat faster as the signal heats up -->
-              <div id="signal-radar" class="relative grid h-12 w-12 shrink-0 place-items-center" aria-hidden="true">
+              <div id="signal-radar" class="relative grid h-8 w-8 shrink-0 place-items-center" aria-hidden="true">
                 <span class="radar-ring" data-ring="0"></span>
                 <span class="radar-ring" data-ring="1"></span>
                 <span class="radar-ring absolute" data-ring="2"></span>
-                <span class="relative h-2.5 w-2.5 rounded-full bg-gold shadow-hot"></span>
+                <span class="relative h-2 w-2 rounded-full bg-gold shadow-hot"></span>
               </div>
 
-              <!-- continuous heat track: cold → hot with a glowing thumb -->
-              <div id="heat-track" class="relative h-2.5 flex-1 rounded-full bg-line" role="img" aria-label="Signal heat: the brighter and further right, the closer you are">
-                <div class="absolute inset-0 rounded-full bg-heat opacity-80"></div>
-                <div id="heat-thumb" class="heat-thumb absolute top-1/2 -ml-2 h-5 w-4 -translate-y-1/2"></div>
+              <!-- continuous heat track: cold → hot with a glowing droplet thumb + tail -->
+              <div id="heat-track" class="relative h-2 flex-1 rounded-full bg-white/10" role="img" aria-label="Signal heat: the brighter and further right, the closer you are">
+                <div class="absolute inset-0 rounded-full bg-heat opacity-60"></div>
+                <div id="heat-thumb" class="heat-thumb absolute top-1/2 -ml-1.5 h-4 w-3 -translate-y-1/2"></div>
               </div>
             </div>
 
@@ -257,31 +257,47 @@
         <p class="font-display text-3xl tracking-[0.35em] text-gold drop-shadow-[0_2px_8px_rgba(4,6,11,0.9)]">WORLD LOCKED</p>
       </div>
 
-      <!-- bottom HUD: compact signal + viewfinder controls -->
+      <!-- bottom HUD: signal + heat track now lives on the camera (unified with dashboard) -->
       <div
-        class="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 px-4"
+        class="absolute inset-x-0 bottom-0 flex flex-col gap-3 px-4"
         style="padding-bottom: max(1rem, env(safe-area-inset-bottom))"
       >
+        <!-- heat track: radar + slider + thumb — same component as dashboard, camera is background -->
         <div class="signal-chip pointer-events-auto">
-          <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-fog">Signal</p>
-          <p id="ar-signal-word" class="font-display text-2xl leading-none tracking-wider text-fog">COLD</p>
-          <div class="mt-1.5 h-1 w-28 overflow-hidden rounded-full bg-line">
-            <div id="ar-heat-fill" class="h-full rounded-full bg-gold transition-[width] duration-300" style="width: 0%"></div>
+          <div class="flex items-center justify-between">
+            <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-fog">Signal</p>
+            <p id="ar-signal-word" class="font-display text-lg leading-none tracking-wider text-fog">COLD</p>
           </div>
+          <div class="mt-2 flex items-center gap-2.5">
+            <div id="ar-radar" class="relative grid h-8 w-8 shrink-0 place-items-center" aria-hidden="true">
+              <span class="radar-ring" data-ring="0"></span>
+              <span class="radar-ring" data-ring="1"></span>
+              <span class="relative h-2 w-2 rounded-full bg-gold shadow-hot"></span>
+            </div>
+            <div class="relative h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+              <div class="absolute inset-0 rounded-full bg-heat opacity-60"></div>
+              <div id="ar-heat-fill" class="absolute inset-y-0 left-0 rounded-full bg-gold transition-[width] duration-300" style="width: 0%"></div>
+              <div id="ar-heat-thumb" class="heat-thumb absolute top-1/2 -ml-1.5 h-4 w-3 -translate-y-1/2"></div>
+            </div>
+          </div>
+          <p id="ar-signal-copy" class="mt-2 line-clamp-2 text-[11px] leading-relaxed text-white/60"></p>
         </div>
-        <div class="pointer-events-auto flex items-center gap-2">
-          <button id="ar-setlist-btn" type="button" class="ar-circle-btn" aria-label="Open the set list">
-            <span class="text-base leading-none">▤</span>
-            <span class="text-[8px] tracking-[0.14em]">SETS</span>
-          </button>
-          <button id="recenter-btn" type="button" class="ar-circle-btn" aria-label="Recenter the world">
-            <span class="text-lg leading-none">↻</span>
-            <span class="text-[8px] tracking-[0.14em]">RECENTER</span>
-          </button>
-          <button id="end-ar-btn" type="button" class="ar-circle-btn" aria-label="Exit to the set list">
-            <span class="text-base leading-none">✕</span>
-            <span class="text-[8px] tracking-[0.14em]">EXIT</span>
-          </button>
+        <div class="flex items-center justify-between">
+          <p id="ar-hint-short" class="text-[11px] leading-relaxed text-white/50">Move slowly — the portal appears when HOT.</p>
+          <div class="flex items-center gap-2">
+            <button id="ar-setlist-btn" type="button" class="ar-circle-btn" aria-label="Open the set list">
+              <span class="text-base leading-none">▤</span>
+              <span class="text-[8px] tracking-[0.14em]">SETS</span>
+            </button>
+            <button id="recenter-btn" type="button" class="ar-circle-btn" aria-label="Recenter the world">
+              <span class="text-lg leading-none">↻</span>
+              <span class="text-[8px] tracking-[0.14em]">RECENTER</span>
+            </button>
+            <button id="end-ar-btn" type="button" class="ar-circle-btn" aria-label="Exit to the set list">
+              <span class="text-base leading-none">✕</span>
+              <span class="text-[8px] tracking-[0.14em]">EXIT</span>
+            </button>
+          </div>
         </div>
       </div>
 
