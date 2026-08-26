@@ -258,12 +258,17 @@ function startDemoFlight(): void {
 }
 
 /**
- * Dev/sim: teleport the "GPS" signal to a spot and hold it there. Stops the
- * auto-drift simulator so manual testing stays deterministic.
+ * Dev/sim: teleport the "GPS" signal to a spot and hold it there. Installs a
+ * static position source, so a jump is just another adapter — every fix in
+ * the app arrives through the single handleFix path.
  */
 function manualJump(spot: FilmSpot): void {
   locationCtrl?.stop()
-  locationCtrl = null
+  locationCtrl = {
+    start: () => undefined,
+    stop: () => undefined,
+    refix: () => undefined,
+  }
   handleFix({lat: spot.lat, lng: spot.lng, accuracyM: 5, simulated: true})
 }
 
@@ -467,14 +472,9 @@ recenterBtn.addEventListener('click', () => ar.recenter())
 revealContinueBtn.addEventListener('click', endArSession)
 
 gpsErrorBtn.addEventListener('click', () => {
-  if (!navigator.geolocation) return
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      handleFix({lat: pos.coords.latitude, lng: pos.coords.longitude, accuracyM: pos.coords.accuracy, simulated: false})
-    },
-    () => undefined,
-    {enableHighAccuracy: true, timeout: 12000},
-  )
+  // One-shot fresh fix through the active source — no parallel API path.
+  if (!locationCtrl) return
+  locationCtrl.refix()
   toast('Requesting a position fix…')
 })
 

@@ -39,6 +39,8 @@ export const distanceM = (fix: GeoFix, lat: number, lng: number): number =>
 export interface LocationController {
   start(): void
   stop(): void
+  /** One-shot fresh fix delivered through the same onFix path (retry UI). */
+  refix(): void
 }
 
 /**
@@ -69,6 +71,17 @@ export const startRealLocation = (
     stop: () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId)
       watchId = null
+    },
+    // One-shot fresh fix — the retry button's path, same onFix sink.
+    refix: () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (pos.timestamp && Date.now() - pos.timestamp > 20000) return
+          onFix({lat: pos.coords.latitude, lng: pos.coords.longitude, accuracyM: pos.coords.accuracy, simulated: false})
+        },
+        (err) => onError?.(err.code),
+        {enableHighAccuracy: true, timeout: 12000},
+      )
     },
   }
 }
@@ -125,6 +138,8 @@ export const startSimulatedFixer = (
       /* already running */
     },
     stop: () => window.clearInterval(handle),
+    // The simulator pushes continuously; a one-shot re-fix is meaningless.
+    refix: () => undefined,
   }
 }
 
