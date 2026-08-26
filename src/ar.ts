@@ -15,6 +15,8 @@ import * as THREE from 'three'
 import {fullWindowCanvasModule} from './full-window-canvas'
 import type {FilmSpot} from './data/spots'
 import {createRevealDevice, type RevealDevice} from './reveal'
+import {createRevealGate, type RevealGate} from './reveal-gate'
+import {haptics} from './haptics'
 import type {Xr8, Xr8CameraPipelineModule, Xr8RealityFrameData, Xr8ThreejsHandle, XrCameraStatusData} from './types/xr8'
 
 // The engine's Threejs pipeline module reads a global THREE object (the official
@@ -66,20 +68,19 @@ interface ActiveSession {
   spot: FilmSpot
   hooks: ArHooks
   revealed: boolean
+  /** Owns the "inside for ≥2 s with NORMAL tracking" rule. */
+  gate: RevealGate
 }
 
 let active: ActiveSession | null = null
-let insideMs = 0
 let lastFrameAt = 0
 let revealDevice: RevealDevice | null = null
-
-const REVEAL_INSIDE_MS = 2000
 
 const triggerReveal = (): void => {
   const session = active
   if (!session || session.revealed) return
   session.revealed = true
-  insideMs = 0
+  session.gate.reset()
   revealDevice?.show(session.spot)
   session.hooks.onReveal(session.spot)
 }
@@ -144,15 +145,13 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     const dt = lastFrameAt ? Math.min(64, now - lastFrameAt) : 16
     lastFrameAt = now
 
-    if (session && !session.revealed && reality?.trackingStatus === 'NORMAL') {
-      // 2 continuous seconds inside the radius count only while tracking is
-      // locked. Brief tracking loss pauses the clock; leaving the radius resets it.
-      if (session.hooks.inRange()) {
-        insideMs += dt
-        if (insideMs >= REVEAL_INSIDE_MS) triggerReveal()
-      } else {
-        insideMs = 0
-      }
+    if (session && !session.revealed) {
+      const verdict = session.gate.tick({
+        inside: session.hooks.inRange(),
+        trackingNormal: reality?.trackingStatus === 'NORMAL',
+        dtMs: dt,
+      })
+      if (verdict === 'fire') triggerReveal()
     }
 
     revealDevice?.tick(now)
@@ -181,8 +180,7 @@ export const createArControl = (): ArControl => ({
   start(spot, hooks) {
     if (running) this.stop()
 
-    active = {spot, hooks, revealed: false}
-    insideMs = 0
+    active = {spot, hooks, revealed: false, gate: createRevealGate()}
     lastFrameAt = 0
 
     bootEngine()
@@ -203,7 +201,6 @@ export const createArControl = (): ArControl => ({
 
   stop() {
     active = null
-    insideMs = 0
     if (running && XR8) {
       try {
         XR8.stop()
@@ -218,7 +215,7 @@ export const createArControl = (): ArControl => ({
     if (!running || !XR8) return
     try {
       XR8.XrController.recenter()
-      navigator.vibrate?.(15)
+      haptics.tick()
     } catch {
       /* no-op */
     }
