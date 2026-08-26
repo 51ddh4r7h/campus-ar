@@ -6,7 +6,7 @@
  *
  * Flow: start screen → hunt (GPS warmth only) → open camera inside a spot's
  * radius → tracking locks + ≥2 s inside → reveal (3D slate + info panel) →
- * all three spots → summary (splits, name entry, stub leaderboard).
+ * all five spots → summary (splits, name entry, stub leaderboard).
  */
 
 import './style.css'

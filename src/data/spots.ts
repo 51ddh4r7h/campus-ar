@@ -1,13 +1,15 @@
 /**
  * Film-spot data model for the Campus Film Hunt MVP.
  *
- * Coordinates are PLACEHOLDERS — replace them with your campus's real spots.
- * They are spaced ~80–150 m apart around a generic campus centre so the
- * proximity gate behaves plausibly during testing.
+ * Coordinates are REAL — extracted from geotagged photos of the Symbiosis
+ * Lavale campus (Pune, Maharashtra). Ordered south → north so the set list
+ * reads as a walking arc.
  *
- * To set up real spots: drop pins on a campus map, read their lat/lng, and set
- * each `lat`/`lng` here. `radiusM` (default 15) is how close you must get
- * before the spot unlocks.
+ * `radiusM` is how close you must get before the spot unlocks. 15 m covers
+ * normal phone-GPS scatter outdoors; 20 m is used where fixes drift
+ * (viewpoints, building entrances).
+ *
+ * Movie pairings + blurbs are PLAYFUL FICTION for onboarding — swap freely.
  */
 
 export interface FilmSpot {
@@ -31,40 +33,64 @@ export interface FilmSpot {
 
 export const FILM_SPOTS: FilmSpot[] = [
   {
-    id: 'the-quad',
-    name: 'The Quad',
-    lat: 37.4279,
-    lng: -122.1706,
+    id: 'mind-studio',
+    name: 'Mind Studio',
+    lat: 18.5342614,
+    lng: 73.7332691,
     radiusM: 15,
     movie: {
-      title: 'The Social Network',
-      blurb: 'The midnight whiteboard run that changed a campus — and a decade — was shot on this very lawn.',
+      title: 'Dear Zindagi',
+      blurb: "Every hero gets the scene where they finally exhale. This is yours — the campus's quiet corner for when the semester gets loud.",
     },
-    asset: {color: '#F3B93F', label: 'clip-quad-behind-the-scenes-01'},
+    asset: {color: '#7FD1C0', label: 'clip-mind-studio exhale-01'},
   },
   {
-    id: 'library-steps',
-    name: 'Library Steps',
-    lat: 37.4284,
-    lng: -122.1692,
+    id: 'aqua-point',
+    name: 'Aqua Point',
+    lat: 18.5357918,
+    lng: 73.7333646,
+    radiusM: 20,
+    movie: {
+      title: 'Dil Chahta Hai',
+      blurb: 'Three friends, one hilltop, zero plans. The valley below has been waiting for your group photo since 2001.',
+    },
+    asset: {color: '#7EC8E3', label: 'clip-aqua-point valley-wide-02'},
+  },
+  {
+    id: 'fountain',
+    name: 'The Fountain',
+    lat: 18.5361451,
+    lng: 73.7331103,
+    radiusM: 15,
+    movie: {
+      title: '3 Idiots',
+      blurb: "All is well — especially here, where every campus legend has cooled their heels between lectures.",
+    },
+    asset: {color: '#4FB3D9', label: 'clip-fountain all-is-well-03'},
+  },
+  {
+    id: 'library',
+    name: 'Central Library',
+    lat: 18.5368027,
+    lng: 73.7326191,
     radiusM: 15,
     movie: {
       title: 'The Graduate',
-      blurb: "Benjamin’s sprint to the chapel steps began here, three takes before the crew called 'cut'.",
+      blurb: "The sprint past these steps has ended more movie chases than any other. Yours starts the moment exams do.",
     },
-    asset: {color: '#FFE9AE', label: 'clip-steps-rosettes-02'},
+    asset: {color: '#FFE9AE', label: 'clip-library rosettes-04'},
   },
   {
-    id: 'memorial-court',
-    name: 'Memorial Court',
-    lat: 37.4267,
-    lng: -122.1689,
-    radiusM: 15,
+    id: 'auditorium',
+    name: 'Auditorium',
+    lat: 18.5367206,
+    lng: 73.7324656,
+    radiusM: 20,
     movie: {
-      title: 'Legally Blonde',
-      blurb: "Elle’s grand courthouse entrance swept through this court while the extras hid behind the fountain.",
+      title: 'Whiplash',
+      blurb: 'Every great performance starts with a tempo check. The stage behind these doors is where campus legends hit their mark.',
     },
-    asset: {color: '#D94838', label: 'clip-court-pink-03'},
+    asset: {color: '#D94838', label: 'clip-auditorium curtain-05'},
   },
 ]
 

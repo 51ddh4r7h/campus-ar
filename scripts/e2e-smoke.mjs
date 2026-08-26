@@ -43,9 +43,9 @@ try {
   await page.click('#start-button')
   await page.waitForFunction(() => !document.getElementById('screen-hunt').classList.contains('hidden'))
   check('hunt screen shown after Start', true)
-  check('3 spots on the list', (await page.locator('#spot-list li').count()) === 3)
-  check('sets counter 0/3', (await page.textContent('#sets-chip'))?.includes('0/3') ?? false)
-  check('all spots off air', (await page.locator('#spot-list .badge', {hasText: 'off air'}).count()) === 3)
+  check('5 spots on the list', (await page.locator('#spot-list li').count()) === 5)
+  check('sets counter 0/5', (await page.textContent('#sets-chip'))?.includes('0/5') ?? false)
+  check('all spots off air', (await page.locator('#spot-list .badge', {hasText: 'off air'}).count()) === 5)
   check('meter starts at 1 lit segment', (await page.locator('#signal-meter .segment.lit').count()) === 1)
 
   // 3. Timer ticks.
@@ -60,8 +60,8 @@ try {
   const t2 = await page.textContent('#timer-chip')
   check('hunt resumes after reload', true, `timer@reload=${t2}`)
 
-  // 5. Enter spot A's radius → unlock + CTA.
-  await page.evaluate(() => window.__campushunt.jump('the-quad'))
+  // 5. Enter spot 1's radius → unlock + CTA.
+  await page.evaluate(() => window.__campushunt.jump('mind-studio'))
   await page.waitForFunction(() => document.getElementById('signal-label').textContent.includes("You’re close"))
   check('band reaches You’re close', true)
   check('meter fully lit', (await page.locator('#signal-meter .segment.lit').count()) === 5)
@@ -73,14 +73,14 @@ try {
   await page.click('#open-ar-btn')
   await page.waitForFunction(() => !document.getElementById('ar-chrome').classList.contains('hidden'))
   check('AR chrome shown', true)
-  check('debug HUD shows spot', (await page.textContent('#hud-spot'))?.trim() === 'the-quad')
+  check('debug HUD shows spot', (await page.textContent('#hud-spot'))?.trim() === 'mind-studio')
   check('AR timer visible', await page.locator('#ar-timer').isVisible())
 
   await page.evaluate(() => window.__campushunt.reveal())
   await page.waitForFunction(() => !document.getElementById('reveal-panel').classList.contains('hidden'), null, {timeout: 4000})
   check('reveal panel opens', true)
-  check('reveal shows spot name', (await page.textContent('#reveal-spot-name'))?.trim() === 'The Quad')
-  check('reveal shows movie', (await page.textContent('#reveal-movie'))?.trim() === 'The Social Network')
+  check('reveal shows spot name', (await page.textContent('#reveal-spot-name'))?.trim() === 'Mind Studio')
+  check('reveal shows movie', (await page.textContent('#reveal-movie'))?.trim() === 'Dear Zindagi')
   check('reveal shows a split', ((await page.textContent('#reveal-split'))?.trim()?.length ?? 0) > 0)
 
   await page.click('#reveal-continue')
@@ -88,8 +88,13 @@ try {
   check('back on hunt screen', true)
   check('spot A now in the can', ((await page.textContent('#spot-list li:first-child .badge'))?.includes('in the can') ?? false))
 
-  // 7. Spots B and C.
-  for (const [id, name] of [['library-steps', 'Library Steps'], ['memorial-court', 'Memorial Court']]) {
+  // 7. Spots 2–5.
+  for (const [id, name] of [
+    ['aqua-point', 'Aqua Point'],
+    ['fountain', 'The Fountain'],
+    ['library', 'Central Library'],
+    ['auditorium', 'Auditorium'],
+  ]) {
     await page.evaluate((spotId) => window.__campushunt.jump(spotId), id)
     await page.waitForFunction(() => !document.getElementById('open-ar-btn').classList.contains('hidden'))
     await page.click('#open-ar-btn')
@@ -105,7 +110,7 @@ try {
   check('summary screen shown', true)
   const total = await page.textContent('#summary-total')
   check('total time rendered', (total?.trim()?.length ?? 0) > 0, total)
-  check('3 split rows', (await page.locator('#summary-splits li').count()) === 3)
+  check('5 split rows', (await page.locator('#summary-splits li').count()) === 5)
 
   // 9. Name entry → stub leaderboard.
   await page.fill('#name-input', 'Zed')
