@@ -16,6 +16,7 @@ import * as THREE from 'three'
 import {fullWindowCanvasModule} from './full-window-canvas'
 import type {FilmSpot} from './data/spots'
 import {createArWorld, type ArWorld} from './ar-world'
+import {createFilmPortal, type FilmPortal} from './film-portal'
 import {createRevealDevice, type RevealDevice} from './reveal'
 import {createRevealGate, type RevealGate} from './reveal-gate'
 import {haptics} from './haptics'
@@ -81,6 +82,8 @@ let active: ActiveSession | null = null
 let lastFrameAt = 0
 let revealDevice: RevealDevice | null = null
 let arWorld: ArWorld | null = null
+let portal: FilmPortal | null = null
+let portalSpot: FilmSpot | null = null
 let xrSceneRef: Xr8ThreejsHandle | null = null
 let currentSignal: SignalLevel = 0
 const labelState = {name: '', sub: ''}
@@ -172,10 +175,12 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
 
     setupCamera(xrScene)
 
-    // Fresh AR world + reveal device for this session (anchored in world space).
+    // Fresh AR world + portal + reveal device for this session (anchored in world space).
     arWorld?.reset()
     if (!arWorld) arWorld = createArWorld(scene)
     arWorld.setSignal(currentSignal)
+    if (!portal) portal = createFilmPortal(scene)
+    else portal.hide()
     if (revealDevice) revealDevice.reset()
     revealDevice = createRevealDevice(scene)
     revealDevice.onOpen = (spot) => active?.hooks.onPanelOpen(spot)
@@ -203,6 +208,7 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     }
 
     revealDevice?.tick(now)
+    portal?.tick(now)
     if (arWorld && xrSceneRef) {
       arWorld.tick(now, xrSceneRef.camera.position)
       projectLabel(xrSceneRef.camera)
@@ -230,6 +236,9 @@ export interface ArControl {
   setSignal(level: SignalLevel): void
   /** Spatial label content for the world-anchored reel. */
   setLabel(name: string, sub: string): void
+  /** Film-set portal — the walk-aroundable frame (§17 portal spec). */
+  showPortal(spot: FilmSpot): void
+  hidePortal(): void
 }
 
 export const createArControl = (): ArControl => ({
@@ -260,6 +269,7 @@ export const createArControl = (): ArControl => ({
 
   stop() {
     active = null
+    portal?.hide()
     labelEl.root?.classList.add('hidden')
     if (running && XR8) {
       try {
@@ -276,6 +286,16 @@ export const createArControl = (): ArControl => ({
     try {
       XR8.XrController.recenter()
       if (arWorld && xrSceneRef) arWorld.recenter(xrSceneRef.camera.position)
+      if (portal && portalSpot) {
+        // Keep the portal ahead after recenter — re-show at new origin if it was visible.
+        const wasVisible = portal.group.visible
+        const spot = portalSpot
+        if (wasVisible && spot) {
+          portal.hide()
+          // Re-place after XR recenter settles (next frame's tick will place it).
+          requestAnimationFrame(() => portal?.show(spot))
+        }
+      }
       haptics.tick()
     } catch {
       /* no-op */
@@ -293,10 +313,21 @@ export const createArControl = (): ArControl => ({
   setSignal(level) {
     currentSignal = level
     arWorld?.setSignal(level)
+    portal?.setSignal(level)
   },
 
   setLabel(name, sub) {
     labelState.name = name
     labelState.sub = sub
+  },
+
+  showPortal(spot) {
+    portalSpot = spot
+    portal?.show(spot)
+  },
+
+  hidePortal() {
+    portalSpot = null
+    portal?.hide()
   },
 })

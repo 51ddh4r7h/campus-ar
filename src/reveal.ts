@@ -8,12 +8,12 @@
 import * as THREE from 'three'
 import type {FilmSpot} from './data/spots'
 
-// Designed to feel like marquee brass + cinema-navy board, not default materials.
+// Muted champagne — was saturated #F3B93F, now #D8C4A0 to match tailwind gold.
 const NIGHT = 0x0d1320
-const BRASS = 0xb97e1e
-const GOLD = 0xf3b93f
+const BRASS = 0xa6906b
+const GOLD = 0xd8c4a0
 const CHALK = 0xeae4d5
-const CREAM = 0xffe9ae
+const CREAM = 0xf0e6d3
 
 type Phase = 'idle' | 'rise' | 'clap' | 'flash' | 'present' | 'done'
 
@@ -123,11 +123,11 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
   slate.visible = false
 
   // ----------------------------------------------------------- light effect
-  // Spotlight cone (apex set into the board top, flaring upward).
+  // Spotlight cone — restrained, not the blowout in the screenshot.
   const cone = new THREE.Mesh(
-    new THREE.ConeGeometry(0.62, 2.6, 24, 1, true),
+    new THREE.ConeGeometry(0.38, 1.4, 24, 1, true),
     new THREE.MeshBasicMaterial({
-      color: GOLD,
+      color: 0xd8c4a0,
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,
@@ -136,7 +136,7 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
     }),
   )
   cone.rotation.x = Math.PI
-  cone.position.y = 1.95
+  cone.position.y = 1.15
   slate.add(cone)
 
   // Warm ground disc so the slate feels seated in the room.
@@ -268,8 +268,8 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
       slate.rotation.set(0, 0, 0)
       slate.scale.setScalar(prefersReduced ? 1 : 0.001)
       arm.rotation.x = prefersReduced ? CLOSED_ANGLE : OPEN_ANGLE
-      cone.material.opacity = prefersReduced ? 0.28 : 0
-      ring.material.opacity = prefersReduced ? 0.18 : 0
+      cone.material.opacity = prefersReduced ? 0.12 : 0
+      ring.material.opacity = prefersReduced ? 0.06 : 0
       flash.material.opacity = 0
       clipScreen.visible = false
       ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = 0
@@ -354,7 +354,7 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
             if (strip.life <= 0) strip.mesh.visible = false
           }
           const p = t / 320
-          flash.material.opacity = Math.max(0, Math.sin(Math.PI * p)) * 0.9
+          flash.material.opacity = Math.max(0, Math.sin(Math.PI * p)) * 0.32
           if (p >= 1 && !openedCalled) {
             phase = 'present'
             startedAt = nowMs
@@ -372,12 +372,10 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
             ;(strip.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, strip.life)
             if (strip.life <= 0) strip.mesh.visible = false
           }
-          // The board presents: cone blooms, soft float, panel opens. The
-          // movie clip screen (if the clip loaded) fades in behind the board,
-          // and the FilmFrame title card rises above it.
+          // The board presents: restrained cone + ring (was blowout at 0.5).
           const p = Math.min(1, t / 1600)
-          cone.material.opacity = 0.08 + 0.42 * easeOutQuad(p)
-          ring.material.opacity = 0.05 + 0.22 * easeOutQuad(p)
+          cone.material.opacity = 0.04 + 0.14 * easeOutQuad(p)
+          ring.material.opacity = 0.03 + 0.10 * easeOutQuad(p)
           slate.rotation.z = Math.sin(t * 0.0016) * 0.045
           slate.position.y = Math.sin(t * 0.0022) * 0.03
           if (clipReady && !clipFailed) {

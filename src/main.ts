@@ -101,6 +101,7 @@ let locationCtrl: LocationController | null = null
 let lastFix: GeoFix | null = null
 let arTarget: FilmSpot | null = null // closest unfound spot the user is inside
 let targetSpot: FilmSpot | null = null // the set the player chose to hunt (null = auto)
+let lastPortalSpotId: string | null = null
 let toastTimer = 0
 let alreadyFoundNotified = false
 let revealFallbackTimer = 0
@@ -187,6 +188,7 @@ function enterAr(): void {
 /** ✕ — leave the camera; the hunt keeps running on the dashboard. */
 function exitAr(): void {
   ar.stop()
+  lastPortalSpotId = null
   arChrome.classList.add('hidden')
   revealPanel.classList.add('hidden')
   window.clearTimeout(lockedFlashTimer)
@@ -252,6 +254,18 @@ function applyFix(fix: GeoFix): void {
     labelSpot ? labelSpot.name.toUpperCase() : '',
     verdict.band >= 4 ? 'ON SET' : verdict.band >= 3 ? 'HOT' : verdict.band >= 2 ? 'WARM' : 'SIGNAL',
   )
+  // Film-set portal centerpiece — appears when HOT, walk-aroundable (§17 portal spec).
+  const shouldShowPortal = verdict.band >= 3 && !hunt.allFound() && worldLocked
+  const portalFor = shouldShowPortal ? (verdict.insideSpot ?? targetSpot ?? verdict.namedSpot) : null
+  if (portalFor) {
+    if (lastPortalSpotId !== portalFor.id) {
+      ar.showPortal(portalFor)
+      lastPortalSpotId = portalFor.id
+    }
+  } else if (lastPortalSpotId !== null) {
+    ar.hidePortal()
+    lastPortalSpotId = null
+  }
   if (verdict.band >= 3 && worldLocked) setReticle('nearby')
 }
 
