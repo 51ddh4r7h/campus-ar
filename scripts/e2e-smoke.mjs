@@ -46,7 +46,8 @@ try {
   check('5 spots on the list', (await page.locator('#spot-list li').count()) === 5)
   check('sets counter 0/5', (await page.textContent('#sets-chip'))?.includes('0/5') ?? false)
   check('all spots off air', (await page.locator('#spot-list .badge', {hasText: 'off air'}).count()) === 5)
-  check('meter starts at 1 lit segment', (await page.locator('#signal-meter .segment.lit').count()) === 1)
+  const thumbCold = Number(await page.$eval('#heat-thumb', (el) => el.style.left.replace('%', '')))
+  check('heat thumb parked near cold', thumbCold < 25, `${thumbCold}%`)
 
   // 3. Timer ticks.
   await page.waitForTimeout(1600)
@@ -64,7 +65,12 @@ try {
   await page.evaluate(() => window.__campushunt.jump('mind-studio'))
   await page.waitForFunction(() => document.getElementById('signal-label').textContent.includes("You’re close"))
   check('band reaches You’re close', true)
-  check('meter fully lit', (await page.locator('#signal-meter .segment.lit').count()) === 5)
+  await page.waitForFunction(
+    () => Number(document.getElementById('heat-thumb').style.left.replace('%', '')) >= 90,
+    null,
+    {timeout: 4000},
+  )
+  check('heat thumb glides to blazing', true)
   check('open-camera CTA visible', await page.locator('#open-ar-btn').isVisible())
   const spot1Badge = await page.textContent('#spot-list li:first-child .badge')
   check('spot A marked live', spot1Badge?.trim() === 'live', spot1Badge)
@@ -82,6 +88,9 @@ try {
   check('reveal shows spot name', (await page.textContent('#reveal-spot-name'))?.trim() === 'Mind Studio')
   check('reveal shows movie', (await page.textContent('#reveal-movie'))?.trim() === 'Dear Zindagi')
   check('reveal shows a split', ((await page.textContent('#reveal-split'))?.trim()?.length ?? 0) > 0)
+  // No clip file in headless → the swatch fallback must replace the player.
+  await page.waitForFunction(() => !document.getElementById('reveal-asset-row').classList.contains('hidden'), null, {timeout: 4000})
+  check('clip fallback swatch (no clip file yet)', true)
 
   await page.click('#reveal-continue')
   await page.waitForFunction(() => document.getElementById('screen-hunt').classList.contains('hidden') === false)

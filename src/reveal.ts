@@ -29,7 +29,38 @@ export interface RevealDevice {
 }
 
 export function createRevealDevice(scene: THREE.Scene): RevealDevice {
-  const prefersReduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const prefersReduced =
+    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+
+  // ---------------------------------------------------------------- clip screen
+  // When the spot ships a movie clip (public/clips/<id>.mp4) it plays on a
+  // screen behind the slate after the clap. Missing file → board-only reveal.
+  const clipVideo = document.createElement('video')
+  clipVideo.muted = true
+  clipVideo.loop = true
+  clipVideo.playsInline = true
+  clipVideo.setAttribute('playsinline', '')
+  clipVideo.style.display = 'none'
+  document.body.appendChild(clipVideo)
+
+  let clipReady = false
+  let clipFailed = false
+  let clipSrc = ''
+  clipVideo.addEventListener('loadeddata', () => {
+    clipReady = true
+  })
+  clipVideo.addEventListener('error', () => {
+    clipFailed = true
+  })
+
+  const clipTexture = new THREE.VideoTexture(clipVideo)
+  clipTexture.colorSpace = THREE.SRGBColorSpace
+  const clipScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.6, 0.9),
+    new THREE.MeshBasicMaterial({map: clipTexture, transparent: true, opacity: 0, toneMapped: false}),
+  )
+  clipScreen.position.set(0, 0.18, -0.35)
+  clipScreen.visible = false
 
   // ------------------------------------------------------------------ slate
   const slate = new THREE.Group()
@@ -138,6 +169,7 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
   slate.add(flash)
 
   scene.add(slate)
+  slate.add(clipScreen)
 
   // ---------------------------------------------------------------- timeline
   let phase: Phase = 'idle'
@@ -162,6 +194,17 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
       cone.material.opacity = prefersReduced ? 0.28 : 0
       ring.material.opacity = prefersReduced ? 0.18 : 0
       flash.material.opacity = 0
+      clipScreen.visible = false
+      ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = 0
+      clipReady = false
+      clipFailed = false
+      const wanted = s.asset.videoUrl ?? ''
+      if (wanted && clipSrc !== wanted) {
+        clipSrc = wanted
+        clipVideo.src = wanted
+        clipVideo.load()
+      }
+      if (wanted) clipVideo.play().catch(() => undefined)
       phase = prefersReduced ? 'flash' : 'rise'
     },
 
@@ -171,7 +214,9 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
       cone.material.opacity = 0
       ring.material.opacity = 0
       flash.material.opacity = 0
-      arm.rotation.x = OPEN_ANGLE
+      clipScreen.visible = false
+      ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = 0
+      clipVideo.pause()
       spot = null
     },
 
@@ -222,12 +267,22 @@ export function createRevealDevice(scene: THREE.Scene): RevealDevice {
           break
         }
         case 'present': {
-          // The board presents: cone blooms, soft float, panel opens.
+          // The board presents: cone blooms, soft float, panel opens. The
+          // movie clip screen (if the clip loaded) fades in behind the board.
           const p = Math.min(1, t / 1600)
           cone.material.opacity = 0.08 + 0.42 * easeOutQuad(p)
           ring.material.opacity = 0.05 + 0.22 * easeOutQuad(p)
           slate.rotation.z = Math.sin(t * 0.0016) * 0.045
           slate.position.y = Math.sin(t * 0.0022) * 0.03
+          if (clipReady && !clipFailed) {
+            if (!clipScreen.visible) {
+              clipScreen.visible = true
+              clipVideo.play().catch(() => undefined)
+            }
+            const cp = Math.min(1, t / 700)
+            ;(clipScreen.material as THREE.MeshBasicMaterial).opacity = easeOutQuad(cp)
+            clipScreen.position.y = 0.18 + 0.06 * easeOutQuad(cp)
+          }
           if (!openedCalled && t >= OPEN_AT) {
             openedCalled = true
             device.onOpen?.(spot)

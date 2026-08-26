@@ -44,6 +44,11 @@ export default {
         haze: 'inset 0 1px 0 rgba(35, 43, 60, 0.7)',
       },
 
+      backgroundImage: {
+        // Cold → hot ramp for the continuous heat track (token colors only).
+        heat: 'linear-gradient(90deg, #232B3C 0%, #4A3F1E 38%, #B97E1E 62%, #F3B93F 82%, #D94838 100%)',
+      },
+
       keyframes: {
         'panel-rise': {
           '0%': {transform: 'translate3d(0, 100%, 0)', opacity: '0'},
@@ -61,6 +66,19 @@ export default {
           '0%': {opacity: '1'},
           '100%': {opacity: '0.4'},
         },
+        // Sonar ping ring: expands + fades from the signal radar.
+        'radar': {
+          '0%': {transform: 'scale(0.35)', opacity: '0.7'},
+          '100%': {transform: 'scale(1.6)', opacity: '0'},
+        },
+        // Clap impact — tiny screen shake on the AR view.
+        'shake': {
+          '0%, 100%': {transform: 'translate3d(0, 0, 0)'},
+          '20%': {transform: 'translate3d(-5px, 3px, 0)'},
+          '40%': {transform: 'translate3d(4px, -3px, 0)'},
+          '60%': {transform: 'translate3d(-3px, -2px, 0)'},
+          '80%': {transform: 'translate3d(2px, 2px, 0)'},
+        },
       },
 
       animation: {
@@ -68,6 +86,8 @@ export default {
         'fade-in': 'fade-in 320ms ease-out both',
         'pulse-lamp': 'pulse-lamp 2.4s ease-in-out infinite',
         'tick': 'tick 1s steps(2, start) infinite',
+        'radar': 'radar 2.2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite',
+        'shake': 'shake 380ms ease-in-out both',
       },
     },
   },

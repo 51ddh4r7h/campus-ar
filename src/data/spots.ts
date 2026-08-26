@@ -24,10 +24,12 @@ export interface FilmSpot {
     /** One-line "filmed here" pitch, shown at the reveal. */
     blurb: string
   }
-  /** Placeholder reveal asset — a colour + label. Swap for real media later. */
+  /** Reveal media: a fallback colour swatch + the clip that plays in-world
+   *  and in the panel once you drop the file at public/clips/<id>.mp4. */
   asset: {
     color: string
     label: string
+    videoUrl?: string
   }
 }
 
@@ -42,7 +44,7 @@ export const FILM_SPOTS: FilmSpot[] = [
       title: 'Dear Zindagi',
       blurb: "Every hero gets the scene where they finally exhale. This is yours — the campus's quiet corner for when the semester gets loud.",
     },
-    asset: {color: '#7FD1C0', label: 'clip-mind-studio exhale-01'},
+    asset: {color: '#7FD1C0', label: 'clip-mind-studio exhale-01', videoUrl: '/clips/mind-studio.mp4'},
   },
   {
     id: 'aqua-point',
@@ -54,7 +56,7 @@ export const FILM_SPOTS: FilmSpot[] = [
       title: 'Dil Chahta Hai',
       blurb: 'Three friends, one hilltop, zero plans. The valley below has been waiting for your group photo since 2001.',
     },
-    asset: {color: '#7EC8E3', label: 'clip-aqua-point valley-wide-02'},
+    asset: {color: '#7EC8E3', label: 'clip-aqua-point valley-wide-02', videoUrl: '/clips/aqua-point.mp4'},
   },
   {
     id: 'fountain',
@@ -66,7 +68,7 @@ export const FILM_SPOTS: FilmSpot[] = [
       title: '3 Idiots',
       blurb: "All is well — especially here, where every campus legend has cooled their heels between lectures.",
     },
-    asset: {color: '#4FB3D9', label: 'clip-fountain all-is-well-03'},
+    asset: {color: '#4FB3D9', label: 'clip-fountain all-is-well-03', videoUrl: '/clips/fountain.mp4'},
   },
   {
     id: 'library',
@@ -78,7 +80,7 @@ export const FILM_SPOTS: FilmSpot[] = [
       title: 'The Graduate',
       blurb: "The sprint past these steps has ended more movie chases than any other. Yours starts the moment exams do.",
     },
-    asset: {color: '#FFE9AE', label: 'clip-library rosettes-04'},
+    asset: {color: '#FFE9AE', label: 'clip-library rosettes-04', videoUrl: '/clips/library.mp4'},
   },
   {
     id: 'auditorium',
@@ -90,7 +92,7 @@ export const FILM_SPOTS: FilmSpot[] = [
       title: 'Whiplash',
       blurb: 'Every great performance starts with a tempo check. The stage behind these doors is where campus legends hit their mark.',
     },
-    asset: {color: '#D94838', label: 'clip-auditorium curtain-05'},
+    asset: {color: '#D94838', label: 'clip-auditorium curtain-05', videoUrl: '/clips/auditorium.mp4'},
   },
 ]
 

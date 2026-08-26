@@ -12,8 +12,11 @@
 import './style.css'
 import {XR8Promise} from '@8thwall/engine-binary'
 import {createArControl} from './ar'
+import {fireConfetti} from './confetti'
 import {FILM_SPOTS, type FilmSpot} from './data/spots'
+import {bandFromHeat, glide, heatFromDistance} from './heat'
 import {createHunt, formatClock, type HuntController} from './hunt'
+import {haptics} from './haptics'
 import {fetchLeaderboard, submitScore, type ScoreEntry} from './leaderboard'
 import {
   distanceM,
@@ -49,7 +52,8 @@ const signalLabel = $('#signal-label')
 const signalBand = $('#signal-band')
 const signalCopy = $('#signal-copy')
 const signalSpot = $('#signal-spot')
-const signalMeter = $('#signal-meter')
+const signalRadar = $('#signal-radar')
+const heatThumb = $('#heat-thumb')
 const spotList = $('#spot-list')
 const setsChip = $('#sets-chip')
 const timerChip = $('#timer-chip')
@@ -65,7 +69,7 @@ const hud = {
   spot: $('#hud-spot'),
   state: $('#hud-state'),
 }
-const arTimer = $('#ar-timer')
+const arTimerValue = $('#ar-timer-value')
 const arHint = $('#ar-hint')
 const endArBtn = $<HTMLButtonElement>('#end-ar-btn')
 const recenterBtn = $<HTMLButtonElement>('#recenter-btn')
@@ -84,6 +88,8 @@ const revealSpotName = $('#reveal-spot-name')
 const revealMovie = $('#reveal-movie')
 const revealBlurb = $('#reveal-blurb')
 const revealSplit = $('#reveal-split')
+const revealVideo = $<HTMLVideoElement>('#reveal-video')
+const revealAssetRow = $('#reveal-asset-row')
 const revealAsset = $('#reveal-asset')
 const revealAssetLabel = $('#reveal-asset-label')
 const revealKicker = $('#reveal-kicker')
@@ -202,36 +208,47 @@ const BAND_UI: Array<{label: string; sub: string; copy: string; tone: string}> =
 ]
 
 let currentBand: Band = 0
+let heat = 0 // gliding display value (0–100)
+let targetHeat = 0
 
 /** No fix yet — say so instead of silently sitting on "Cold". */
 function setWaitingSignal(): void {
+  heat = 0
+  targetHeat = 0
+  heatThumb.style.left = '0%'
   signalLabel.textContent = '···'
   signalLabel.className = 'font-display text-7xl leading-none tracking-wider text-fog'
   signalBand.textContent = 'Rolling the establishing shot'
   signalCopy.textContent = 'Getting a fix on your position — hold tight.'
   signalSpot.classList.add('hidden')
-  for (const seg of Array.from(signalMeter.children)) seg.classList.remove('lit')
+}
+
+function setRadarSpeed(): void {
+  const duration = 2.6 - (heat / 100) * 1.9 // 2.6 s cold → 0.7 s blazing
+  for (const ring of signalRadar.querySelectorAll<HTMLElement>('.radar-ring')) {
+    ring.style.animationDuration = `${duration.toFixed(2)}s`
+  }
+}
+
+/** Glide thumb + radar toward target heat; called from the 100 ms ticker. */
+function tickHeatUI(): void {
+  heat = glide(heat, targetHeat)
+  heatThumb.style.left = `${heat.toFixed(1)}%`
+  heatThumb.classList.toggle('is-blazing', heat > 85)
+  setRadarSpeed()
 }
 
 function setBand(band: Band): void {
+  const rising = band > currentBand
   currentBand = band
   const ui = BAND_UI[band]
   signalLabel.textContent = ui.label
   signalLabel.className = `font-display text-7xl leading-none tracking-wider ${ui.tone}`
   signalBand.textContent = ui.sub
-  for (const seg of signalMeter.querySelectorAll<HTMLElement>('.segment')) {
-    const lit = Number(seg.dataset.band) <= band
-    seg.classList.toggle('lit', lit)
-  }
+  if (rising) haptics.tick() // band crossed upward — feel the warm-up
 }
 
 // ------------------------------------------------------------------ proximity
-const bandFromDistance = (d: number): Band => {
-  if (d > 100) return 0
-  if (d > 55) return 1
-  if (d > 25) return 2
-  return 3
-}
 
 /** True when a fix is trustworthy enough to unlock a spot. */
 const reliable = (fix: GeoFix): boolean => fix.simulated || fix.accuracyM <= 60
@@ -255,11 +272,16 @@ function evaluateProximity(fix: GeoFix): void {
   // Inside any unfound spot's radius → unlock it and offer the camera.
   if (nearest.dist <= nearest.run.spot.radiusM && reliable(fix)) {
     arTarget = nearest.run.spot
-    if (nearest.run.status === 'locked') hunt.setUnlocked(nearest.run.spot.id)
+    if (nearest.run.status === 'locked') {
+      hunt.setUnlocked(nearest.run.spot.id)
+      haptics.unlock()
+    }
+    targetHeat = 100
     setBand(4)
   } else {
     arTarget = null
-    setBand(bandFromDistance(nearest.dist))
+    targetHeat = heatFromDistance(nearest.dist, nearest.run.spot.radiusM)
+    setBand(bandFromHeat(targetHeat))
 
     // Ambiguity rule: only name a spot when it is clearly the closest
     // (second-closest is >45 m behind). Otherwise stay generic.
@@ -351,7 +373,8 @@ function startTimerTicker(): void {
   timerInterval = window.setInterval(() => {
     const t = formatClock(hunt.elapsedMs())
     timerChip.textContent = t
-    arTimer.textContent = t
+    arTimerValue.textContent = t
+    tickHeatUI()
   }, 100)
 }
 function stopTimerTicker(): void {
@@ -450,6 +473,8 @@ function goToSummary(): void {
   stopTimerTicker()
   showOnlyScreen('summary')
   arTarget = null
+  fireConfetti()
+  haptics.fanfare()
 
   summaryTotal.textContent = formatClock(hunt.elapsedMs())
 
@@ -546,6 +571,12 @@ const arHooks = {
   onReveal(spot: FilmSpot): void {
     hunt.reveal(spot.id)
     hudValue(hud.state, 'found', 'good')
+    haptics.clap()
+    // Clap impact: shake the AR frame (reduced-motion users get none).
+    arChrome.classList.remove('motion-safe:animate-shake')
+    void arChrome.offsetWidth // restart the animation
+    arChrome.classList.add('motion-safe:animate-shake')
+    window.setTimeout(() => arChrome.classList.remove('motion-safe:animate-shake'), 420)
     toast(`Scene found — ${spot.name}.`)
     // If this was the final set, the continue button becomes "see results".
     revealContinueBtn.querySelector('span')!.textContent = hunt.allFound() ? 'See your results' : 'Back to the hunt'
@@ -577,6 +608,23 @@ function openRevealPanel(spot: FilmSpot): void {
   revealAsset.style.backgroundColor = spot.asset.color
   revealAssetLabel.textContent = spot.asset.label
   revealKicker.textContent = hunt.allFound() ? 'Final scene found' : 'Scene found'
+
+  // Movie clip when one is dropped at public/clips/<id>.mp4, swatch otherwise.
+  const videoUrl = spot.asset.videoUrl
+  if (videoUrl) {
+    revealVideo.classList.remove('hidden')
+    revealAssetRow.classList.add('hidden')
+    if (revealVideo.src !== new URL(videoUrl, window.location.href).href) {
+      revealVideo.src = videoUrl
+      revealVideo.load()
+    }
+    revealVideo.play().catch(() => undefined)
+  } else {
+    revealVideo.pause()
+    revealVideo.classList.add('hidden')
+    revealAssetRow.classList.remove('hidden')
+  }
+
   revealPanel.classList.remove('hidden')
 }
 
@@ -599,13 +647,27 @@ function endArSession(): void {
 }
 
 // ------------------------------------------------------------------ events
-startButton.addEventListener('click', beginHunt)
+// Missing clip file → fall back to the swatch row instead of a broken player.
+revealVideo.addEventListener('error', () => {
+  revealVideo.pause()
+  revealVideo.classList.add('hidden')
+  revealAssetRow.classList.remove('hidden')
+})
+
+startButton.addEventListener('click', () => {
+  haptics.tick()
+  beginHunt()
+})
 demoStartBtn.addEventListener('click', () => {
+  haptics.tick()
   beginHunt()
   startDemoFlight()
 })
 demoHuntBtn.addEventListener('click', startDemoFlight)
-openArBtn.addEventListener('click', openAr)
+openArBtn.addEventListener('click', () => {
+  haptics.tick()
+  openAr()
+})
 endArBtn.addEventListener('click', endArSession)
 recenterBtn.addEventListener('click', () => ar.recenter())
 revealContinueBtn.addEventListener('click', endArSession)

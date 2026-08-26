@@ -96,12 +96,29 @@
     @apply border-gold/50;
   }
 
-  /* Heat-meter segment. Lit state is applied from JS. */
-  .segment {
-    @apply h-1.5 flex-1 rounded-full bg-line transition-[background-color,box-shadow] duration-500 motion-reduce:transition-none;
+  /* Continuous heat track: thumb glides along the cold→hot gradient. */
+  .heat-thumb {
+    left: 0%;
+    @apply rounded-full bg-chalk shadow-hot transition-[left,background-color] duration-300 ease-out;
   }
-  .segment.lit {
-    @apply bg-gold shadow-hot;
+  .heat-thumb.is-blazing {
+    @apply bg-gold;
+  }
+
+  /* Sonar ping ring — animation speed is driven from JS by heat. */
+  .radar-ring {
+    @apply absolute h-12 w-12 rounded-full border border-gold/50 motion-safe:animate-radar motion-reduce:opacity-40;
+  }
+  .radar-ring[data-ring='1'] {
+    animation-delay: 0.73s;
+  }
+  .radar-ring[data-ring='2'] {
+    animation-delay: 1.46s;
+  }
+
+  /* Recording dot in the AR timer chip. */
+  .rec-dot {
+    @apply h-2 w-2 rounded-full bg-ember motion-safe:animate-pulse-lamp;
   }
 
   .sim-btn {

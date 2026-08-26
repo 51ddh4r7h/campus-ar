@@ -69,26 +69,42 @@ No frameworks beyond plain TS modules + the engine's camera-pipeline.
 | `src/hunt.ts` | Hunt state machine + wall-clock timer + splits |
 | `src/location.ts` | Single geolocation source (no heading/bearing) + `?sim` simulator |
 | `src/leaderboard.ts` | **Stub** leaderboard — `submitScore()` is the swap point |
-| `src/data/spots.ts` | The 3 film spots (lat/lng/radius/movie/reveal-asset) |
+| `src/data/spots.ts` | The 5 campus spots (lat/lng/radius/movie/reveal-asset/clip) |
 | `src/full-window-canvas.ts` | Keeps the camera canvas filling the viewport |
 | `DESIGN.md` | Token system + signature-element + motion plan |
 | `scripts/e2e-smoke.mjs` | Headless Playwright test of the full hunt flow |
 
 ### Setting your real campus spots
 
-`src/data/spots.ts` ships with placeholder coordinates (a generic campus).
-Drop your own pins:
+`src/data/spots.ts` ships with the real Symbiosis Lavale campus pins (extracted
+from geotagged photos). To change or add spots:
 
 ```ts
 {
-  id: 'the-quad',                   // short slug
-  name: 'The Quad',
-  lat: 37.4279, lng: -122.1706,     // ← real spot
+  id: 'fountain',                   // short slug
+  name: 'The Fountain',
+  lat: 18.5361451, lng: 73.7331103, // ← real spot
   radiusM: 15,                      // how close you must get to unlock
-  movie: {title: 'The Social Network', blurb: '…one-liner…'},
-  asset: {color: '#F3B93F', label: 'clip-quad-01'},
+  movie: {title: '3 Idiots', blurb: '…one-liner…'},
+  asset: {color: '#4FB3D9', label: 'clip-fountain', videoUrl: '/clips/fountain.mp4'},
 }
 ```
+
+### Movie clips (the in-world reveal screen)
+
+Drop an `.mp4` at `public/clips/<spot-id>.mp4` (e.g. `public/clips/fountain.mp4`)
+and it plays automatically: **in-world** on a screen that fades in behind the
+clapperboard after the clap, and in the reveal panel. H.264 MP4 + AAC audio is
+the safe encode for phones; keep clips ≤ 10 s and ≤ 5 MB. Until a file exists,
+the reveal falls back to the colour swatch — nothing breaks.
+
+### Haptics
+
+`src/haptics.ts` wraps the Vibration API: ticks on band crossings, an unlock
+double-tick, a clap pattern on the reveal, and a fanfare at the summary.
+**Android browsers vibrate for real; iOS Safari does not expose the web
+vibration API at all** — there the radar pulse + screen shake carry the
+feedback (Apple limitation, not fixable from the web).
 
 ---
 
