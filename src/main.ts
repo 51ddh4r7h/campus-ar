@@ -169,8 +169,8 @@ function enterAr(): void {
   arChrome.classList.remove('hidden')
   revealPanel.classList.add('hidden')
 
-  // Debug HUD stays behind the dev/sim flag (spec §25).
-  debugHud.classList.toggle('hidden', !(import.meta.env.DEV || simMode))
+  // Debug HUD is dev-only, never on demo flights (spec §25 — screenshots flagged this).
+  debugHud.classList.toggle('hidden', !import.meta.env.DEV)
 
   // Calibration state A — camera starting (spec §8).
   worldLocked = false
@@ -478,8 +478,9 @@ const arHooks = {
     window.setTimeout(() => arChrome.classList.remove('motion-safe:animate-shake'), 420)
     renderProgress()
     toast(`Scene found — ${spot.name}.`)
-    // If this was the final set, the continue button becomes "see results".
-    revealContinueBtn.querySelector('span')!.textContent = hunt.allFound() ? 'See your results' : 'Back to the hunt'
+    // Final set → "See your results", otherwise compact "Continue".
+    const firstLabel = revealContinueBtn.querySelector('span')
+    if (firstLabel) firstLabel.textContent = hunt.allFound() ? 'See your results' : 'Continue'
     // Safety net: the panel opens on the in-scene timeline (~1.25 s), but open
     // it anyway if rendering stalls (helps degraded devices + headless testing).
     window.clearTimeout(revealFallbackTimer)
@@ -504,6 +505,11 @@ function openRevealPanel(spot: FilmSpot): void {
   revealMovie.textContent = spot.movie.title
   revealBlurb.textContent = spot.movie.blurb
   revealSplit.textContent = formatClock(hunt.splitFor(spot.id))
+  const revealCount = document.getElementById('reveal-count')
+  if (revealCount) {
+    const found = hunt.spots.filter((s) => s.status === 'found').length
+    revealCount.textContent = `${String(found).padStart(2, '0')} / ${String(hunt.spots.length).padStart(2, '0')}`
+  }
   revealAsset.style.backgroundColor = spot.asset.color
   revealAssetLabel.textContent = spot.asset.label
   revealKicker.textContent = hunt.allFound() ? 'Final scene found' : 'Scene found'
@@ -539,6 +545,14 @@ revealVideo.addEventListener('error', () => {
   revealVideo.pause()
   revealVideo.classList.add('hidden')
   revealAssetRow.classList.remove('hidden')
+})
+// Scrim / handle: tapping outside the card dismisses to the hunt (world stays behind).
+document.getElementById('reveal-scrim')?.addEventListener('click', () => {
+  haptics.tick()
+  window.clearTimeout(revealFallbackTimer)
+  revealPanel.classList.add('hidden')
+  if (hunt.allFound()) goToSummary()
+  else setReticle(arTarget ? 'nearby' : 'tracking')
 })
 
 startButton.addEventListener('click', () => {

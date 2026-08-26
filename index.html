@@ -76,11 +76,23 @@
         </div>
 
         <div>
-          <ul class="mb-6 space-y-2 text-sm text-fog" aria-label="How the hunt works">
-            <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true"></span>3 sets to find — no map, no arrows, just warmth</li>
-            <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true"></span>A single clock runs until all five are found</li>
-            <li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-gold" aria-hidden="true"></span>Your total time goes up on the marquee</li>
-          </ul>
+          <ol class="mb-6 grid grid-cols-3 gap-3" aria-label="How the hunt works">
+            <li class="rounded-tile border border-white/[0.06] bg-white/[0.04] px-3 py-3 backdrop-blur-md">
+              <span class="font-mono text-[10px] tracking-[0.18em] text-white/35">01</span>
+              <p class="mt-1 font-display text-[13px] leading-tight tracking-wide text-white">Warmth, not map</p>
+              <p class="mt-1 text-[11px] leading-relaxed text-white/45">Signal goes cold → hot as you near a set.</p>
+            </li>
+            <li class="rounded-tile border border-white/[0.06] bg-white/[0.04] px-3 py-3 backdrop-blur-md">
+              <span class="font-mono text-[10px] tracking-[0.18em] text-white/35">02</span>
+              <p class="mt-1 font-display text-[13px] leading-tight tracking-wide text-white">Open camera on set</p>
+              <p class="mt-1 text-[11px] leading-relaxed text-white/45">World locks — a film object appears.</p>
+            </li>
+            <li class="rounded-tile border border-white/[0.06] bg-white/[0.04] px-3 py-3 backdrop-blur-md">
+              <span class="font-mono text-[10px] tracking-[0.18em] text-white/35">03</span>
+              <p class="mt-1 font-display text-[13px] leading-tight tracking-wide text-white">Catch the reveal</p>
+              <p class="mt-1 text-[11px] leading-relaxed text-white/45">5 scenes, one clock. Marquee awaits.</p>
+            </li>
+          </ol>
 
           <button id="start-button" type="button" class="btn-primary w-full">
             <span class="font-display text-xl tracking-[0.18em]">Start the hunt</span>
@@ -289,46 +301,70 @@
       </aside>
     </div>
 
-    <!-- ══════════════════════════════════ REVEAL PANEL (signature moment) ══════════════════════════════════ -->
-    <div id="reveal-panel" class="pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))" aria-live="polite">
-      <div id="reveal-card" class="pointer-events-auto animate-panel-rise overflow-hidden rounded-panel border border-gold/30 bg-abyss/95 shadow-raise backdrop-blur-xl motion-reduce:animate-fade-in">
-        <!-- lamp strip -->
-        <div class="h-1 bg-gradient-to-r from-brass via-gold to-spotlight" aria-hidden="true"></div>
-
-        <div class="px-5 pb-6 pt-4">
-          <p id="reveal-kicker" class="font-display text-base tracking-[0.3em] text-gold">Scene found</p>
-          <h2 id="reveal-spot-name" class="mt-1 font-display text-5xl leading-[0.92] tracking-wide text-spotlight">The Quad</h2>
-
-          <div class="mt-4 border-l-2 border-gold/50 pl-3">
-            <p class="text-[10px] font-bold uppercase tracking-[0.28em] text-fog">Filmed here</p>
-            <p id="reveal-movie" class="mt-0.5 font-display text-2xl tracking-wider text-chalk">The Graduate</p>
+    <!-- ════════════ REVEAL — compact glass sheet (subtle, world stays visible §20) ════════════ -->
+    <div id="reveal-panel" class="pointer-events-none fixed inset-0 z-50 hidden" aria-live="polite">
+      <!-- scrim: tap to dismiss, lets the camera breathe -->
+      <div id="reveal-scrim" class="absolute inset-0 bg-night/20 backdrop-blur-[2px]"></div>
+      <!-- sheet -->
+      <div class="absolute inset-x-0 bottom-0 flex max-h-[52vh] flex-col px-3" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
+        <div
+          id="reveal-card"
+          class="pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#12151E]/70 shadow-[0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl motion-safe:animate-panel-rise motion-reduce:animate-fade-in"
+        >
+          <!-- drag handle -->
+          <div class="flex shrink-0 justify-center pt-2.5">
+            <span class="h-1 w-8 rounded-full bg-white/20" aria-hidden="true"></span>
           </div>
-          <p id="reveal-blurb" class="mt-3 text-[14px] leading-relaxed text-fog"></p>
 
-          <!-- movie clip (plays when public/clips/<id>.mp4 exists) or swatch fallback -->
-          <video
-            id="reveal-video"
-            class="mt-4 hidden w-full rounded-tile border border-gold/30 object-cover shadow-raise"
-            muted
-            loop
-            playsinline
-            preload="auto"
-          ></video>
-
-          <div class="mt-5 flex items-center gap-3">
-            <div class="glass flex items-center gap-2 rounded-chip px-3 py-2" id="reveal-asset-row">
-              <span class="h-6 w-6 rounded-[4px] border border-gold/40" id="reveal-asset" aria-hidden="true"></span>
-              <span class="font-mono text-[10px] leading-tight text-fog" id="reveal-asset-label"></span>
+          <div class="overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
+            <!-- meta row: kicker + count -->
+            <div class="flex items-center gap-2">
+              <span class="h-1 w-1 rounded-full bg-white/40" aria-hidden="true"></span>
+              <p id="reveal-kicker" class="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/50">Scene found</p>
+              <span id="reveal-count" class="ml-auto font-mono text-[10px] tracking-[0.14em] text-white/30">01 / 05</span>
             </div>
-            <p class="ml-auto text-right">
-              <span class="block text-[10px] font-bold uppercase tracking-[0.24em] text-fog">Found in</span>
-              <span id="reveal-split" class="font-display text-3xl leading-none tracking-wider text-gold">12.6</span>
-            </p>
+
+            <h2 id="reveal-spot-name" class="mt-2 font-display text-[30px] leading-none tracking-wide text-white">Mind Studio</h2>
+
+            <div class="mt-3 flex items-stretch gap-3">
+              <span class="w-[2px] shrink-0 rounded-full bg-white/10" aria-hidden="true"></span>
+              <div class="min-w-0">
+                <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/40">Filmed here</p>
+                <p id="reveal-movie" class="mt-0.5 font-display text-[18px] leading-none tracking-wide text-white/90">Dear Zindagi</p>
+              </div>
+              <p class="ml-auto shrink-0 self-center text-right">
+                <span class="block text-[9px] font-semibold uppercase tracking-[0.2em] text-white/35">Found in</span>
+                <span id="reveal-split" class="font-mono text-[18px] font-semibold tracking-tight text-white">1:32</span>
+              </p>
+            </div>
+
+            <p id="reveal-blurb" class="mt-3 line-clamp-3 text-[13px] leading-relaxed text-white/60"></p>
+
+            <!-- clip: only occupies space when a file exists; otherwise hidden with no rect -->
+            <video
+              id="reveal-video"
+              class="mt-3 hidden aspect-video max-h-[22vh] w-full rounded-xl object-cover"
+              muted
+              loop
+              playsinline
+              preload="auto"
+            ></video>
+
+            <!-- swatch fallback: compact, muted, only when no clip -->
+            <div id="reveal-asset-row" class="mt-3 hidden items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2">
+              <span class="h-5 w-5 shrink-0 rounded-[5px] border border-white/10" id="reveal-asset" aria-hidden="true"></span>
+              <span class="font-mono text-[10px] leading-tight text-white/45" id="reveal-asset-label"></span>
+            </div>
           </div>
 
-          <button id="reveal-continue" type="button" class="btn-primary mt-5 w-full">
-            <span class="font-display text-xl tracking-[0.18em]">Back to the hunt</span>
-          </button>
+          <!-- footer: single quiet action -->
+          <div class="shrink-0 border-t border-white/[0.06] bg-white/[0.02] px-3 py-3">
+            <button id="reveal-continue" type="button" class="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-[13px] font-semibold tracking-[0.14em] text-black transition hover:bg-white/90 active:scale-[0.98]">
+              <span>Continue</span>
+              <span class="text-[11px] opacity-60">→</span>
+            </button>
+            <p class="mt-2 text-center text-[10px] tracking-wide text-white/25">world stays behind • tap outside to dismiss</p>
+          </div>
         </div>
       </div>
     </div>

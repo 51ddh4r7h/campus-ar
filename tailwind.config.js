@@ -11,16 +11,19 @@ export default {
     extend: {
       colors: {
         // Cinema stage — see DESIGN.md §2 for roles.
+        // Gold is now a muted champagne (was #F3B93F saturated yellow) for glassmorphism.
         night: '#070A12', // cinema-navy base
         abyss: '#04060B', // deepest inset
         screen: '#101624', // panel surface
-        gold: '#F3B93F', // marquee-lamp accent
-        brass: '#B97E1E', // burnished gold
-        spotlight: '#FFE9AE', // warm projecter highlight / success
+        gold: '#D8C4A0', // muted champagne — restrained accent, not saturated yellow
+        brass: '#A6906B', // muted warm stone
+        spotlight: '#F0E6D3', // soft warm highlight
         ember: '#D94838', // marquee red (sparingly)
-        chalk: '#EAE4D5', // primary text
-        fog: '#8B93A5', // muted text
+        chalk: '#EAE4D5', // warm paper-white — primary text
+        fog: '#8B93A5', // dusk-muted secondary text
         line: '#232B3C', // hairline seams on panels
+        glass: 'rgba(255,255,255,0.06)', // glassmorphism surface
+        glassBorder: 'rgba(255,255,255,0.08)', // glass hairline
       },
 
       fontFamily: {
@@ -39,9 +42,9 @@ export default {
         raise:
           '0 18px 48px -12px rgba(2, 4, 9, 0.85), 0 6px 16px -10px rgba(2, 4, 9, 0.6)',
         lamp:
-          '0 0 0 1px rgba(243, 185, 63, 0.35), 0 10px 34px -8px rgba(243, 185, 63, 0.55), inset 0 1px 0 rgba(255, 233, 174, 0.4)',
-        hot: '0 0 26px -4px rgba(243, 185, 63, 0.7)',
-        haze: 'inset 0 1px 0 rgba(35, 43, 60, 0.7)',
+          '0 0 0 1px rgba(216, 196, 160, 0.22), 0 10px 34px -8px rgba(216, 196, 160, 0.28), inset 0 1px 0 rgba(255,255,255,0.06)',
+        hot: '0 0 24px -4px rgba(216, 196, 160, 0.45)',
+        haze: 'inset 0 1px 0 rgba(255,255,255,0.06)',
       },
 
       backgroundImage: {

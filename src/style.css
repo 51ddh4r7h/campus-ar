@@ -54,34 +54,37 @@
 }
 
 @layer components {
-  /* Accent text: burnished gold gradient, Bebas Neue display reads it best. */
+  /* Accent text: muted champagne gradient, restrained not saturated yellow. */
   .text-gradient-gold {
-    background-image: linear-gradient(100deg, #b97e1e 0%, #f3b93f 45%, #ffe9ae 100%);
+    background-image: linear-gradient(100deg, #a6906b 0%, #d8c4a0 50%, #f0e6d3 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
 
-  /* Translucent panel surface — "backstage glass". */
+  /* Glassmorphism panel — translucent, blurred, hairline border (spec §30). */
   .glass {
-    @apply border border-line bg-screen/80 backdrop-blur-md;
+    @apply border border-white/[0.08] bg-white/[0.06] backdrop-blur-xl;
+  }
+  .glass-strong {
+    @apply border border-white/[0.08] bg-[#0F1420]/55 backdrop-blur-2xl;
   }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-chip border border-line bg-screen/70 px-3 py-1 text-[12px] text-fog;
+    @apply inline-flex items-center gap-1.5 rounded-chip border border-white/[0.08] bg-white/[0.06] px-3 py-1 text-[12px] text-fog backdrop-blur-md;
   }
 
-  /* Primary CTA: marquee lamp. */
+  /* Primary CTA: muted champagne pill, not saturated yellow marquee. */
   .btn-primary {
-    @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-gold px-6 text-abyss shadow-lamp transition-transform duration-150 motion-safe:active:scale-[0.97] motion-safe:hover:brightness-110;
+    @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-chalk px-6 text-night transition-all duration-150 motion-safe:active:scale-[0.97] hover:bg-white;
   }
   .btn-primary:disabled {
-    @apply cursor-default opacity-50 shadow-haze;
+    @apply cursor-default opacity-50;
   }
 
-  /* Quiet secondary / destructive action. */
+  /* Quiet secondary — glass pill. */
   .btn-ghost {
-    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full border border-line bg-screen/60 px-6 text-chalk shadow-haze transition-colors duration-150 hover:border-gold/40 hover:bg-screen;
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-6 text-chalk backdrop-blur-md transition-colors duration-150 hover:border-white/15 hover:bg-white/[0.09];
   }
 
   .error-box {
