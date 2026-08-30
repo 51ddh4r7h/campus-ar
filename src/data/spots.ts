@@ -30,6 +30,8 @@ export interface FilmSpot {
     color: string
     label: string
     videoUrl?: string
+    /** Same-origin fallback for browsers/networks that reject the S3 request. */
+    videoFallbackUrl?: string
   }
 }
 
@@ -44,7 +46,13 @@ export const FILM_SPOTS: FilmSpot[] = [
       title: 'Dear Zindagi',
       blurb: "Every hero gets the scene where they finally exhale. This is yours — the campus's quiet corner for when the semester gets loud.",
     },
-    asset: {color: '#7FD1C0', label: 'clip-mind-studio exhale-01', videoUrl: '/clips/mind-studio.mp4'},
+    // AWS S3 ap-south-1 (Mumbai) — primary per user request, Pages /clips fallback
+    asset: {
+      color: '#7FD1C0',
+      label: 'clip-mind-studio exhale-01',
+      videoUrl: 'https://campus-ar-clips-204685625918-ap-south-1.s3.ap-south-1.amazonaws.com/clips/mind-studio.mp4',
+      videoFallbackUrl: '/clips/mind-studio.mp4',
+    },
   },
   {
     id: 'aqua-point',

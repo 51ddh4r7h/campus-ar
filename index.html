@@ -2,224 +2,227 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <!-- Phone-first: fit the viewport, disable pinch-zoom/bounce on the camera view. -->
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
-    <title>Campus Film Hunt — AR scavenger</title>
-    <meta name="theme-color" content="#070a12" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Campus Film Hunt</title>
+    <meta name="theme-color" content="#f6f7fb" />
+    <meta name="color-scheme" content="light" />
     <meta
       name="description"
-      content="A timed campus scavenger hunt. Find five movie sets, catch the reveal in augmented reality, and put your time on the marquee."
+      content="A timed campus telemetry hunt. Track five dormant film sets by signal heat, lock the world in AR, and put your time on the register."
     />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%AC%3C/text%3E%3C/svg%3E"
     />
 
-    <!-- Cinema type system (DESIGN.md §2): condensed marquee display + warm UI face. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Instrument+Sans:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-
-    <!-- ============================================================
-         8th Wall Engine Binary (current engine, NOT the archived
-         ithub.com/8thwall/web repo).
-         - Loaded via script tag (it cannot be bundled by Vite).
-         - data-preload-chunks="slam" enables World Tracking / SLAM
-           (adds XR8.XrController to the global XR8 object).
-         - Files are copied from node_modules/@8thwall/engine-binary/dist
-           into public/xr8/ by vite.config.ts on startup.
-    ============================================================ -->
-    <script src="./xr8/xr.js" async crossorigin="anonymous" data-preload-chunks="slam"></script>
-    <script>
-      // Friendly fallback if the engine file fails to load (no npm install / bad deploy).
-      window.addEventListener('error', function (e) {
-        const t = e.target
-        if (t && t.tagName === 'SCRIPT' && /xr[^/]*\.js/.test(t.src || '')) {
-          const el = document.getElementById('start-error')
-          if (el) el.textContent = 'Failed to load the 8th Wall engine. Re-run "npm install", then try again.'
-        }
-      })
-    </script>
   </head>
 
-  <body>
-    <!-- Camera feed + in-world AR render into this canvas (kept in the DOM always). -->
+  <body class="antialiased">
+    <!-- Skip link -->
+    <a href="#screen-start" class="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:border focus:border-hazard focus:bg-background focus:px-3 focus:py-2 focus:text-foreground focus:outline-none">Skip to content</a>
+
+    <!-- Camera feed -->
     <canvas id="camerafeed" class="fixed inset-0 z-0 block h-full w-full touch-none" aria-hidden="true"></canvas>
 
-    <!-- ══════════════════════════════════ START SCREEN ══════════════════════════════════ -->
-    <section id="screen-start" class="fixed inset-0 z-40 overflow-hidden bg-night">
-      <div
-        class="absolute inset-0"
-        aria-hidden="true"
-        style="background: radial-gradient(120% 80% at 50% 0%, rgba(243, 185, 63, 0.14) 0%, rgba(7, 10, 18, 0) 55%), radial-gradient(90% 60% at 85% 100%, rgba(185, 126, 30, 0.12) 0%, rgba(7, 10, 18, 0) 60%)"
-      ></div>
-      <!-- faint marquee light row across the top -->
-      <div class="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-gold/10 to-transparent" aria-hidden="true"></div>
+    <main id="app-main">
+    <!-- ═══════════════════════ START SCREEN ═══════════════════════ -->
+    <section id="screen-start" class="fixed inset-0 z-40 flex flex-col overflow-hidden overflow-y-auto overscroll-contain bg-background" aria-labelledby="start-title" tabindex="-1">
+      <!-- top rule — hazard -->
+      <div class="h-[2px] w-full shrink-0 bg-hazard" aria-hidden="true"></div>
 
-      <div class="relative flex h-full flex-col justify-between px-6 pb-8" style="padding-top: max(2.5rem, env(safe-area-inset-top))">
-        <div class="pt-6">
-          <p class="chip motion-safe:animate-pulse-lamp w-max border-gold/40 bg-gold/10 text-gold">★ Campus Film Society presents</p>
-          <h1 class="mt-5 text-balance font-display text-[17vw] leading-[0.86] tracking-wide text-chalk">
-            Find the<br />
-            <span class="text-gradient-gold">movie sets</span>
-          </h1>
-          <p class="mt-5 max-w-[34ch] text-[15px] leading-relaxed text-fog">
-            Five spots on campus once stood in for famous films. Walk the ground — the signal only says how close
-            you are. Find a set, open your camera, and catch the reveal.
-          </p>
-        </div>
+      <!-- header bar — monospaced system meta -->
+      <header class="flex shrink-0 items-center justify-between border-b border-line bg-background px-4 py-2">
+        <p class="app-wordmark">Campus Film Hunt</p>
+        <p class="app-status"><span class="status-dot" aria-hidden="true"></span>Ready when you are</p>
+      </header>
 
-        <div>
-          <ol class="mb-6 grid grid-cols-3 gap-3" aria-label="How the hunt works">
-            <li class="rounded-tile border border-white/[0.06] bg-white/[0.04] px-3 py-3 backdrop-blur-md">
-              <span class="font-mono text-[10px] tracking-[0.18em] text-white/35">01</span>
-              <p class="mt-1 font-display text-[13px] leading-tight tracking-wide text-white">Warmth, not map</p>
-              <p class="mt-1 text-[11px] leading-relaxed text-white/45">Signal goes cold → hot as you near a set.</p>
+      <!-- main -->
+      <div class="flex flex-1 flex-col">
+        <!-- brutal grid: hero + steps -->
+        <div class="brutal-grid flex-1">
+          <!-- hero block -->
+          <div class="bg-background px-5 pb-6 pt-6 sm:px-6 sm:pt-10">
+            <p class="inline-flex items-center gap-2 border border-line bg-raised px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+              <span class="status-dot" aria-hidden="true"></span>
+              A campus adventure
+            </p>
+            <!-- macro — clamp brutalist -->
+            <h1 id="start-title" class="mt-4 font-display text-[clamp(2.8rem,13vw,8rem)] font-black uppercase leading-[0.84] tracking-[-0.05em] text-foreground text-balance" tabindex="-1">
+              Find the story<br />
+              hidden around<br />
+              campus.
+            </h1>
+            <p class="mt-5 max-w-[42ch] font-mono text-[12px] leading-relaxed text-muted">
+              Famous films have left their mark here. Follow a subtle signal, discover the location, and reveal the scene when you arrive.
+            </p>
+            <!-- ASCII divider -->
+            <div class="mt-6 flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-muted/40" aria-hidden="true">
+              <span>5 locations</span><span class="h-px flex-1 bg-line"></span><span>1 shared adventure</span>
+            </div>
+          </div>
+
+          <!-- steps — 3-col grid with 1px gap -->
+          <ol class="brutal-grid grid-cols-3" aria-label="How the hunt works">
+            <li class="bg-raised px-3 py-4 sm:px-4 sm:py-5">
+              <span class="font-mono text-[10px] tracking-[0.18em] text-muted">01</span>
+              <p class="mt-2 font-display text-[11px] font-black uppercase tracking-[0.14em] text-foreground">Follow the signal</p>
+              <p class="mt-1 font-mono text-[11px] leading-relaxed text-muted">We nudge you closer without giving it away.</p>
             </li>
-            <li class="rounded-tile border border-white/[0.06] bg-white/[0.04] px-3 py-3 backdrop-blur-md">
-              <span class="font-mono text-[10px] tracking-[0.18em] text-white/35">02</span>
-              <p class="mt-1 font-display text-[13px] leading-tight tracking-wide text-white">Open camera on set</p>
-              <p class="mt-1 text-[11px] leading-relaxed text-white/45">World locks — a film object appears.</p>
+            <li class="bg-raised px-3 py-4 sm:px-4 sm:py-5">
+              <span class="font-mono text-[10px] tracking-[0.18em] text-muted">02</span>
+              <p class="mt-2 font-display text-[11px] font-black uppercase tracking-[0.14em] text-foreground">Find the place</p>
+              <p class="mt-1 font-mono text-[11px] leading-relaxed text-muted">Your camera turns the real location into a stage.</p>
             </li>
-            <li class="rounded-tile border border-white/[0.06] bg-white/[0.04] px-3 py-3 backdrop-blur-md">
-              <span class="font-mono text-[10px] tracking-[0.18em] text-white/35">03</span>
-              <p class="mt-1 font-display text-[13px] leading-tight tracking-wide text-white">Catch the reveal</p>
-              <p class="mt-1 text-[11px] leading-relaxed text-white/45">5 scenes, one clock. Marquee awaits.</p>
+            <li class="bg-raised px-3 py-4 sm:px-4 sm:py-5">
+              <span class="font-mono text-[10px] tracking-[0.18em] text-muted">03</span>
+              <p class="mt-2 font-display text-[11px] font-black uppercase tracking-[0.14em] text-foreground">Beat the clock</p>
+              <p class="mt-1 font-mono text-[11px] leading-relaxed text-muted">Reveal every scene and see your time on the board.</p>
             </li>
           </ol>
+        </div>
 
+        <!-- CTAs -->
+        <div class="border-t border-line bg-background px-5 py-4 sm:px-6" style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
           <button id="start-button" type="button" class="btn-primary w-full">
-            <span class="font-display text-xl tracking-[0.18em]">Start the hunt</span>
+            <span>Start exploring</span>
+            <span aria-hidden="true">→</span>
           </button>
-          <button id="demo-start-btn" type="button" class="btn-ghost mt-3 w-full">
-            <span class="text-xs font-semibold uppercase tracking-[0.2em]">Not on campus? Watch the demo flight</span>
+          <button id="demo-start-btn" type="button" class="btn-ghost mt-2 w-full">
+            Try the demo — start with a mystery
           </button>
-          <p id="start-error" class="error-box mt-3 hidden"></p>
-          <p id="env-note" class="error-box mt-3 hidden"></p>
-          <p class="mt-4 text-center text-xs text-fog/70">HTTPS · camera · location access</p>
+          <p id="start-error" class="error-box mt-3 hidden" role="alert"></p>
+          <p id="env-note" class="error-box mt-3 hidden" role="status"></p>
+          <p class="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-muted/60">HTTPS · Camera · Location</p>
         </div>
       </div>
     </section>
 
-    <!-- ════════════════ HUNT SHEET — set list as bottom sheet over camera (unified) ════════════════ -->
+    <!-- ═══════════════ HUNT SHEET — brutalist compartmentalized sheet ═══════════════ -->
     <section
       id="screen-hunt"
-      class="fixed inset-x-0 bottom-[84px] z-40 hidden max-h-[48vh] flex-col overflow-hidden rounded-t-[24px] border-t border-white/[0.08] bg-[#0F1420]/82 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
+      class="fixed inset-x-0 bottom-0 z-40 hidden max-h-[56vh] flex-col overflow-hidden border-t border-line bg-background"
+      aria-labelledby="hunt-title"
+      tabindex="-1"
     >
-      <div class="flex justify-center pt-2.5">
-        <span class="h-1 w-10 rounded-full bg-white/20" aria-hidden="true"></span>
+      <!-- drag handle — square, not pill -->
+      <div class="flex shrink-0 justify-center border-b border-line bg-raised py-2">
+        <span class="h-1 w-8 bg-muted/40" aria-hidden="true"></span>
       </div>
 
-      <div class="relative flex flex-1 flex-col overflow-hidden px-5 pb-2" style="padding-top: 0.5rem">
-        <!-- top bar -->
-        <header class="flex items-center justify-between pt-safe">
-          <h1 class="font-display text-lg tracking-[0.22em] text-chalk">Film Hunt</h1>
-          <div class="flex items-center gap-2">
-            <span id="demo-chip" class="chip hidden border-ember/60 bg-ember/10 text-gold">Demo</span>
-            <span id="sets-chip" class="chip" aria-label="sets collected">Sets <span class="font-semibold text-gold">0/5</span></span>
-            <span id="timer-chip" class="chip font-mono text-spotlight" aria-live="off">00:00.0</span>
-          </div>
-        </header>
+      <!-- header bar -->
+      <header class="flex shrink-0 items-center justify-between border-b border-line bg-background px-4 py-2.5">
+        <h1 id="hunt-title" class="font-display text-[13px] font-black uppercase tracking-[0.22em] text-foreground" tabindex="-1">Your hunt <span class="font-mono text-[9px] font-normal tracking-[0.18em] text-muted">5 mysteries</span></h1>
+        <div class="flex items-center gap-1.5">
+          <span id="demo-chip" class="hidden border border-hazard/60 bg-hazardDim px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-hazard">Demo</span>
+          <output id="sets-chip" class="chip" aria-label="mysteries found">0/5 found</output>
+          <output id="timer-chip" class="chip tabular-nums" aria-live="off">00:00.0</output>
+          <button id="hunt-sheet-close" type="button" class="sheet-close-btn" aria-label="Close hunt menu">Close</button>
+        </div>
+      </header>
 
-        <!-- scrollable content: signal + target picker + set list -->
-        <div class="flex-1 overflow-y-auto overscroll-contain pb-[12.5rem]">
-          <!-- signal block -->
-          <div class="mt-5">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Signal</p>
-            <div class="mt-1 flex items-end gap-3">
-              <p id="signal-label" class="font-display text-6xl leading-none tracking-wider text-chalk" aria-live="polite">Cold</p>
-              <p id="signal-band" class="pb-1 text-xs font-medium text-fog">Shivering under the marquee</p>
+      <!-- scrollable content — NO absolute footer; flex column prevents overlap -->
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div class="flex-1 overflow-y-auto overscroll-contain">
+          <!-- signal block — compartment -->
+          <div class="border-b border-line bg-background px-4 py-4">
+            <p class="font-mono text-[10px] font-semibold uppercase tracking-[0.32em] text-muted">How close are you?</p>
+            <div class="mt-2 flex items-baseline gap-3">
+              <samp id="signal-label" class="font-display text-5xl font-black uppercase leading-none tracking-[-0.04em] text-foreground" aria-live="polite">Cold</samp>
+              <span id="signal-band" class="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Shivering under the marquee</span>
             </div>
 
-            <div class="mt-4 flex items-center gap-4">
-              <!-- sonar radar: rings beat faster as the signal heats up -->
-              <div id="signal-radar" class="relative grid h-8 w-8 shrink-0 place-items-center" aria-hidden="true">
+            <div class="mt-4 flex items-center gap-3">
+              <!-- sonar radar -->
+              <div id="signal-radar" class="relative grid h-8 w-8 shrink-0 place-items-center border border-line bg-raised" aria-hidden="true">
                 <span class="radar-ring" data-ring="0"></span>
                 <span class="radar-ring" data-ring="1"></span>
                 <span class="radar-ring absolute" data-ring="2"></span>
-                <span class="relative h-2 w-2 rounded-full bg-gold shadow-hot"></span>
+                <span class="relative h-2 w-2 bg-foreground"></span>
               </div>
-
-              <!-- continuous heat track: cold → hot with a glowing droplet thumb + tail -->
-              <div id="heat-track" class="relative h-2 flex-1 rounded-full bg-white/10" role="img" aria-label="Signal heat: the brighter and further right, the closer you are">
-                <div class="absolute inset-0 rounded-full bg-heat opacity-60"></div>
-                <div id="heat-thumb" class="heat-thumb absolute top-1/2 -ml-1.5 h-4 w-3 -translate-y-1/2"></div>
+              <!-- heat track — hard rectangular -->
+              <div id="heat-track" class="relative h-2 flex-1 border border-line bg-raised" role="img" aria-label="Signal heat: further right is closer">
+                <div class="absolute inset-0 bg-heat opacity-60"></div>
+                <div id="heat-thumb" class="heat-thumb"></div>
               </div>
             </div>
 
-            <p id="signal-copy" class="mt-3 max-w-[38ch] text-[15px] leading-relaxed text-fog" aria-live="polite">
-              A set is out there somewhere on campus. Pick a direction — the signal will sharpen.
-            </p>
-            <p id="signal-spot" class="mt-2 hidden text-sm text-spotlight/80" aria-live="polite"></p>
+            <!-- stacked copy + spot — fixes overlap bug: vertical stack with gap, no absolute -->
+            <div class="mt-3 space-y-1.5">
+              <output id="signal-copy" class="block max-w-[42ch] font-mono text-[12px] leading-relaxed text-muted" aria-live="polite">
+                A set is out there somewhere on campus. Pick a direction — the signal will sharpen.
+              </output>
+              <p id="signal-spot" class="hidden font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-foreground" aria-live="polite"></p>
+            </div>
           </div>
 
-          <!-- target picker: the slider + CTA track the chosen set -->
-          <div class="mt-5">
-            <label for="target-select" class="text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Target set</label>
+          <!-- target picker -->
+          <div class="border-b border-line bg-raised px-4 py-3">
+            <label for="target-select" class="font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-muted">Choose a mystery</label>
             <select id="target-select" class="select mt-1.5 w-full" aria-label="Choose the set you want to hunt"></select>
           </div>
 
-          <!-- spot list -->
-          <div class="mt-5">
-            <p class="mb-2 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Your set list</p>
-            <ul id="spot-list" class="space-y-1.5"></ul>
+          <!-- set list -->
+          <div class="px-4 py-3">
+            <p class="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-muted">Mysteries</p>
+            <ul id="spot-list" class="space-y-px border border-line bg-line"></ul>
           </div>
         </div>
 
-        <!-- CTA / prompts -->
-        <div class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-night via-night/95 to-transparent px-5 pb-2 pt-6" style="padding-bottom: max(1.25rem, env(safe-area-inset-bottom))">
+        <!-- footer — static flex sibling, NOT absolute; border-top separates from scroll -->
+        <div class="shrink-0 border-t border-line bg-background px-4 py-3" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
           <div id="hunt-prompts">
-            <p id="hunt-hint" class="mb-3 text-center text-[13px] text-fog">Keep wandering — the signal will sharpen.</p>
+            <p id="hunt-hint" class="mb-2 text-center font-mono text-[11px] uppercase tracking-[0.08em] text-muted">Keep wandering — the signal will sharpen.</p>
             <button id="open-ar-btn" type="button" class="btn-primary hidden w-full">
-              <span class="font-display text-xl tracking-[0.18em]">Return to camera</span>
-              <span class="text-xs font-semibold uppercase tracking-widest">The hunt is live</span>
+              <span>Open camera</span>
+              <span class="font-mono text-[10px] tracking-[0.14em]" aria-hidden="true">— Camera is ready</span>
             </button>
-            <button id="gps-error-btn" type="button" class="btn-ghost hidden w-full">
-              <span class="font-display text-lg tracking-[0.18em]">Enable location</span>
+            <button id="gps-error-btn" type="button" class="btn-hazard hidden w-full">
+              Enable location
             </button>
             <button id="demo-hunt-btn" type="button" class="btn-ghost mt-2 hidden w-full">
-              <span class="text-xs font-semibold uppercase tracking-[0.2em]">Not on campus? Run the demo flight</span>
+              Try the demo from here
             </button>
           </div>
 
-          <!-- Dev/sim rail: only rendered when the URL carries ?sim -->
-          <div id="sim-rail" class="mt-3 hidden justify-center gap-2">
-            <button type="button" class="sim-btn" data-sim="1">Jump A</button>
-            <button type="button" class="sim-btn" data-sim="2">Jump B</button>
-            <button type="button" class="sim-btn" data-sim="3">Jump C</button>
+          <!-- sim rail — dev only -->
+          <div id="sim-rail" class="mt-2 hidden justify-center gap-1.5">
+            <button type="button" class="sim-btn" data-sim="1" aria-label="Jump to mystery one">Mystery 1</button>
+            <button type="button" class="sim-btn" data-sim="2" aria-label="Jump to mystery two">Mystery 2</button>
+            <button type="button" class="sim-btn" data-sim="3" aria-label="Jump to mystery three">Mystery 3</button>
+            <button type="button" class="sim-btn" data-sim="4" aria-label="Jump to mystery four">Mystery 4</button>
+            <button type="button" class="sim-btn" data-sim="5" aria-label="Jump to mystery five">Mystery 5</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ══════════════════════════════════ AR HUNT — the camera is the app ══════════════════════════════════ -->
+    <!-- ═════════════════════ AR HUNT — camera is the app ═════════════════════ -->
     <div id="ar-chrome" class="pointer-events-none fixed inset-0 z-30 hidden">
-      <!-- cinematic layers: vignette + grain (below UI, above camera) -->
       <div class="ar-vignette absolute inset-0" aria-hidden="true"></div>
       <div class="ar-grain absolute inset-0" aria-hidden="true"></div>
+      <!-- CRT scanline overlay for AR -->
+      <div class="pointer-events-none absolute inset-0 opacity-[0.07]" aria-hidden="true" style="background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px)"></div>
 
-      <!-- top HUD: title + film progress + timecode -->
+      <!-- top HUD — progress at a glance -->
       <div
-        class="absolute inset-x-0 top-0 flex items-start justify-between px-4"
-        style="padding-top: max(0.9rem, env(safe-area-inset-top))"
+        id="ar-topbar"
+        class="absolute inset-x-0 top-0 flex items-start justify-between border-b border-line bg-background/90 px-3 py-2 backdrop-blur-[2px]"
+        style="padding-top: max(0.6rem, env(safe-area-inset-top))"
       >
-        <p class="font-display text-lg tracking-[0.22em] text-chalk drop-shadow-[0_1px_2px_rgba(4,6,11,0.9)]">Film Hunt</p>
+        <div>
+          <p class="font-display text-[12px] font-black uppercase tracking-[0.22em] text-foreground">Explore <span class="font-mono text-[8px] font-normal tracking-[0.18em] text-muted">campus</span></p>
+          <p id="ar-state-copy" class="mt-1 font-mono text-[9px] tracking-[0.08em] text-muted" aria-live="polite">Preparing camera</p>
+        </div>
         <div class="flex flex-col items-end gap-1">
           <div class="flex items-center gap-2">
             <span id="ar-progress" class="flex items-center gap-1" aria-label="sets found"></span>
-            <span id="ar-progress-count" class="font-mono text-[11px] tabular-nums text-chalk/90">01/05</span>
+            <data id="ar-progress-count" value="1/5" class="font-mono text-[10px] tabular-nums tracking-[0.08em] text-foreground">01/05</data>
           </div>
-          <span id="ar-timer-value" class="font-mono text-[11px] tabular-nums text-spotlight/90">00:00.0</span>
+          <data id="ar-timer-value" value="00:00.0" class="font-mono text-[10px] tabular-nums text-muted">00:00.0</data>
         </div>
       </div>
 
-      <!-- viewfinder reticle: searching / tracking / nearby / reveal -->
+      <!-- reticle -->
       <div
         id="ar-reticle"
         class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
@@ -232,229 +235,263 @@
         <span class="reticle-corner br"></span>
         <span class="reticle-plus">+</span>
       </div>
+      <button
+        id="ar-recenter-prompt"
+        type="button"
+        class="pointer-events-auto absolute left-1/2 top-[58%] hidden -translate-x-1/2 border border-hazard/40 bg-background px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-hazard"
+        aria-label="Recenter the world"
+      >
+          Looks off? Recenter →
+      </button>
 
-      <!-- calibration copy -->
+      <!-- calibration -->
       <div id="ar-calibration" class="absolute inset-x-0 top-[60%] px-6 text-center">
-        <p id="ar-calibration-title" class="font-display text-2xl tracking-[0.3em] text-chalk drop-shadow-[0_1px_2px_rgba(4,6,11,0.9)]">STARTING CAMERA</p>
-        <p id="ar-calibration-sub" class="mt-1.5 text-xs leading-relaxed text-chalk/70">Give the app a moment — the viewfinder will guide you.</p>
+        <p id="ar-calibration-title" class="font-display text-xl font-black uppercase tracking-[0.3em] text-foreground">Starting camera</p>
+        <p id="ar-calibration-sub" class="mt-1.5 font-mono text-[11px] leading-relaxed text-muted">Give the app a moment — the viewfinder will guide you.</p>
       </div>
 
-      <!-- spatial label (projected from the world-anchored film reel) -->
-      <div id="ar-label" class="absolute left-0 top-0 hidden -translate-x-1/2 -translate-y-[130%] text-center" aria-hidden="true">
-        <p id="ar-label-name" class="font-display text-sm tracking-[0.24em] text-chalk drop-shadow-[0_1px_2px_rgba(4,6,11,0.9)]"></p>
-        <p id="ar-label-state" class="font-mono text-[10px] uppercase tracking-[0.2em] text-gold"></p>
+      <!-- spatial label -->
+      <div id="ar-label" class="absolute left-0 top-0 hidden -translate-x-1/2 -translate-y-[130%] border border-line bg-background px-2 py-1 text-center" aria-hidden="true">
+        <p id="ar-label-name" class="font-display text-[11px] font-black uppercase tracking-[0.18em] text-foreground"></p>
+        <p id="ar-label-state" class="font-mono text-[9px] uppercase tracking-[0.16em] text-muted"></p>
       </div>
 
       <!-- tracking lost -->
-      <div id="ar-lost" class="absolute inset-0 hidden bg-night/55 backdrop-blur-[2px]">
+      <div id="ar-lost" class="absolute inset-0 hidden bg-background/60 backdrop-blur-[2px]">
         <div class="absolute inset-x-0 top-[36%] px-6 text-center">
-          <p class="font-display text-2xl tracking-[0.3em] text-chalk">TRACKING LOST</p>
-          <p class="mt-2 text-xs leading-relaxed text-chalk/75">Move your phone slowly across a textured surface.</p>
+          <p class="font-display text-xl font-black uppercase tracking-[0.3em] text-foreground">Tracking lost</p>
+          <p class="mt-2 font-mono text-[11px] leading-relaxed text-muted">Move your phone slowly across a textured surface.</p>
         </div>
       </div>
 
       <!-- world-locked flash -->
-      <div id="ar-locked-flash" class="absolute inset-0 hidden items-center justify-center">
-        <p class="font-display text-3xl tracking-[0.35em] text-gold drop-shadow-[0_2px_8px_rgba(4,6,11,0.9)]">WORLD LOCKED</p>
+      <div id="ar-locked-flash" class="absolute inset-0 hidden items-center justify-center bg-background/20">
+        <p class="border border-foreground bg-background px-4 py-2 font-display text-xl font-black uppercase tracking-[0.35em] text-foreground">World locked</p>
       </div>
 
-      <!-- bottom HUD: signal + heat track now lives on the camera (unified with dashboard) -->
+      <!-- bottom HUD -->
       <div
-        class="absolute inset-x-0 bottom-0 flex flex-col gap-3 px-4"
-        style="padding-bottom: max(1rem, env(safe-area-inset-bottom))"
+        id="ar-bottom-bar"
+        class="absolute inset-x-0 bottom-0 flex flex-col gap-2 border-t border-line bg-background/90 px-3 py-3 backdrop-blur-[2px]"
+        style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))"
       >
-        <!-- heat track: radar + slider + thumb — same component as dashboard, camera is background -->
         <div class="signal-chip pointer-events-auto">
           <div class="flex items-center justify-between">
-            <p class="text-[9px] font-bold uppercase tracking-[0.3em] text-fog">Signal</p>
-            <p id="ar-signal-word" class="font-display text-lg leading-none tracking-wider text-fog">COLD</p>
+            <span class="font-mono text-[9px] font-bold uppercase tracking-[0.3em] text-muted">[ Signal ]</span>
+            <samp id="ar-signal-word" class="font-display text-sm font-black uppercase tracking-[0.12em] text-muted">Cold</samp>
           </div>
           <div class="mt-2 flex items-center gap-2.5">
-            <div id="ar-radar" class="relative grid h-8 w-8 shrink-0 place-items-center" aria-hidden="true">
+            <div id="ar-radar" class="relative grid h-8 w-8 shrink-0 place-items-center border border-line bg-raised" aria-hidden="true">
               <span class="radar-ring" data-ring="0"></span>
               <span class="radar-ring" data-ring="1"></span>
-              <span class="relative h-2 w-2 rounded-full bg-gold shadow-hot"></span>
+              <span class="relative h-2 w-2 bg-foreground"></span>
             </div>
-            <div class="relative h-2 flex-1 overflow-hidden rounded-full bg-white/10">
-              <div class="absolute inset-0 rounded-full bg-heat opacity-60"></div>
-              <div id="ar-heat-fill" class="absolute inset-y-0 left-0 rounded-full bg-gold transition-[width] duration-300" style="width: 0%"></div>
-              <div id="ar-heat-thumb" class="heat-thumb absolute top-1/2 -ml-1.5 h-4 w-3 -translate-y-1/2"></div>
+            <div class="relative h-2 flex-1 overflow-hidden border border-line bg-raised">
+              <div class="absolute inset-0 bg-heat opacity-60"></div>
+              <div id="ar-heat-fill" class="absolute inset-y-0 left-0 bg-foreground transition-[width] duration-300" style="width: 0%"></div>
+              <div id="ar-heat-thumb" class="heat-thumb"></div>
             </div>
           </div>
-          <p id="ar-signal-copy" class="mt-2 line-clamp-2 text-[11px] leading-relaxed text-white/60"></p>
+          <p id="ar-signal-copy" class="mt-2 line-clamp-2 min-w-0 font-mono text-[11px] leading-relaxed text-muted"></p>
         </div>
-        <div class="flex items-center justify-between">
-          <p id="ar-hint-short" class="text-[11px] leading-relaxed text-white/50">Move slowly — the portal appears when HOT.</p>
-          <div class="flex items-center gap-2">
-            <button id="ar-setlist-btn" type="button" class="ar-circle-btn" aria-label="Open the set list">
-              <span class="text-base leading-none">▤</span>
-              <span class="text-[8px] tracking-[0.14em]">SETS</span>
+        <div class="flex items-center justify-between gap-2">
+          <p id="ar-hint-short" class="min-w-0 flex-1 font-mono text-[11px] leading-relaxed text-muted">Move slowly — the screen appears when you’re close.</p>
+          <div class="flex shrink-0 items-center gap-1.5">
+            <button id="ar-setlist-btn" type="button" class="ar-circle-btn" aria-label="Open hunt menu" aria-controls="screen-hunt" aria-expanded="false">
+              <span class="text-[14px] leading-none" aria-hidden="true">▤</span>
+              <span class="font-mono text-[7px] uppercase tracking-[0.12em]">Hunt</span>
             </button>
             <button id="recenter-btn" type="button" class="ar-circle-btn" aria-label="Recenter the world">
-              <span class="text-lg leading-none">↻</span>
-              <span class="text-[8px] tracking-[0.14em]">RECENTER</span>
+              <span class="text-[16px] leading-none" aria-hidden="true">↻</span>
+              <span class="font-mono text-[7px] uppercase tracking-[0.12em]">Ctr</span>
             </button>
-            <button id="end-ar-btn" type="button" class="ar-circle-btn" aria-label="Exit to the set list">
-              <span class="text-base leading-none">✕</span>
-              <span class="text-[8px] tracking-[0.14em]">EXIT</span>
+            <button id="end-ar-btn" type="button" class="ar-circle-btn border-hazard/40 text-hazard hover:border-hazard/60" aria-label="Exit to hunt">
+              <span class="text-[14px] leading-none" aria-hidden="true">✕</span>
+              <span class="font-mono text-[7px] uppercase tracking-[0.12em]">Exit</span>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- debug HUD — dev/sim only, never production -->
+      <!-- debug HUD — dev only -->
       <aside
         id="debug-hud"
-        class="glass pointer-events-auto absolute left-3 top-[max(3.4rem,env(safe-area-inset-top))] hidden w-[152px] rounded-chip px-2.5 py-2 font-mono text-[10px] leading-[1.6] text-fog"
+        class="pointer-events-auto absolute left-2 top-[max(3rem,env(safe-area-inset-top))] hidden w-[168px] border border-line bg-raised px-2.5 py-2 font-mono text-[10px] leading-[1.6] text-muted"
         aria-label="Debug HUD"
       >
-        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">ENGINE</span><span id="hud-engine" class="truncate text-chalk">loading…</span></div>
-        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">DEVICE</span><span id="hud-device" class="truncate text-chalk">—</span></div>
-        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">CAMERA</span><span id="hud-camera" class="truncate text-chalk">—</span></div>
-        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">TRACKING</span><span id="hud-tracking" class="truncate text-chalk">—</span></div>
-        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">REASON</span><span id="hud-reason" class="truncate text-chalk">—</span></div>
-        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">SPOT</span><span id="hud-spot" class="truncate text-chalk">none</span></div>
-        <div class="flex gap-2"><span class="w-14 shrink-0 text-fog/60">STATE</span><span id="hud-state" class="truncate text-chalk">—</span></div>
+        <dl class="m-0">
+          <div class="flex gap-2"><dt class="w-14 shrink-0 text-muted/60">ENGINE</dt><dd id="hud-engine" class="m-0 truncate text-foreground">loading…</dd></div>
+          <div class="flex gap-2"><dt class="w-14 shrink-0 text-muted/60">DEVICE</dt><dd id="hud-device" class="m-0 truncate text-foreground">—</dd></div>
+          <div class="flex gap-2"><dt class="w-14 shrink-0 text-muted/60">CAMERA</dt><dd id="hud-camera" class="m-0 truncate text-foreground">—</dd></div>
+          <div class="flex gap-2"><dt class="w-14 shrink-0 text-muted/60">TRACKING</dt><dd id="hud-tracking" class="m-0 truncate text-foreground">—</dd></div>
+          <div class="flex gap-2"><dt class="w-14 shrink-0 text-muted/60">REASON</dt><dd id="hud-reason" class="m-0 truncate text-foreground">—</dd></div>
+          <div class="flex gap-2"><dt class="w-14 shrink-0 text-muted/60">SPOT</dt><dd id="hud-spot" class="m-0 truncate text-foreground">none</dd></div>
+          <div class="flex gap-2"><dt class="w-14 shrink-0 text-muted/60">STATE</dt><dd id="hud-state" class="m-0 truncate text-foreground">—</dd></div>
+        </dl>
       </aside>
+
+      <!-- portal debug — always visible in demo/sim so YOU'RE CLOSE + vanished is self-evident -->
+      <div
+        id="portal-debug"
+        class="pointer-events-none absolute left-1/2 top-[68%] hidden max-w-[92vw] -translate-x-1/2 border border-hazard/40 bg-background/90 px-3 py-2 text-center font-mono text-[10px] leading-tight text-foreground"
+        aria-live="polite"
+      >
+        <p id="portal-debug-text">portal: —</p>
+        <p class="mt-1 text-[9px] text-muted">Demo: portal should be at 2.6m eye level when HOT — tap CTR if off</p>
+      </div>
+
+      <!-- RCA debug — always visible when ?debug, not covering portal/debug-hud -->
+      <div
+        id="rca-debug"
+        class="pointer-events-none absolute left-2 right-2 top-[44px] z-40 hidden border border-hazard bg-background px-2 py-2 font-mono text-[10px] leading-[1.35] text-foreground"
+        aria-live="polite"
+        aria-label="RCA debug overlay"
+      >
+        <p class="font-bold uppercase tracking-[0.14em] text-hazard">RCA — ?debug</p>
+        <dl class="mt-1 grid grid-cols-[110px_1fr] gap-x-2 gap-y-0.5">
+          <dt class="text-muted">XR8_INIT</dt><dd id="rca-xr8">pending…</dd>
+          <dt class="text-muted">CAMERA</dt><dd id="rca-camera">—</dd>
+          <dt class="text-muted">TRACKING</dt><dd id="rca-tracking">—</dd>
+          <dt class="text-muted">WORLDLOCK</dt><dd id="rca-worldlock">—</dd>
+          <dt class="text-muted">TICK_POSE</dt><dd id="rca-tick">—</dd>
+        </dl>
+      </div>
     </div>
 
-    <!-- ════════════ REVEAL — compact glass sheet (subtle, world stays visible §20) ════════════ -->
-    <div id="reveal-panel" class="fixed inset-0 z-50 hidden" aria-live="polite">
-      <!-- scrim: tap to dismiss, lets the camera breathe -->
-      <div id="reveal-scrim" class="absolute inset-0 bg-night/20 backdrop-blur-[2px]"></div>
-      <!-- sheet -->
-      <div class="absolute inset-x-0 bottom-0 flex max-h-[52vh] flex-col px-3" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
+    <!-- ═══════════════ REVEAL — square brutalist sheet ═══════════════ -->
+    <div id="reveal-panel" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="reveal-spot-name" aria-describedby="reveal-blurb" aria-live="polite">
+      <button id="reveal-scrim" type="button" class="absolute inset-0 bg-background/60 backdrop-blur-[1px]" aria-label="Dismiss reveal"></button>
+      <div class="absolute inset-x-0 bottom-0 flex max-h-[52vh] flex-col px-2" style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom))">
         <div
           id="reveal-card"
-          class="pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#12151E]/70 shadow-[0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl motion-safe:animate-panel-rise motion-reduce:animate-fade-in"
+          class="pointer-events-auto flex max-h-full flex-col overflow-hidden border border-line bg-background motion-safe:animate-panel-rise motion-reduce:animate-fade-in"
+          tabindex="-1"
         >
-          <!-- drag handle -->
-          <div class="flex shrink-0 justify-center pt-2.5">
-            <span class="h-1 w-8 rounded-full bg-white/20" aria-hidden="true"></span>
+          <div class="flex shrink-0 justify-center border-b border-line bg-raised py-2">
+            <span class="h-1 w-8 bg-muted/40" aria-hidden="true"></span>
           </div>
 
-          <div class="overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
-            <!-- meta row: kicker + count -->
+          <div class="overflow-y-auto overscroll-contain px-4 pb-4 pt-3">
             <div class="flex items-center gap-2">
-              <span class="h-1 w-1 rounded-full bg-white/40" aria-hidden="true"></span>
-              <p id="reveal-kicker" class="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/50">Scene found</p>
-              <span id="reveal-count" class="ml-auto font-mono text-[10px] tracking-[0.14em] text-white/30">01 / 05</span>
+              <span class="h-1.5 w-1.5 bg-hazard" aria-hidden="true"></span>
+              <p id="reveal-kicker" class="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-muted">Scene found</p>
+              <data id="reveal-count" value="01/05" class="ml-auto font-mono text-[10px] tabular-nums tracking-[0.12em] text-muted">01 / 05</data>
             </div>
 
-            <h2 id="reveal-spot-name" class="mt-2 font-display text-[30px] leading-none tracking-wide text-white">Mind Studio</h2>
+            <h2 id="reveal-spot-name" class="mt-2 font-display text-[28px] font-black uppercase leading-none tracking-[-0.03em] text-foreground text-balance">Mind Studio</h2>
 
-            <div class="mt-3 flex items-stretch gap-3">
-              <span class="w-[2px] shrink-0 rounded-full bg-white/10" aria-hidden="true"></span>
-              <div class="min-w-0">
-                <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/40">Filmed here</p>
-                <p id="reveal-movie" class="mt-0.5 font-display text-[18px] leading-none tracking-wide text-white/90">Dear Zindagi</p>
+            <div class="mt-3 flex items-stretch gap-3 border border-line bg-raised px-3 py-2">
+              <span class="w-px shrink-0 bg-line" aria-hidden="true"></span>
+              <div class="min-w-0 flex-1">
+                <p class="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-muted">Filmed here</p>
+                <p id="reveal-movie" class="mt-0.5 font-display text-[16px] font-black uppercase tracking-[-0.02em] text-foreground truncate">Dear Zindagi</p>
               </div>
               <p class="ml-auto shrink-0 self-center text-right">
-                <span class="block text-[9px] font-semibold uppercase tracking-[0.2em] text-white/35">Found in</span>
-                <span id="reveal-split" class="font-mono text-[18px] font-semibold tracking-tight text-white">1:32</span>
+                <span class="block font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-muted">Found in</span>
+                <data id="reveal-split" value="1:32" class="font-mono text-[16px] font-bold tabular-nums tracking-tight text-foreground">1:32</data>
               </p>
             </div>
 
-            <p id="reveal-blurb" class="mt-3 line-clamp-3 text-[13px] leading-relaxed text-white/60"></p>
+            <p id="reveal-blurb" class="mt-3 line-clamp-3 min-w-0 font-mono text-[12px] leading-relaxed text-muted"></p>
 
-            <!-- clip: only occupies space when a file exists; otherwise hidden with no rect -->
             <video
               id="reveal-video"
-              class="mt-3 hidden aspect-video max-h-[22vh] w-full rounded-xl object-cover"
+              class="mt-3 hidden aspect-video max-h-[22vh] w-full border border-line bg-raised object-cover"
               muted
               loop
               playsinline
-              preload="auto"
+              preload="metadata"
+              poster="/clips/mind-studio-poster.jpg"
+              aria-label="Film clip from this set"
+              aria-describedby="reveal-video-description"
             ></video>
+            <p id="reveal-video-description" class="sr-only">A short silent film clip from this campus set.</p>
 
-            <!-- swatch fallback: compact, muted, only when no clip -->
-            <div id="reveal-asset-row" class="mt-3 hidden items-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2">
-              <span class="h-5 w-5 shrink-0 rounded-[5px] border border-white/10" id="reveal-asset" aria-hidden="true"></span>
-              <span class="font-mono text-[10px] leading-tight text-white/45" id="reveal-asset-label"></span>
+            <div id="reveal-asset-row" class="mt-3 hidden items-center gap-2 border border-line bg-raised px-3 py-2">
+              <span class="h-4 w-4 shrink-0 border border-line" id="reveal-asset" aria-hidden="true"></span>
+              <samp class="min-w-0 flex-1 truncate font-mono text-[10px] leading-tight text-muted" id="reveal-asset-label"></samp>
             </div>
           </div>
 
-          <!-- footer: single quiet action -->
-          <div class="shrink-0 border-t border-white/[0.06] bg-white/[0.02] px-3 py-3">
-            <button id="reveal-continue" type="button" class="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-[13px] font-semibold tracking-[0.14em] text-black transition hover:bg-white/90 active:scale-[0.98]">
+          <div class="shrink-0 border-t border-line bg-raised px-3 py-3">
+            <button id="reveal-continue" type="button" class="flex w-full items-center justify-center gap-2 border border-foreground bg-foreground py-3 font-display text-[12px] font-black uppercase tracking-[0.16em] text-background transition-colors duration-150 hover:bg-white">
               <span>Continue</span>
-              <span class="text-[11px] opacity-60">→</span>
+              <span class="font-mono text-[11px]" aria-hidden="true">→</span>
             </button>
-            <p class="mt-2 text-center text-[10px] tracking-wide text-white/25">world stays behind • tap outside to dismiss</p>
+            <p class="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-muted/50">World stays behind · Tap outside to dismiss</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- confetti (summary celebration) -->
+    <!-- confetti -->
     <canvas id="confetti-canvas" class="pointer-events-none fixed inset-0 z-[70] hidden" aria-hidden="true"></canvas>
 
     <!-- toast -->
-    <div id="toast" class="pointer-events-none fixed inset-x-0 bottom-[max(6.75rem,env(safe-area-inset-bottom))] z-[60] hidden justify-center px-6" aria-live="polite">
-      <p class="glass rounded-full px-4 py-2 text-center text-[13px] font-semibold text-chalk"></p>
+    <div id="toast" class="pointer-events-none fixed inset-x-0 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-[60] hidden justify-center px-6" aria-live="polite" aria-atomic="true">
+      <p class="border border-line bg-background px-4 py-2 text-center font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-foreground"></p>
     </div>
 
-    <!-- ══════════════════════════════════ SUMMARY SCREEN ══════════════════════════════════ -->
-    <section id="screen-summary" class="fixed inset-0 z-40 hidden overflow-y-auto bg-abyss">
-      <div class="relative min-h-full px-5 pb-12" style="padding-top: max(3rem, env(safe-area-inset-top))">
-        <div
-          class="pointer-events-none absolute inset-x-0 top-0 h-44"
-          aria-hidden="true"
-          style="background: radial-gradient(90% 100% at 50% 0%, rgba(243, 185, 63, 0.18) 0%, rgba(4, 6, 11, 0) 70%)"
-        ></div>
-
-        <div class="relative">
-          <p class="font-display text-lg tracking-[0.3em] text-gold">That’s a wrap</p>
-          <h1 class="mt-1 text-balance font-display text-6xl leading-[0.9] tracking-wide">
-            <span class="text-gradient-gold">Hunt complete</span>
+    <!-- ═══════════════════════ SUMMARY SCREEN ═══════════════════════ -->
+    <section id="screen-summary" class="fixed inset-0 z-40 hidden overflow-y-auto overscroll-contain bg-background" aria-labelledby="summary-title" tabindex="-1">
+      <!-- hazard top rule -->
+      <div class="h-[2px] w-full bg-hazard" aria-hidden="true"></div>
+      <div class="relative min-h-full px-4 pb-10 sm:px-6" style="padding-top: max(1.5rem, env(safe-area-inset-top))">
+        <header class="border-b border-line pb-4">
+          <p class="font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-hazard">[ That’s a wrap ]</p>
+          <h1 id="summary-title" class="mt-2 font-display text-[clamp(2.4rem,10vw,4.5rem)] font-black uppercase leading-[0.86] tracking-[-0.05em] text-foreground text-balance" tabindex="-1">
+            Hunt complete
           </h1>
+        </header>
 
-          <!-- total -->
-          <div class="glass mt-7 flex items-center justify-between rounded-panel px-5 py-4">
+        <!-- total — brutalist compartment -->
+        <div class="brutal-grid mt-4">
+          <div class="flex items-center justify-between bg-raised px-4 py-4">
             <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.26em] text-fog">Total time</p>
-              <p id="summary-total" class="mt-1 font-display text-5xl leading-none tracking-wider text-spotlight">12:04</p>
+              <p class="font-mono text-[10px] font-bold uppercase tracking-[0.26em] text-muted">Total time</p>
+              <data id="summary-total" value="12:04" class="mt-1 block font-display text-4xl font-black tracking-[-0.03em] text-foreground tabular-nums">12:04</data>
             </div>
-            <p class="w-max text-right text-xs leading-relaxed text-fog">All five sets<br />in the can.</p>
+            <p class="max-w-[14ch] text-right font-mono text-[11px] leading-relaxed text-muted">All five locations<br />found.</p>
           </div>
-
-          <!-- splits -->
-          <p class="mt-8 mb-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Your splits</p>
-          <ul id="summary-splits" class="space-y-2"></ul>
-
-          <!-- name + marquee -->
-          <div class="mt-8">
-            <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">Carve your name onto the marquee</p>
-            <form id="name-form" class="flex gap-2">
-              <input
-                id="name-input"
-                type="text"
-                name="name"
-                maxlength="18"
-                autocomplete="name"
-                autocapitalize="words"
-                placeholder="Your name…"
-                aria-label="Your name for the leaderboard"
-                class="field flex-1"
-              />
-              <button id="post-score-btn" type="submit" class="btn-primary shrink-0 px-5">
-                <span class="font-display text-lg tracking-[0.16em]">Post</span>
-              </button>
-            </form>
-            <p id="score-status" class="mt-2 hidden text-xs text-gold" aria-live="polite"></p>
-          </div>
-
-          <div class="mt-8">
-            <p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.32em] text-fog">The marquee</p>
-            <ul id="leaderboard-list" class="glass divide-y divide-line overflow-hidden rounded-panel"></ul>
-          </div>
-
-          <button id="restart-btn" type="button" class="btn-ghost mt-8 w-full">
-            <span class="font-display text-lg tracking-[0.18em]">Run it back</span>
-          </button>
         </div>
+
+        <p class="mb-2 mt-6 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-muted">Your splits</p>
+        <ul id="summary-splits" class="space-y-px border border-line bg-line"></ul>
+
+        <div class="mt-6 border border-line bg-raised p-4">
+          <p class="mb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-muted">Carve your name onto the register</p>
+          <form id="name-form" class="flex gap-2" novalidate>
+            <label for="name-input" class="sr-only">Your name for the leaderboard</label>
+            <input
+              id="name-input"
+              type="text"
+              name="name"
+              maxlength="18"
+              autocomplete="name"
+              autocapitalize="words"
+              spellcheck="false"
+              placeholder="Your name…"
+              aria-label="Your name for the leaderboard"
+              class="field flex-1"
+            />
+            <button id="post-score-btn" type="submit" class="btn-primary shrink-0 px-5">
+              Post
+            </button>
+          </form>
+          <p id="score-status" class="mt-2 hidden font-mono text-[11px] text-foreground" aria-live="polite"></p>
+        </div>
+
+        <div class="mt-6">
+          <p class="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] text-muted">The register</p>
+          <ul id="leaderboard-list" class="divide-y divide-line overflow-hidden border border-line bg-raised"></ul>
+        </div>
+
+        <button id="restart-btn" type="button" class="btn-ghost mt-6 w-full">
+          Run it back
+        </button>
       </div>
     </section>
+    </main>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

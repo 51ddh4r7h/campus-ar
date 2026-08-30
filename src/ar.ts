@@ -50,8 +50,23 @@ let XR8: Xr8 | null = null
 let modulesInstalled = false
 let running = false
 
+function loadEngineScript(): Promise<void> {
+  if (window.XR8) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = './xr8/xr.js'
+    script.async = true
+    script.crossOrigin = 'anonymous'
+    script.dataset.preloadChunks = 'slam'
+    script.addEventListener('load', () => resolve(), {once: true})
+    script.addEventListener('error', () => reject(new Error('Engine load failed — reload and try again.')), {once: true})
+    document.head.appendChild(script)
+  })
+}
+
 const bootEngine = async (): Promise<Xr8> => {
   if (XR8) return XR8
+  await loadEngineScript()
   XR8 = await XR8Promise
   if (!XR8) throw new Error('8th Wall engine did not initialise.')
   return XR8
@@ -86,6 +101,7 @@ let portal: FilmPortal | null = null
 let portalSpot: FilmSpot | null = null
 let xrSceneRef: Xr8ThreejsHandle | null = null
 let currentSignal: SignalLevel = 0
+let recenterPending = false
 const labelState = {name: '', sub: ''}
 
 const triggerReveal = (): void => {
@@ -95,8 +111,11 @@ const triggerReveal = (): void => {
   if (!spot) return
   session.revealed = true
   session.gate.reset()
-  revealDevice?.show(spot)
+  // No clapperboard — keep the curved screen as the hero, just open the panel
+  // (slate device is disabled per UX request)
   session.hooks.onReveal(spot)
+  // Small delay so the "You're close" → panel transition feels intentional, not instant pop
+  setTimeout(() => session.hooks.onPanelOpen(spot), 320)
 }
 
 function setupCamera(xrScene: Xr8ThreejsHandle): void {
@@ -112,7 +131,17 @@ function setupCamera(xrScene: Xr8ThreejsHandle): void {
 }
 
 // ---------------------------------------------------------------- spatial label
-const labelEl = {root: null as HTMLElement | null, name: null as HTMLElement | null, sub: null as HTMLElement | null}
+interface LabelElements {
+  root: HTMLElement | null
+  name: HTMLElement | null
+  sub: HTMLElement | null
+}
+
+const labelEl: LabelElements = {
+  root: null,
+  name: null,
+  sub: null,
+}
 const projection = new THREE.Vector3()
 
 function projectLabel(camera: THREE.Camera): void {
@@ -179,8 +208,16 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     arWorld?.reset()
     if (!arWorld) arWorld = createArWorld(scene)
     arWorld.setSignal(currentSignal)
-    if (!portal) portal = createFilmPortal(scene)
-    else portal.hide()
+    if (!portal) {
+      portal = createFilmPortal(scene)
+      portal.setSignal(currentSignal)
+      // Demo mode can request the portal before the async XR boot finishes.
+      // Replay that pending request now that the Three.js portal exists.
+      if (portalSpot) portal.show(portalSpot)
+    } else {
+      portal.hide()
+      if (portalSpot) portal.show(portalSpot)
+    }
     if (revealDevice) revealDevice.reset()
     revealDevice = createRevealDevice(scene)
     revealDevice.onOpen = (spot) => active?.hooks.onPanelOpen(spot)
@@ -191,6 +228,15 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
 
   onUpdate: ({processCpuResult}) => {
     const reality = processCpuResult?.reality
+    // RCA: raw tracking status every frame, not inferred
+    if (new URLSearchParams(window.location.search).has('debug')) {
+      const rcaEl = document.getElementById('rca-tracking')
+      if (rcaEl) {
+        const s = reality?.trackingStatus ?? 'NONE'
+        const r = reality?.trackingReason ?? '—'
+        rcaEl.textContent = `${s} / ${r}`
+      }
+    }
     const session = active
     if (session) session.hooks.onTracking(reality)
 
@@ -208,9 +254,14 @@ const sceneModule = (): Xr8CameraPipelineModule => ({
     }
 
     revealDevice?.tick(now)
-    if (xrSceneRef) portal?.tick(now, xrSceneRef.camera.position)
+    if (recenterPending && xrSceneRef) {
+      portal?.recenter(xrSceneRef.camera.position, xrSceneRef.camera.quaternion)
+      arWorld?.recenter(xrSceneRef.camera.position, xrSceneRef.camera.quaternion)
+      recenterPending = false
+    }
+    if (xrSceneRef) portal?.tick(now, xrSceneRef.camera.position, xrSceneRef.camera.quaternion)
     if (arWorld && xrSceneRef) {
-      arWorld.tick(now, xrSceneRef.camera.position)
+      arWorld.tick(now, xrSceneRef.camera.position, xrSceneRef.camera.quaternion)
       projectLabel(xrSceneRef.camera)
     }
   },
@@ -269,6 +320,7 @@ export const createArControl = (): ArControl => ({
 
   stop() {
     active = null
+    recenterPending = false
     portal?.hide()
     labelEl.root?.classList.add('hidden')
     if (running && XR8) {
@@ -282,21 +334,20 @@ export const createArControl = (): ArControl => ({
   },
 
   recenter() {
-    if (!running || !XR8) return
+    if (!running || !XR8 || !xrSceneRef) return
     try {
-      XR8.XrController.recenter()
-      if (arWorld && xrSceneRef) arWorld.recenter(xrSceneRef.camera.position)
-      if (portal && portalSpot) {
-        // Keep the portal ahead after recenter — re-show at new origin if it was visible.
-        const wasVisible = portal.group.visible
-        const spot = portalSpot
-        if (wasVisible && spot) {
-          portal.hide()
-          // Re-place after XR recenter settles (next frame's tick will place it).
-          requestAnimationFrame(() => portal?.show(spot))
-        }
-      }
+      // Reset XR first. The next frame reads the post-reset pose and moves every
+      // world object together, preventing a one-frame split between reel/screen.
+      try { XR8.XrController.recenter() } catch { /* no-op */ }
+      recenterPending = true
+      try {
+        XR8.XrController.updateCameraProjectionMatrix({
+          origin: xrSceneRef.camera.position,
+          facing: xrSceneRef.camera.quaternion,
+        })
+      } catch { /* no-op */ }
       haptics.tick()
+      window.dispatchEvent(new CustomEvent('campus-ar:recenter-done'))
     } catch {
       /* no-op */
     }

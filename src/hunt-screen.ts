@@ -23,31 +23,31 @@ const BAND_UI: Array<{label: string; sub: string; copy: string; tone: string}> =
     label: 'Cold',
     sub: 'Shivering under the marquee',
     copy: 'A set is out there somewhere on campus. Pick a direction — the signal will sharpen.',
-    tone: 'text-fog',
+    tone: 'text-muted',
   },
   {
     label: 'Chilly',
     sub: 'Not far from the lobby',
     copy: 'You’re in the right neighborhood. Keep wandering — the signal will rise.',
-    tone: 'text-fog',
+    tone: 'text-muted',
   },
   {
     label: 'Warm',
     sub: 'Somewhere behind the curtain',
     copy: 'Getting warmer. Trust your feet — slow and steady.',
-    tone: 'text-gold',
+    tone: 'text-foreground',
   },
   {
     label: 'Hot',
     sub: 'Right on the soundstage',
     copy: 'Very close now. Keep your eyes open.',
-    tone: 'text-spotlight',
+    tone: 'text-hazard',
   },
   {
     label: 'You’re close',
     sub: 'Standing on a set',
     copy: 'You’re standing on a set right now.',
-    tone: 'text-spotlight',
+    tone: 'text-hazard',
   },
 ]
 
@@ -92,11 +92,11 @@ export function createHuntScreen() {
     currentBand = band
     const ui = BAND_UI[band]
     signalLabel.textContent = ui.label
-    signalLabel.className = `font-display text-7xl leading-none tracking-wider ${ui.tone}`
+    signalLabel.className = `font-display text-5xl font-black uppercase leading-none tracking-[-0.04em] ${ui.tone}`
     signalLabel.classList.toggle('heat-warm', band === 2)
     signalLabel.classList.toggle('heat-hot', band >= 3)
     signalBand.textContent = ui.sub
-    if (rising) haptics.tick() // band crossed upward — feel the warm-up
+    if (rising) haptics.tick()
   }
 
   /** No fix yet — say so instead of silently sitting on "Cold". */
@@ -105,7 +105,7 @@ export function createHuntScreen() {
     targetHeat = 0
     heatThumb.style.left = '0%'
     signalLabel.textContent = '···'
-    signalLabel.className = 'font-display text-7xl leading-none tracking-wider text-fog'
+    signalLabel.className = 'font-display text-5xl font-black uppercase leading-none tracking-[-0.04em] text-muted'
     signalBand.textContent = 'Rolling the establishing shot'
     signalCopy.textContent = 'Getting a fix on your position — hold tight.'
     signalSpot.classList.add('hidden')
@@ -118,7 +118,7 @@ export function createHuntScreen() {
 
     if (verdict.namedSpot) {
       signalSpot.textContent = verdict.targeted
-        ? `Target set: ${verdict.namedSpot.name}.`
+        ? `Mystery: ${verdict.namedSpot.name}.`
         : `Closest set on the board: ${verdict.namedSpot.name}.`
       signalSpot.classList.remove('hidden')
     } else {
@@ -129,7 +129,7 @@ export function createHuntScreen() {
     else if (verdict.band === 4)
       signalCopy.textContent = verdict.insideSpot
         ? `You’re standing on a set right now — ${verdict.insideSpot.name}.`
-        : 'That’s a wrap — every set is in the can.'
+        : 'All locations found.'
     else if (verdict.farAway)
       signalCopy.textContent = 'The sets are parked on a campus kilometres from here. Run the demo flight to see the hunt.'
     else signalCopy.textContent = BAND_UI[verdict.band].copy
@@ -172,30 +172,32 @@ export function createHuntScreen() {
     for (const run of runs) {
       const li = document.createElement('li')
       li.className =
-        'glass flex items-center gap-2.5 rounded-tile px-3 py-2 motion-safe:transition-colors motion-safe:duration-300'
+        'flex items-center gap-2.5 border-b border-line bg-background px-3 py-2.5 last:border-b-0 motion-safe:transition-colors motion-safe:duration-150'
       const turn = FILM_SPOTS.indexOf(run.spot) + 1
       li.innerHTML = `
-        <span class="font-display w-7 shrink-0 text-base tracking-wider text-fog/50">${String(turn).padStart(2, '0')}</span>
+        <span class="font-mono w-7 shrink-0 text-[11px] tabular-nums tracking-[0.14em] text-muted">${String(turn).padStart(2, '0')}</span>
         <div class="min-w-0 flex-1">
-          <p class="font-display truncate text-lg tracking-wider text-chalk">${run.spot.name}</p>
-          <p class="truncate text-[11px] text-fog">${run.spot.movie.title}</p>
+          <p class="font-display truncate text-[13px] font-black uppercase tracking-[0.08em] text-foreground">${run.spot.name}</p>
+          <p class="truncate font-mono text-[10px] uppercase tracking-[0.08em] text-muted">${run.spot.movie.title}</p>
         </div>
-        <span class="badge"></span>`
+        <span class="badge shrink-0"></span>`
       const badge = li.querySelector('.badge')!
       if (run.status === 'found') {
-        badge.className = 'badge rounded-full border border-gold/50 bg-gold/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-spotlight'
-        badge.textContent = 'in the can'
+        badge.className = 'badge border border-foreground bg-foreground px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-background'
+        badge.textContent = 'FOUND'
       } else if (run.status === 'unlocked') {
-        badge.className = 'badge rounded-full border border-ember/50 bg-ember/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-gold'
-        badge.textContent = 'live'
+        badge.className = 'badge border border-hazard bg-hazardDim px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-hazard'
+        badge.textContent = 'READY'
       } else {
-        badge.className = 'badge rounded-full border border-line px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-fog/60'
-        badge.textContent = 'off air'
+        badge.className = 'badge border border-line px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-muted'
+        badge.textContent = 'NOT FOUND'
       }
       spotList.appendChild(li)
     }
     const found = runs.filter((s) => s.status === 'found').length
-    setsChip.innerHTML = `Sets <span class="font-semibold text-gold">${found}/${runs.length}</span>`
+    setsChip.textContent = `${found}/${runs.length} found`
+    // terminal green only on timer when live — single green element rule
+    timerChip.classList.toggle('terminal-live', found > 0)
   }
 
   function setTimer(text: string): void {
@@ -235,7 +237,7 @@ export function createHuntScreen() {
       huntHint.textContent =
         mode === 'wander'
           ? 'Keep wandering — the signal will sharpen.'
-          : 'One just went live, but it’ll wait. Wander where the signal points.'
+          : 'A mystery is ready. Follow the signal.'
     }
   }
 

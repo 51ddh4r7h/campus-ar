@@ -1,23 +1,14 @@
 /**
- * Film Set Portal — the centerpiece (§11 "first proof this is AR" + user portal spec).
+ * Film Screen — curved cinemascope, the hunt's centerpiece.
  *
- * A life-size frame standing on the ground, world-anchored. Inside the frame:
- * an animated film still (canvas) that becomes the clip when `public/clips/<id>.mp4`
- * exists. The user can walk around it — it stays attached to the physical world.
- *
- * Lifecycle:
- *  - hidden until HOT (signal 3)
- *  - HOT: fades/scales in, standing, subtle breathe
- *  - YOU'RE CLOSE / ON SET: fully solid + clip plays
- *  - REVEAL: flashes, frame glows, card already handled by reveal.ts
+ * Simple: a single gently-curved 2.39:1 screen floating further out.
+ * The clip plays on it. No doorway, no cone, no plinth.
+ * Appears when HOT, further by default (2.4m), RECENTER brings it back in front.
  */
 
 import * as THREE from 'three'
 import type {FilmSpot} from './data/spots'
-
-const CREAM = 0xeae4d5
-const NIGHT = 0x0b0e16
-const MUTED_GOLD = 0xd8c4a0
+import {getNetworkConnection} from './network'
 
 export type PortalSignal = 0 | 1 | 2 | 3 | 4
 
@@ -26,70 +17,57 @@ export interface FilmPortal {
   show(spot: FilmSpot): void
   hide(): void
   setSignal(level: PortalSignal): void
-  tick(nowMs: number, cameraPos?: THREE.Vector3): void
+  recenter(cameraPos: THREE.Vector3, cameraQuat: THREE.Quaternion): void
+  tick(nowMs: number, cameraPos?: THREE.Vector3, cameraQuat?: THREE.Quaternion): void
   dispose(): void
+}
+
+const DIST = 2.4 // tighter so it fits within phone width, not top bar
+const W = 1.55 // cinemascope 2.39:1 — fits within viewport width with margin, true AR object
+const H = 0.65
+const SAG = 0.38 // pronounced 1000R curve — visible wrap, not subtle barrel
+
+function makeCurvedGeometry(w: number, h: number, sag: number, segW = 48, segH = 1): THREE.BufferGeometry {
+  const geo = new THREE.PlaneGeometry(w, h, segW, segH)
+  const pos = geo.attributes.position
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i)
+    // cylindrical 1000R curve — deeper wrap than parabolic, new-age cinemascope
+    const nx = x / (w / 2)
+    const z = -sag * (nx * nx * (0.7 + 0.3 * Math.abs(nx))) // cubic falloff for stronger edge bend
+    pos.setZ(i, z)
+  }
+  pos.needsUpdate = true
+  geo.computeVertexNormals()
+  return geo
 }
 
 export function createFilmPortal(scene: THREE.Scene): FilmPortal {
   const group = new THREE.Group()
   group.visible = false
-  ;(group as unknown as {renderOrder: number}).renderOrder = 10
-
-  // ── frame: doorway proportions, standing on ground
-  // Outer size ~1.32 × 1.9, border 0.08 thick, bottom sits on ground (y = -1.4 local → world ground).
-  const frameMat = new THREE.MeshStandardMaterial({
-    color: CREAM,
-    metalness: 0.15,
-    roughness: 0.55,
-    transparent: true,
-  })
-  const accentMat = new THREE.MeshStandardMaterial({
-    color: MUTED_GOLD,
-    metalness: 0.4,
-    roughness: 0.4,
-    emissive: MUTED_GOLD,
-    emissiveIntensity: 0,
-    transparent: true,
-  })
-
-  const W = 1.32
-  const H = 1.9
-  const T = 0.07
-  const B = 0.09
-
-  // Top / bottom / left / right rails
-  const top = new THREE.Mesh(new THREE.BoxGeometry(W + B * 2, B, T), frameMat)
-  top.position.y = H / 2 - B / 2
-  const bottom = new THREE.Mesh(new THREE.BoxGeometry(W + B * 2, B, T), frameMat)
-  bottom.position.y = -H / 2 + B / 2
-  const left = new THREE.Mesh(new THREE.BoxGeometry(B, H - B * 2, T), frameMat)
-  left.position.x = -W / 2 - B / 2
-  const right = new THREE.Mesh(new THREE.BoxGeometry(B, H - B * 2, T), frameMat)
-  right.position.x = W / 2 + B / 2
-  group.add(top, bottom, left, right)
-
-  // Thin inner accent line (muted gold hairline)
-  const innerFrame = new THREE.Mesh(
-    new THREE.BoxGeometry(W + 0.02, H - 0.08, 0.02),
-    new THREE.MeshBasicMaterial({color: MUTED_GOLD, transparent: true, opacity: 0.35}),
+  // Grounding cue: soft contact shadow + faint grid so tilt is self-evident
+  const groundCue = new THREE.Mesh(
+    new THREE.CircleGeometry(1.4, 32),
+    new THREE.MeshBasicMaterial({color: 0x000000, transparent: true, opacity: 0, depthWrite: false}),
   )
-  // Use edges: just a wireframe look via 4 thin planes? Keep simple: one inner rect as line loop via LineSegments
-  // Instead, draw a simple inner border with 4 thin boxes at low opacity
-  innerFrame.visible = false // placeholder — keep accent via emissive instead
-  group.add(innerFrame)
+  groundCue.rotation.x = -Math.PI / 2
+  groundCue.position.y = -1.45
+  groundCue.visible = false
+  // Grid helper for "flush vs floating wrong" feedback — very subtle
+  const grid = new THREE.GridHelper(4, 8, 0x2a334a, 0x1e2635)
+  const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material]
+  for (const material of gridMaterials) {
+    material.transparent = true
+    material.opacity = 0
+  }
+  grid.position.y = -1.44
+  grid.visible = false
+  group.add(groundCue, grid)
 
-  // Backing (dark interior, blocks camera behind)
-  const backing = new THREE.Mesh(
-    new THREE.PlaneGeometry(W, H - B * 2),
-    new THREE.MeshBasicMaterial({color: NIGHT, transparent: true, opacity: 0.96, side: THREE.DoubleSide}),
-  )
-  backing.position.z = -0.02
-  group.add(backing)
-
-  // ── screen: cinemascope film still / clip inside the doorway
+  // ── screen: canvas still -> video
   const canvas = document.createElement('canvas')
   canvas.width = 640
-  canvas.height = 268 // 2.39:1 scope
+  canvas.height = 268 // 2.39:1
   const ctx = canvas.getContext('2d')!
   const contentTexture = new THREE.CanvasTexture(canvas)
   contentTexture.colorSpace = THREE.SRGBColorSpace
@@ -98,98 +76,116 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
   videoEl.muted = true
   videoEl.loop = true
   videoEl.playsInline = true
+  videoEl.preload = 'none'
   videoEl.setAttribute('playsinline', '')
+  videoEl.setAttribute('preload', 'none')
   videoEl.style.display = 'none'
   document.body.appendChild(videoEl)
   let videoReady = false
   let videoFailed = false
   let videoSrc = ''
+  let videoFallbackSrc: string | null = null
+  let pendingSrc: string | null = null
   videoEl.addEventListener('loadeddata', () => {
     videoReady = true
+    console.log(`[portal] loadeddata ${videoSrc} readyState:${videoEl.readyState}`)
+    updatePortalDebug()
   })
   videoEl.addEventListener('error', () => {
+    console.warn(`[portal] video error ${videoSrc}`, videoEl.error)
+    // S3 can fail because of CORS, range requests, captive portals, or a
+    // regional endpoint issue. Keep the S3 URL primary, but never leave the
+    // projected screen blank when the identical deployed asset is available.
+    if (videoFallbackSrc && videoSrc !== videoFallbackSrc) {
+      console.warn(`[portal] falling back to ${videoFallbackSrc}`)
+      ensureVideo(videoFallbackSrc)
+      return
+    }
     videoFailed = true
+    updatePortalDebug()
   })
+  videoEl.addEventListener('stalled', () => console.warn('[portal] stalled', videoSrc))
   const videoTexture = new THREE.VideoTexture(videoEl)
   videoTexture.colorSpace = THREE.SRGBColorSpace
 
+  const ensureVideo = (src: string): void => {
+    if (!src || videoSrc === src) return
+    const conn = getNetworkConnection()
+    if (conn?.saveData || conn?.effectiveType === '2g' || conn?.effectiveType === 'slow-2g') return
+    pendingSrc = null
+    videoSrc = src
+    videoFailed = false
+    videoReady = false
+    // AWS S3 needs crossOrigin anonymous for VideoTexture (CORS *), same-origin Pages does not
+    if (src.includes('s3.amazonaws.com') || src.includes('s3.ap-south-1')) {
+      videoEl.crossOrigin = 'anonymous'
+      videoEl.setAttribute('crossorigin', 'anonymous')
+    } else {
+      videoEl.removeAttribute('crossorigin')
+      videoEl.crossOrigin = ''
+    }
+    videoEl.src = src
+    videoEl.load()
+    const tryPlay = (): void => {
+      videoEl.play().catch((err) => {
+        // Autoplay may be blocked until next gesture — retry on any tap/click
+        console.warn('[portal] play blocked', err?.name)
+        const onTap = (): void => {
+          videoEl.play().catch(()=>undefined)
+          window.removeEventListener('click', onTap)
+          window.removeEventListener('touchend', onTap)
+        }
+        window.addEventListener('click', onTap, {once: true})
+        window.addEventListener('touchend', onTap, {once: true})
+      })
+    }
+    tryPlay()
+    // Also retry on visibility change (user returns to tab)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && videoEl.paused && videoReady) videoEl.play().catch(()=>undefined)
+    }, {once: true})
+  }
+
+  // Curved screen mesh
+  const screenGeo = makeCurvedGeometry(W, H, SAG)
   const screenMat = new THREE.MeshBasicMaterial({
     map: contentTexture,
     transparent: true,
-    opacity: 1,
+    opacity: 0,
+    side: THREE.DoubleSide,
   })
-  // Cinemascope screen — centered in the doorway at eye level
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.48), screenMat)
-  screen.position.set(0, 0.18, 0.02)
+  const screen = new THREE.Mesh(screenGeo, screenMat)
   group.add(screen)
 
-  // Ground shadow under the portal feet
-  const groundShadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.55, 24),
-    new THREE.MeshBasicMaterial({color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false}),
-  )
-  groundShadow.rotation.x = -Math.PI / 2
-  groundShadow.position.y = -H / 2 + 0.015
-  group.add(groundShadow)
+  // A restrained illuminated edge gives the screen a physical boundary in
+  // busy camera scenes. It materialises with the image instead of reading as
+  // a flat HTML rectangle floating over the feed.
+  const frameMat = new THREE.LineBasicMaterial({color: 0xf3b93f, transparent: true, opacity: 0})
+  const screenFrame = new THREE.LineSegments(new THREE.EdgesGeometry(screenGeo), frameMat)
+  screenFrame.scale.setScalar(1.01)
+  group.add(screenFrame)
 
-  // Subtle base plinth (two small feet) for "standing on ground" read
-  const plinthGeo = new THREE.BoxGeometry(0.22, 0.04, 0.14)
-  const plinthMat = new THREE.MeshStandardMaterial({color: 0x1a1f2e, roughness: 0.7})
-  const footL = new THREE.Mesh(plinthGeo, plinthMat)
-  footL.position.set(-W / 2 + 0.14, -H / 2 + 0.02, 0.02)
-  const footR = new THREE.Mesh(plinthGeo, plinthMat)
-  footR.position.set(W / 2 - 0.14, -H / 2 + 0.02, 0.02)
-  group.add(footL, footR)
+  // (test cube removed — was for mobile/desktop split debug)
 
-  // ── drawing helpers
+  // Reference is edgeless — no bezel box.
+
   const drawStill = (spot: FilmSpot): void => {
+    // Dark with loading hint — so "vanished" isn't confused with "loading 1.5MB on 4G"
     ctx.clearRect(0, 0, 640, 268)
-    // vignetted scope background
     const grad = ctx.createLinearGradient(0, 0, 0, 268)
-    grad.addColorStop(0, '#1a1f2e')
-    grad.addColorStop(0.5, '#0f141e')
+    grad.addColorStop(0, '#0f141e')
     grad.addColorStop(1, '#0b0e16')
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, 640, 268)
-    ctx.fillStyle = 'rgba(255,255,255,0.04)'
-    for (let i = 0; i < 120; i++) {
-      const x = Math.random() * 640
-      const y = Math.random() * 268
-      ctx.fillRect(x, y, 1, 1)
-    }
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'
+    for (let i = 0; i < 60; i++) ctx.fillRect(Math.random() * 640, Math.random() * 268, 1, 1)
     ctx.textAlign = 'center'
-    ctx.fillStyle = 'rgba(216,196,160,0.9)'
-    ctx.font = '9px "Instrument Sans", system-ui, sans-serif'
-    ctx.fillText('FILMED HERE  •  CAMPUS  SET', 320, 42)
-    ctx.fillStyle = '#F0E6D3'
-    let size = 42
-    const title = spot.name.toUpperCase()
-    do {
-      ctx.font = `700 ${size}px "Instrument Sans", system-ui, sans-serif`
-      size -= 2
-    } while (ctx.measureText(title).width > 520 && size > 22)
-    ctx.fillText(title, 320, 132)
-    ctx.strokeStyle = 'rgba(216,196,160,0.35)'
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(250, 150)
-    ctx.lineTo(390, 150)
-    ctx.stroke()
-    ctx.fillStyle = 'rgba(234,228,213,0.9)'
-    ctx.font = '15px "Instrument Sans", system-ui, sans-serif'
-    ctx.fillText(spot.movie.title, 320, 174)
-    ctx.fillStyle = 'rgba(234,228,213,0.5)'
+    ctx.fillStyle = 'rgba(216,196,160,0.85)'
     ctx.font = '11px "Instrument Sans", system-ui, sans-serif'
-    // single-line blurb, truncated
-    let blurb = spot.movie.blurb
-    if (ctx.measureText(blurb).width > 560) {
-      while (ctx.measureText(`${blurb}…`).width > 560 && blurb.length > 20) blurb = blurb.slice(0, -1)
-      blurb += '…'
-    }
-    ctx.fillText(blurb, 320, 206)
-    ctx.fillStyle = 'rgba(255,255,255,0.22)'
-    ctx.font = '8px ui-monospace, monospace'
-    ctx.fillText(`${spot.id.toUpperCase()}  •  WALK AROUND ME`, 320, 248)
+    ctx.fillText('LOADING CLIP…', 320, 128)
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'
+    ctx.font = '10px ui-monospace, monospace'
+    ctx.fillText(`${spot.movie.title.toUpperCase()} • ${spot.name.toUpperCase()}`, 320, 148)
     contentTexture.needsUpdate = true
   }
 
@@ -200,26 +196,47 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
   let currentOpacity = 0
   let spawnTime = 0
   let spawned = false
+  const debugEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug')
 
-  const placeAround = (cameraPos: THREE.Vector3): void => {
-    const forward = new THREE.Vector3(0, 0, -1)
-    group.position.set(cameraPos.x + forward.x * 1.7, -0.42, cameraPos.z + forward.z * 1.7)
+  const updatePortalDebug = (): void => {
+    const el = document.getElementById('portal-debug')
+    const txt = document.getElementById('portal-debug-text')
+    if (!debugEnabled || !el || !txt) return
+    const dbgVis = currentSpot ? `${currentSpot.id} sig:${signal} vis:${group.visible} spawned:${spawned} op:${currentOpacity.toFixed(2)}/${targetOpacity.toFixed(2)}` : `no spot sig:${signal} vis:${group.visible} spawned:${spawned} hasSpot:${currentSpot!==null}`
+    const vid = videoSrc ? `${videoSrc.split('/').pop()} rdy:${videoReady} fail:${videoFailed} pend:${pendingSrc ?? '–'}` : 'no video'
+    const pos = `${group.position.x.toFixed(2)},${group.position.y.toFixed(2)},${group.position.z.toFixed(2)} rotY:${(group.rotation.y * 180 / Math.PI).toFixed(0)} scale:${group.scale.x.toFixed(2)}`
+    const xrAvail = window.XR8 !== undefined ? 'xr:yes' : 'xr:no'
+    txt.textContent = `portal: ${dbgVis} | ${vid} | pos:${pos} | ${xrAvail} | cam:${(document.getElementById('ar-chrome')?.classList.contains('hidden') ? 'no-ar' : 'ar')}`
+    // Always show in AR when in demo/sim so mobile vanish is self-evident
+    const inAr = !document.getElementById('ar-chrome')?.classList.contains('hidden')
+    const shouldShow = inAr && debugEnabled
+    el.classList.toggle('hidden', !shouldShow)
+  }
+
+  const placeInFront = (camPos: THREE.Vector3, camQuat: THREE.Quaternion, dist = DIST): void => {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat)
+    // Keep screen center at true eye level: cam.y is eye height after SLAM init.
+    // Slight +0.05 centers it where your eyes naturally rest, not at chest.
+    const pos = camPos.clone().addScaledVector(forward, dist)
+    pos.y = camPos.y - 0.18 // centered in viewport, not top bar
+    group.position.copy(pos)
+    // Level and facing: copy camera yaw, keep horizon flat (no pitch roll)
+    const e = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ')
+    group.rotation.set(0, e.y + Math.PI, 0) // +PI so concave ( -Z bulge ) faces user
     spawned = true
+    updatePortalDebug()
   }
 
   const applySignal = (): void => {
-    // COLD/WARM: hidden, HOT: fade in, YOU'RE CLOSE: solid, FOUND: hold solid
     if (signal <= 1) targetOpacity = 0
-    else if (signal === 2) targetOpacity = 0.35
-    else if (signal === 3) targetOpacity = 0.92
+    else if (signal === 2) targetOpacity = 0.38
+    else if (signal === 3) targetOpacity = 0.96
     else targetOpacity = 1
   }
 
   scene.add(group)
-  // Place the portal ahead, standing on the ground plane (world origin = where tracking locked).
-  // Camera starts at (0,0,0) looking -Z; portal 1.7m ahead, feet on the ground.
-  group.position.set(0, -0.42, -1.7)
-  group.rotation.y = 0
+  group.position.set(0, 0.05, -DIST)
+  group.rotation.set(0, Math.PI, 0)
 
   return {
     group,
@@ -230,77 +247,102 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
       screenMat.map = contentTexture
       screenMat.needsUpdate = true
       videoReady = false
+      videoFallbackSrc = null
       videoFailed = false
       spawned = false
+      groundCue.visible = false
+      grid.visible = false
       const wanted = spot.asset.videoUrl ?? ''
-      if (wanted && videoSrc !== wanted) {
-        videoSrc = wanted
-        videoEl.src = wanted
-        videoEl.load()
-      }
-      if (wanted) {
-        videoEl.play().catch(() => undefined)
-      }
-      // Keep canvas still until video loads; swap when ready is handled in tick.
+      videoFallbackSrc = spot.asset.videoFallbackUrl ?? null
+      pendingSrc = wanted || null
+      if (signal >= 3 && wanted) ensureVideo(wanted)
       spawnTime = performance.now()
+      console.log(`[portal] show ${spot.id} sig:${signal} wanted:${wanted} pending:${pendingSrc}`)
+      updatePortalDebug()
     },
 
     hide() {
       currentSpot = null
       targetOpacity = 0
+      videoEl.pause()
+      pendingSrc = null
     },
 
     setSignal(level: PortalSignal) {
       signal = level
       applySignal()
-      // Emissive on frame for heat
-      const intensity = level <= 1 ? 0 : level === 2 ? 0.15 : level === 3 ? 0.45 : 0.6
-      ;(accentMat as THREE.MeshStandardMaterial).emissiveIntensity = intensity
+      if (level >= 3 && pendingSrc) ensureVideo(pendingSrc)
+      console.log(`[portal] setSignal ${level} -> targetOp:${targetOpacity} pending:${pendingSrc} vis:${group.visible}`)
+      updatePortalDebug()
     },
 
-    tick(nowMs: number, cameraPos?: THREE.Vector3) {
-      if (!spawned && currentSpot !== null && cameraPos) placeAround(cameraPos)
+    recenter(cameraPos: THREE.Vector3, cameraQuat: THREE.Quaternion) {
+      if (currentSpot) {
+        spawned = false
+        placeInFront(cameraPos, cameraQuat)
+        // grounding cue fades in with the screen
+        groundCue.visible = true
+        grid.visible = true
+      }
+    },
 
-      // Swap canvas → video once the clip is ready (seamless).
+    tick(nowMs: number, cameraPos?: THREE.Vector3, cameraQuat?: THREE.Quaternion) {
+      // RCA: pose reaching tick() — (d) diagnostic
+      if (debugEnabled) {
+        const el = document.getElementById('rca-tick')
+        if (el) {
+          if (cameraPos && cameraQuat) {
+            el.textContent = `defined — xyz:${cameraPos.x.toFixed(2)},${cameraPos.y.toFixed(2)},${cameraPos.z.toFixed(2)} quat:${cameraQuat.x.toFixed(2)},${cameraQuat.y.toFixed(2)},${cameraQuat.z.toFixed(2)},${cameraQuat.w.toFixed(2)}`
+          } else {
+            el.textContent = `UNDEFINED — camPos:${cameraPos ? 'yes' : 'no'} camQuat:${cameraQuat ? 'yes' : 'no'} (XR not started)`
+          }
+        }
+      }
+      // World-locked once: place immediately when HOT. Fallback to default pose if XR not yet ready
+      // (mobile camera permission pending) — so mobile doesn't stay hidden while desktop shows.
+      if (!spawned && currentSpot !== null) {
+        if (cameraPos && cameraQuat) {
+          placeInFront(cameraPos, cameraQuat)
+        } else {
+          // Fallback: place at default 2.6m in front of origin, facing user — ensures mobile shows even before XR locks
+          group.position.set(0, 0.05, -DIST)
+          group.rotation.set(0, Math.PI, 0)
+          spawned = true
+          updatePortalDebug()
+        }
+      }
+
       if (videoReady && !videoFailed && screenMat.map !== videoTexture) {
         screenMat.map = videoTexture
         screenMat.needsUpdate = true
       }
 
-      // Visibility is driven by targetOpacity (signal) + whether we have a spot.
       const hasSpot = currentSpot !== null
-      const desiredVisible = hasSpot && targetOpacity > 0.02
+      const desiredVisible = hasSpot && spawned && targetOpacity > 0.02
       if (desiredVisible && !group.visible) {
         group.visible = true
         spawnTime = nowMs
         currentOpacity = 0
       }
       if (!desiredVisible && group.visible && targetOpacity < 0.02) {
-        // fade out, then hide to avoid popping
-        currentOpacity += (targetOpacity - currentOpacity) * 0.12
+        currentOpacity += (targetOpacity - currentOpacity) * 0.14
         if (currentOpacity < 0.03) group.visible = false
       }
+      // Also hide while waiting for still lock so no world-origin flash
+      if (hasSpot && !spawned && group.visible) group.visible = false
 
-      // Glide opacity + scale for "materialising" feel
-      currentOpacity += (targetOpacity - currentOpacity) * 0.08
+      currentOpacity += (targetOpacity - currentOpacity) * 0.09
       const vis = Math.max(0, Math.min(1, currentOpacity))
-      // Apply to all frame meshes' opacity via material (frame mats are opaque; fade via group scale + backing)
-      backing.material.opacity = 0.96 * vis
-      groundShadow.material.opacity = 0.28 * vis
       screenMat.opacity = vis
-      // Scale breathes slightly on HOT
+      frameMat.opacity = vis * 0.72
+      groundCue.material.opacity = vis * 0.18
+      for (const material of gridMaterials) material.opacity = vis * 0.07
+
       const age = (nowMs - spawnTime) / 1000
-      const appear = Math.min(1, age * 2.2) // first 0.45s
+      const appear = Math.min(1, age * 1.8)
       const ease = 1 - Math.pow(1 - appear, 3)
-      const breathe = 1 + Math.sin(nowMs * 0.0009) * 0.008 * (signal >= 3 ? 1 : 0.3)
-      group.scale.setScalar((0.88 + 0.12 * ease) * breathe)
-      // Subtle Y bob when hot
-      group.position.y = -0.15 + Math.sin(nowMs * 0.001) * 0.015 * (signal >= 3 ? 1 : 0.2)
-      // Gentle flicker on frame accent when hot
-      if (signal >= 3) {
-        const flicker = 0.45 + Math.sin(nowMs * 0.004) * 0.12
-        ;(accentMat as THREE.MeshStandardMaterial).emissiveIntensity = flicker
-      }
+      group.scale.setScalar(0.9 + 0.1 * ease)
+      if (Math.floor(nowMs / 500) % 2 === 0) updatePortalDebug()
     },
 
     dispose() {
@@ -310,11 +352,13 @@ export function createFilmPortal(scene: THREE.Scene): FilmPortal {
           obj.geometry.dispose()
           const m = obj.material
           if (Array.isArray(m)) m.forEach((x) => x.dispose())
-          else (m as THREE.Material).dispose()
+          else m.dispose()
         }
       })
       contentTexture.dispose()
       videoTexture.dispose()
+      screenFrame.geometry.dispose()
+      frameMat.dispose()
       videoEl.remove()
     },
   }

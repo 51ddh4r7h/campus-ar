@@ -168,8 +168,18 @@ export const fullWindowCanvasModule = (): Xr8CameraPipelineModule => {
     },
 
     onDeviceOrientationChange: ({orientation: o}) => {
+      const prev = orientation
       orientation = o
       fillScreenWithCanvas()
+      // Notify the app layer that the physical device rotated — the Three camera
+      // and world anchors need to re-sync or they'll read 90° off (the bug in the screenshot).
+      if (prev !== o) {
+        window.dispatchEvent(
+          new CustomEvent('campus-ar:orientation', {
+            detail: {orientation: o, prev},
+          }),
+        )
+      }
     },
 
     onCanvasSizeChange: () => fillScreenWithCanvas(),

@@ -18,14 +18,14 @@ trail is gone.
 
 ```
 Start screen → Hunt (GPS warmth, no directions)
-  → pick a Target set from the dropdown (or leave "Auto — nearest set")
+  → pick a mystery (or leave "Nearest mystery")
   → inside the target's radius → "Open camera"
   → tracking NORMAL + inside for ≥2 s → REVEAL
-    (in-world clapperboard claps + spotlight + movie clip + info panel)
+    (the world-anchored screen plays the clip + opens the clue panel)
   × 5 → Summary (total time, splits, name entry → stubbed leaderboard)
 ```
 
-- **Targeted hunt:** the "Target set" dropdown re-aims the heat slider, the
+- **Targeted hunt:** the "Choose a mystery" dropdown re-aims the heat slider, the
   radar, and the camera CTA at the chosen set (default: auto-nearest). When a
   chosen target is found, the picker falls back to auto.
 - **No arrows, no waypoints, no turn-by-turn.** The proximity gate only says how
@@ -33,10 +33,10 @@ Start screen → Hunt (GPS warmth, no directions)
   Warm · Hot · You're close). In auto mode, if more than one spot is plausibly
   close, the signal stays ambiguous and won't name a nearest spot.
 - **Timer** is wall-clock based (`Date.now()`), persists across background /
-  foreground / brief tracking loss, and survives a mid-hunt reload
-  (sessionStorage).
-- **Spot states:** `locked → unlocked → found`. Once found, a spot can never
-  re-reveal ("already in the can" toast instead).
+  foreground / brief tracking loss, and survives a mid-hunt reload or browser
+  restart (localStorage).
+- **Spot states:** `locked → unlocked → found`, shown to players as
+  `NOT FOUND → READY → FOUND`. Once found, a location stays found.
 - **Leaderboard is stubbed** — `submitScore()` in `src/leaderboard.ts` is the only
   call the app makes. Swap its body for a real backend later without touching
   anything else.
@@ -65,6 +65,9 @@ No frameworks beyond plain TS modules + the engine's camera-pipeline.
 
 ## Project layout
 
+Start with [`AGENTS.md`](AGENTS.md) for the working agreement and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the runtime ownership map.
+
 | File | Responsibility |
 | --- | --- |
 | `src/main.ts` | App orchestrator: screens, proximity gate, timer, AR open/close, summary |
@@ -77,6 +80,10 @@ No frameworks beyond plain TS modules + the engine's camera-pipeline.
 | `src/full-window-canvas.ts` | Keeps the camera canvas filling the viewport |
 | `DESIGN.md` | Token system + signature-element + motion plan |
 | `scripts/e2e-smoke.mjs` | Headless Playwright test of the full hunt flow |
+| `scripts/README.md` | Script purpose, debug-probe rules, and runbook |
+
+The AR module and 8th Wall engine load only when the player enters the camera;
+the landing screen stays on the small app shell until then.
 
 ### Setting your real campus spots
 
@@ -118,6 +125,8 @@ feedback (Apple limitation, not fixable from the web).
 npm install
 npm run dev        # http://localhost:5173 + LAN URL + tunnel-host-ready
 npm run typecheck  # tsc --noEmit
+npm test           # 27 simulated/unit tests
+npm run lint       # Oxlint; existing anti-slop findings are reported
 npm run build      # production build into dist/
 npm run preview    # serve the build locally
 ```
@@ -131,8 +140,8 @@ spots and shows a **jump rail** on the hunt screen. Perfect for demos:
 http://localhost:5173/?sim
 ```
 
-**No URL tricks needed:** the start screen has a **"Not on campus? Watch the demo
-flight"** button, and the hunt screen offers **"Run the demo flight"** whenever
+**No URL tricks needed:** the start screen has a **"Try the demo — start with a
+mystery"** button, and the hunt screen offers **"Try the demo from here"** whenever
 you're hunting with real GPS (e.g. you're kilometres from the sets). Both run the
 same simulator — full flow works anywhere, and a `Demo` chip marks the run.
 

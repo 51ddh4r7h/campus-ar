@@ -1,0 +1,12 @@
+/clips/*
+  Cache-Control: public, max-age=31536000, immutable
+  X-Content-Type-Options: nosniff
+  Access-Control-Allow-Origin: *
+
+# Engine binary — already immutable via vite, but ensure re-use
+/xr8/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/* 
+  # HTML never cached (always fresh shell), assets hashed via vite
+  Cache-Control: public, max-age=0, must-revalidate

@@ -28,9 +28,9 @@ export interface ArWorld {
   readonly markers: THREE.Group
   setSignal(level: SignalLevel): void
   /** Per-frame animation; cameraPos is the tracked device position. */
-  tick(nowMs: number, cameraPos: THREE.Vector3): void
+  tick(nowMs: number, cameraPos: THREE.Vector3, cameraQuat?: THREE.Quaternion): void
   /** Re-centre the hunt anchor around a fresh world position. */
-  recenter(cameraPos: THREE.Vector3): void
+  recenter(cameraPos: THREE.Vector3, cameraQuat?: THREE.Quaternion): void
   reset(): void
   dispose(): void
 }
@@ -126,23 +126,34 @@ export function createArWorld(scene: THREE.Scene): ArWorld {
   // ────────────────────────────────────────────── placement + state
   let signal: SignalLevel = 0
   let spawned = false
+  let lastQuat = new THREE.Quaternion()
 
-  const placeAround = (cameraPos: THREE.Vector3): void => {
-    // Anchor the reel ~1.2 m ahead at eye-ish height; markers ring the player.
+  const placeAround = (cameraPos: THREE.Vector3, cameraQuat?: THREE.Quaternion): void => {
+    // Anchor the reel ~1.2 m ahead using the *actual* camera forward, not world -Z
+    // — world -Z gave the "tilted curtain fold" when the device was 90° off.
     const forward = new THREE.Vector3(0, 0, -1)
+    if (cameraQuat) forward.applyQuaternion(cameraQuat)
     anchor.position.set(cameraPos.x + forward.x * 1.2, -0.25, cameraPos.z + forward.z * 1.2)
+    // Keep shadow grounded at y≈-1.15 regardless of eye height bob
     shadow.position.y = -1.15 - anchor.position.y + 0.02
     markers.position.set(cameraPos.x, 0, cameraPos.z)
+    if (cameraQuat) lastQuat.copy(cameraQuat)
     spawned = true
   }
 
-  const SIGNAL_TUNING: Record<SignalLevel, {emissive: number; halo: number; pulseHz: number; markerOpacity: number}> = {
+  interface SignalTuning {
+    emissive: number
+    halo: number
+    pulseHz: number
+    markerOpacity: number
+  }
+  const SIGNAL_TUNING = {
     0: {emissive: 0.06, halo: 0.1, pulseHz: 0.5, markerOpacity: 0},
     1: {emissive: 0.16, halo: 0.2, pulseHz: 0.8, markerOpacity: 0},
     2: {emissive: 0.34, halo: 0.38, pulseHz: 1.3, markerOpacity: 0},
     3: {emissive: 0.62, halo: 0.6, pulseHz: 2.1, markerOpacity: 0.85},
     4: {emissive: 0.9, halo: 0.8, pulseHz: 2.8, markerOpacity: 1},
-  }
+  } satisfies Record<SignalLevel, SignalTuning>
 
   return {
     anchor,
@@ -159,8 +170,8 @@ export function createArWorld(scene: THREE.Scene): ArWorld {
       }
     },
 
-    tick(nowMs: number, cameraPos: THREE.Vector3): void {
-      if (!spawned) placeAround(cameraPos)
+    tick(nowMs: number, cameraPos: THREE.Vector3, cameraQuat?: THREE.Quaternion): void {
+      if (!spawned) placeAround(cameraPos, cameraQuat)
       const tuning = SIGNAL_TUNING[signal]
 
       // Reel: slow cinematic rotation + gentle bob.
@@ -171,7 +182,7 @@ export function createArWorld(scene: THREE.Scene): ArWorld {
       // Heat-reactive glow: heartbeat pulse scales with signal level.
       const beat = (Math.sin(nowMs * 0.001 * Math.PI * 2 * tuning.pulseHz) + 1) / 2
       metal.emissiveIntensity = tuning.emissive * (0.7 + 0.5 * beat)
-      ;(halo.material as THREE.MeshBasicMaterial).opacity = tuning.halo * (0.6 + 0.4 * beat)
+      halo.material.opacity = tuning.halo * (0.6 + 0.4 * beat)
       halo.rotation.z = nowMs * 0.0002
 
       // Markers slowly orbit + spin once materialised.
@@ -181,9 +192,9 @@ export function createArWorld(scene: THREE.Scene): ArWorld {
       }
     },
 
-    recenter(cameraPos: THREE.Vector3): void {
+    recenter(cameraPos: THREE.Vector3, cameraQuat?: THREE.Quaternion): void {
       spawned = false
-      placeAround(cameraPos)
+      placeAround(cameraPos, cameraQuat ?? lastQuat)
     },
 
     reset(): void {

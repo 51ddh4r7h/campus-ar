@@ -46,28 +46,40 @@ export function createSummaryScreen() {
     summarySplits.innerHTML = ''
     for (const split of data.splits) {
       const li = document.createElement('li')
-      li.className = 'glass flex items-center gap-3 rounded-tile px-3.5 py-3'
+      li.className = 'flex items-center gap-3 border-b border-line bg-background px-3 py-3 last:border-b-0'
       li.innerHTML = `
-        <span class="grid h-9 w-9 place-items-center rounded-chip bg-gold/10 font-display text-lg text-gold">${split.index}</span>
+        <span class="grid h-8 w-8 shrink-0 place-items-center border border-line bg-raised font-mono text-[11px] font-bold tabular-nums text-muted">${String(split.index).padStart(2, '0')}</span>
         <div class="min-w-0 flex-1">
-          <p class="font-display truncate text-xl tracking-wider text-chalk">${split.name}</p>
-          <p class="truncate text-[11px] text-fog">${split.movie}</p>
+          <p class="truncate font-display text-[13px] font-black uppercase tracking-[0.08em] text-foreground">${split.name}</p>
+          <p class="truncate font-mono text-[10px] uppercase tracking-[0.08em] text-muted">${split.movie}</p>
         </div>
-        <p class="font-display shrink-0 text-2xl tracking-wider text-spotlight">${formatClock(split.ms)}</p>`
+        <data value="${split.ms}" class="shrink-0 font-mono text-[13px] font-bold tabular-nums tracking-tight text-foreground">${formatClock(split.ms)}</data>`
       summarySplits.appendChild(li)
+    }
+    if (data.splits.length === 0) {
+      const empty = document.createElement('li')
+      empty.className = 'border border-dashed border-line bg-background px-4 py-6 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-muted'
+      empty.textContent = '— No splits yet —'
+      summarySplits.appendChild(empty)
     }
 
     leaderboardList.innerHTML = ''
     for (const [i, entry] of data.entries.entries()) {
       const li = document.createElement('li')
       const highlighted = highlightName !== undefined && entry.name === highlightName
-      li.className = 'flex items-center gap-3 px-4 py-2.5 ' + (highlighted ? 'bg-gold/10' : '')
+      li.className = 'flex items-center gap-3 px-4 py-2.5 ' + (highlighted ? 'bg-hazardDim border-l-2 border-l-hazard' : '')
       li.innerHTML = `
-        <span class="w-6 font-display text-lg text-fog/60">${i + 1}</span>
-        <span class="min-w-0 flex-1 truncate font-semibold text-chalk">${escapeHtml(entry.name)}</span>
-        ${entry.splits.length ? `<span class="text-[10px] font-bold uppercase tracking-widest text-fog">${entry.splits.length}/${FILM_SPOTS.length} sets</span>` : ''}
-        <span class="font-display text-xl tracking-wider text-spotlight">${formatClock(entry.totalTimeMs)}</span>`
+        <span class="w-6 font-mono text-[11px] tabular-nums tracking-[0.12em] text-muted">${String(i + 1).padStart(2, '0')}</span>
+        <span class="min-w-0 flex-1 truncate font-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-foreground">${escapeHtml(entry.name)}</span>
+        ${entry.splits.length ? `<span class="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-muted">${entry.splits.length}/${FILM_SPOTS.length} sets</span>` : ''}
+        <data value="${entry.totalTimeMs}" class="font-mono text-[13px] font-bold tabular-nums tracking-tight text-foreground">${formatClock(entry.totalTimeMs)}</data>`
       leaderboardList.appendChild(li)
+    }
+    if (data.entries.length === 0) {
+      const empty = document.createElement('li')
+      empty.className = 'px-4 py-6 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-muted'
+      empty.textContent = '— No entries yet — be the first —'
+      leaderboardList.appendChild(empty)
     }
   }
 

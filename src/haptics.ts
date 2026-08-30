@@ -8,14 +8,19 @@
 
 type Pattern = number | number[]
 
+type VibratingNavigator = Navigator & {vibrate(pattern: Pattern): boolean}
+
+const canVibrate = (value: Navigator): value is VibratingNavigator =>
+  'vibrate' in value && typeof value.vibrate === 'function'
+
 const buzz = (pattern: Pattern): boolean => {
-  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return false
+  if (!canVibrate(navigator)) return false
   return navigator.vibrate(pattern)
 }
 
 export const haptics = {
   /** True when the device can actually vibrate (Android browsers). */
-  supported: (): boolean => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function',
+  supported: (): boolean => canVibrate(navigator),
 
   /** UI tap — button presses, band crossings. */
   tick: (): boolean => buzz(9),

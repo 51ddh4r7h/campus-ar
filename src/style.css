@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 /* ===========================================================================
-   Campus Film Hunt — base styles + token-derived component classes.
-   Design tokens live in tailwind.config.js (see DESIGN.md). This file only
-   composes them; it introduces no ad-hoc arbitrary values.
+   Campus Film Hunt — Tactical Telemetry & CRT Terminal
+   Archetype: dark deactivated-CRT substrate, phosphor foreground, hazard red,
+   single terminal-green readout.  No gradients, no soft shadows, no radius.
    =========================================================================== */
 
 @layer base {
@@ -16,20 +16,46 @@
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
-    color-scheme: dark;
-    /* iOS: don't let the browser bounce/pull the viewport while in AR. */
+    color-scheme: light;
     position: fixed;
     inset: 0;
-    background: #070a12;
-    color: #eae4d5;
-    font-family: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: #0a0a0a;
+    color: #eaeaea;
+    font-family: 'Avenir Next', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-color: rgba(255, 42, 42, 0.2);
+    touch-action: manipulation;
+    /* mechanical noise — low-opacity SVG turbulence, global grain */
+    /* applied via body::before so it does not interfere with layout */
   }
 
-  /* The engine draws the camera feed + transparent AR scene into this canvas. */
+  /* ── Global CRT scanline + noise overlays ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9998;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.12) 2px,
+      rgba(0, 0, 0, 0.12) 4px
+    );
+  }
+
   #camerafeed {
     touch-action: none;
   }
@@ -38,112 +64,931 @@
     font: inherit;
     border: none;
     cursor: pointer;
+    touch-action: manipulation;
   }
 
-  /* Visible keyboard focus on every interactive control (accessibility bar). */
+  /* hard focus ring — hazard red, square */
   :focus-visible {
-    outline: 2px solid rgba(243, 185, 63, 0.75);
+    outline: 1px solid #ff2a2a;
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: 0;
   }
 
   ::selection {
-    background: rgba(243, 185, 63, 0.3);
-    color: #ffe9ae;
+    background: rgba(255, 42, 42, 0.3);
+    color: #eaeaea;
+  }
+
+  /* honor reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    body::after {
+      display: none;
+    }
+  }
+
+  /* headings — text-wrap balance prevents widows */
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+/* AR and reveal surfaces use the same friendly material language while
+   retaining enough contrast over a live camera feed. */
+@layer components {
+  #ar-chrome > .absolute.bottom-0 {
+    border-top: 0;
+    border-radius: 1.35rem 1.35rem 0 0;
+    background: rgba(15, 23, 42, 0.82);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.18);
+  }
+
+  #ar-bottom-bar {
+    transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease;
+  }
+
+  #ar-bottom-bar[data-quiet='true'] {
+    transform: translateY(0.65rem);
+    opacity: 0.72;
+  }
+
+  #ar-bottom-bar[data-quiet='true']:focus-within,
+  #ar-bottom-bar[data-quiet='true']:hover {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  #ar-topbar {
+    border-bottom: 0;
+    border-radius: 0 0 1.1rem 1.1rem;
+    background: rgba(15, 23, 42, 0.72);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  #ar-topbar p {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    text-transform: none;
+  }
+
+  #ar-state-copy {
+    color: rgba(226, 232, 240, 0.7);
+    transition: color 180ms ease;
+  }
+
+  #ar-chrome[data-state='warming'] #ar-state-copy,
+  #ar-chrome[data-state='appearing'] #ar-state-copy {
+    color: #f3b93f;
+  }
+
+  #ar-chrome[data-state='discovered'] #ar-state-copy {
+    color: #b9f3d4;
+  }
+
+  #ar-chrome[data-state='tracking-lost'] #ar-state-copy {
+    color: #ffb4a5;
+  }
+
+  #ar-recenter-prompt {
+    border: 0;
+    border-radius: 999px;
+    background: rgba(239, 118, 93, 0.94);
+    color: #ffffff;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 0;
+    text-transform: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+
+  #ar-calibration-title,
+  #ar-lost p:first-child,
+  #ar-locked-flash p {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.03em;
+    text-transform: none;
+  }
+
+  #ar-calibration-sub,
+  #ar-lost p:last-child,
+  #ar-hint-short {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .signal-chip {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .ar-circle-btn {
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    transition-property: transform, background-color, border-color;
+    transition-duration: 150ms;
+  }
+
+  .ar-circle-btn:active {
+    transform: scale(0.96);
+  }
+
+  #ar-label {
+    border: 0;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.86);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    padding: 0.55rem 0.8rem;
+  }
+
+  #reveal-card {
+    border: 0;
+    border-radius: 1.35rem;
+    background: #f6f7fb;
+    color: #182033;
+    box-shadow: 0 -16px 60px rgba(0, 0, 0, 0.24);
+  }
+
+  #reveal-card .bg-raised,
+  #reveal-card #reveal-asset-row {
+    background: #ffffff;
+    border-color: #e2e7f0;
+    border-radius: 1rem;
+  }
+
+  #reveal-card .text-foreground {
+    color: #182033;
+  }
+
+  #reveal-card .text-muted {
+    color: #657087;
+  }
+
+  #reveal-card h2 {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.06em;
+    text-transform: none;
+  }
+
+  #reveal-card #reveal-continue {
+    min-height: 3.2rem;
+    border: 0;
+    border-radius: 0.9rem;
+    background: #ef765d;
+    box-shadow: 0 8px 18px rgba(239, 118, 93, 0.2);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  #reveal-card > div:first-child {
+    border-bottom: 0;
+    background: transparent;
+  }
+
+  #reveal-card > div:last-child {
+    border-top: 0;
+    background: transparent;
+  }
+
+  #reveal-video {
+    border: 0;
+    border-radius: 1rem;
+    background: #182033;
+  }
+
+  #reveal-scrim {
+    background: rgba(15, 23, 42, 0.48);
+    backdrop-filter: blur(6px);
+  }
+
+  .sim-btn {
+    border: 1px solid rgba(239, 118, 93, 0.45);
+    border-radius: 999px;
+    background: rgba(239, 118, 93, 0.1);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  #screen-start h1:focus,
+  #screen-hunt h1:focus,
+  #screen-summary h1:focus {
+    /* Headings receive programmatic focus for screen-reader announcements;
+       they are not keyboard controls and should not show a control ring. */
+    outline: 0;
+  }
+}
+
+/* ===========================================================================
+   Calm product shell
+   The camera keeps its cinematic treatment; these screens use a quieter,
+   human-first surface so the next action is obvious at a glance.
+   =========================================================================== */
+
+@layer components {
+  html,
+  body {
+    background: #f6f7fb;
+    color: #182033;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  body::before,
+  body::after {
+    display: none;
+  }
+
+  #screen-start,
+  #screen-hunt,
+  #screen-summary {
+    color-scheme: light;
+    background: #f6f7fb;
+    color: #182033;
+  }
+
+  #screen-start .bg-background,
+  #screen-hunt .bg-background,
+  #screen-summary .bg-background {
+    background: transparent;
+  }
+
+  #screen-start .bg-raised,
+  #screen-hunt .bg-raised,
+  #screen-summary .bg-raised {
+    background: #ffffff;
+  }
+
+  #screen-start .text-foreground,
+  #screen-hunt .text-foreground,
+  #screen-summary .text-foreground {
+    color: #182033;
+  }
+
+  #screen-start .text-muted,
+  #screen-hunt .text-muted,
+  #screen-summary .text-muted {
+    color: #657087;
+  }
+
+  #screen-start .border-line,
+  #screen-hunt .border-line,
+  #screen-summary .border-line {
+    border-color: #e2e7f0;
+  }
+
+  #screen-start > div:first-child,
+  #screen-start .brutal-grid {
+    background: transparent;
+  }
+
+  #screen-start > div:first-child > div:first-child {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 2rem;
+  }
+
+  #screen-start > div:first-child > div:first-child > div:first-child {
+    padding: 0;
+  }
+
+  #screen-start > div:first-child > div:first-child > div:first-child > p:first-child {
+    border: 0;
+    background: transparent;
+    color: #657087;
+    padding: 0;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  #screen-start .status-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: #ef765d;
+    box-shadow: 0 0 0 4px rgba(239, 118, 93, 0.12);
+  }
+
+  #screen-start h1 {
+    max-width: 10ch;
+    margin-top: 1.25rem;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: clamp(3.2rem, 14vw, 7rem);
+    font-weight: 800;
+    line-height: 0.94;
+    letter-spacing: -0.07em;
+    text-transform: none;
+  }
+
+  #screen-start h1 + p {
+    max-width: 38rem;
+    margin-top: 1.5rem;
+    color: #657087;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  #screen-start > div:first-child > div:first-child > div:first-child > div:last-child {
+    margin-top: 2rem;
+    color: #657087;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+
+  #screen-start ol {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 1.5rem 2rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  #screen-start ol > li {
+    min-height: 9.5rem;
+    border: 1px solid #e2e7f0;
+    border-radius: 1rem;
+    background: #ffffff;
+    padding: 1.1rem;
+    box-shadow: 0 8px 24px rgba(36, 48, 78, 0.05);
+  }
+
+  #screen-start ol > li > p:first-of-type {
+    margin-top: 1.1rem;
+    color: #182033;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: none;
+  }
+
+  #screen-start ol > li > p:last-of-type {
+    color: #657087;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
+  #screen-start > div:first-child > div:last-child {
+    max-width: 760px;
+    margin: 0 auto;
+    border: 0;
+    padding: 1rem 1.5rem 1.5rem;
+  }
+
+  #screen-start .btn-primary,
+  #screen-start .btn-ghost {
+    min-height: 3.25rem;
+    border-radius: 0.9rem;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-transform: none;
+  }
+
+  #screen-start .btn-primary {
+    background: #ef765d;
+    box-shadow: 0 8px 18px rgba(239, 118, 93, 0.22);
+  }
+
+  #screen-start .btn-ghost {
+    border: 1px solid #d7deea;
+    background: #ffffff;
+    color: #33415e;
+  }
+
+  .app-wordmark,
+  .app-status {
+    margin: 0;
+    color: #657087;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+  }
+
+  .app-wordmark {
+    color: #182033;
+    font-weight: 700;
+  }
+
+  .app-status {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  #screen-start > .h-\[2px\] {
+    display: none;
+  }
+
+  #screen-hunt {
+    max-height: min(760px, 82vh);
+    border: 1px solid #e2e7f0;
+    border-bottom: 0;
+    border-radius: 1.35rem 1.35rem 0 0;
+    box-shadow: 0 -12px 40px rgba(36, 48, 78, 0.12);
+  }
+
+  #screen-hunt[data-view='dashboard'] {
+    inset: 0;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #screen-hunt[data-view='dashboard'] > div:first-child {
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+  }
+
+  #screen-hunt[data-view='sheet'] {
+    transform: translate3d(0, var(--sheet-offset, 0px), 0);
+    will-change: transform;
+  }
+
+  #screen-hunt[data-view='sheet'][data-dragging='true'] {
+    user-select: none;
+  }
+
+  #screen-hunt > div:first-child {
+    background: transparent;
+    border-bottom-color: #e2e7f0;
+  }
+
+  #screen-hunt > header {
+    background: #ffffff;
+    border-bottom-color: #e2e7f0;
+  }
+
+  #screen-hunt h1 {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+    text-transform: none;
+  }
+
+  #screen-hunt .chip {
+    border-color: #e2e7f0;
+    border-radius: 999px;
+    background: #f6f7fb;
+    color: #657087;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  #screen-hunt .chip.terminal-live {
+    color: #27856f;
+  }
+
+  #screen-hunt .border-b {
+    border-bottom-color: #e2e7f0;
+  }
+
+  #screen-hunt .select {
+    min-height: 3rem;
+    border: 1px solid #d7deea;
+    border-radius: 0.8rem;
+    background: #ffffff;
+    color: #182033;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.95rem;
+  }
+
+  #screen-hunt #spot-list {
+    overflow: hidden;
+    border: 1px solid #e2e7f0;
+    border-radius: 1rem;
+    background: #ffffff;
+  }
+
+  #screen-hunt #spot-list li {
+    background: #ffffff;
+    border-bottom-color: #eef1f6;
+  }
+
+  #screen-hunt #spot-list .badge {
+    border-radius: 999px;
+    letter-spacing: 0.04em;
+  }
+
+  #screen-hunt .btn-primary,
+  #screen-hunt .btn-ghost,
+  #screen-hunt .btn-hazard {
+    min-height: 3rem;
+    border-radius: 0.8rem;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .sheet-close-btn {
+    display: none;
+    min-height: 2.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid #d7deea;
+    border-radius: 0.7rem;
+    background: #ffffff;
+    color: #33415e;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  #screen-hunt[data-view='sheet'] .sheet-close-btn {
+    display: block;
+  }
+
+  #screen-summary {
+    color: #182033;
+  }
+
+  #screen-summary .bg-hazard {
+    background: #ef765d;
+  }
+
+  #screen-summary h1 {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.07em;
+    text-transform: none;
+  }
+
+  #screen-summary .brutal-grid > * {
+    border: 1px solid #e2e7f0;
+    border-radius: 1rem;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(36, 48, 78, 0.05);
+  }
+
+  #screen-summary #summary-splits {
+    overflow: hidden;
+    border: 1px solid #e2e7f0;
+    border-radius: 1rem;
+    background: #ffffff;
+  }
+
+  #screen-summary #name-input {
+    min-height: 3rem;
+    border: 1px solid #d7deea;
+    border-radius: 0.8rem;
+    background: #ffffff;
+    color: #182033;
+  }
+
+  @media (max-width: 640px) {
+    #screen-start > div:first-child > div:first-child {
+      padding-top: 1.35rem;
+      padding-bottom: 1rem;
+    }
+
+    #screen-start h1 {
+      font-size: clamp(2.8rem, 13vw, 4.2rem);
+    }
+
+    #screen-start h1 + p {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    #screen-start ol {
+      grid-template-columns: 1fr;
+      padding-bottom: 1rem;
+    }
+
+    #screen-start ol > li {
+      min-height: auto;
+      padding: 0.8rem 1rem;
+    }
+
+    #screen-start ol > li > p:first-of-type {
+      margin-top: 0.35rem;
+    }
+
+    #screen-start ol > li > p:last-of-type {
+      margin-top: 0.15rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #screen-start > div:first-child > div:last-child {
+      padding-top: 0.5rem;
+    }
   }
 }
 
 @layer components {
-  /* Accent text: muted champagne gradient, restrained not saturated yellow. */
-  .text-gradient-gold {
-    background-image: linear-gradient(100deg, #a6906b 0%, #d8c4a0 50%, #f0e6d3 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+  /* ── Typography — macro vs micro ── */
+  .macro {
+    font-family: 'Archivo Black', Inter, system-ui, sans-serif;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.05em;
+    line-height: 0.88;
+    /* fluid brutalist scale */
+    font-size: clamp(2.5rem, 10vw, 7rem);
+  }
+  .macro-hero {
+    font-size: clamp(4rem, 10vw, 15rem);
+    letter-spacing: -0.05em;
+    line-height: 0.85;
+  }
+  .micro {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.4;
+  }
+  .micro-label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    line-height: 1.2;
   }
 
-  /* Glassmorphism panel — translucent, blurred, hairline border (spec §30). */
+  /* ── Grid determinism — 1px gap razor lines ── */
+  .brutal-grid {
+    display: grid;
+    gap: 1px;
+    background: #2a2a2a;
+  }
+  .brutal-grid > * {
+    background: #0a0a0a;
+  }
+  .brutal-grid--surface > * {
+    background: #141414;
+  }
+
+  /* ── Borders — hard 1px only ── */
+  .brutal-border {
+    border: 1px solid #2a2a2a;
+  }
+  .brutal-border-strong {
+    border: 1px solid #3a3a3a;
+  }
+  .brutal-rule {
+    height: 1px;
+    background: #2a2a2a;
+    border: none;
+  }
+  .brutal-rule--hazard {
+    height: 2px;
+    background: #ff2a2a;
+  }
+
+  /* ── ASCII framing utilities ── */
+  .ascii-bracket::before { content: '[ '; }
+  .ascii-bracket::after { content: ' ]'; }
+  .ascii-frame {
+    position: relative;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  .ascii-frame::before {
+    content: '├─';
+    position: absolute;
+    left: 0;
+    opacity: 0.4;
+  }
+  .ascii-frame::after {
+    content: '─┤';
+    position: absolute;
+    right: 0;
+    opacity: 0.4;
+  }
+
+  /* crosshair at grid intersections */
+  .crosshair {
+    position: relative;
+  }
+  .crosshair::before,
+  .crosshair::after {
+    content: '';
+    position: absolute;
+    background: #2a2a2a;
+    pointer-events: none;
+  }
+  .crosshair::before {
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    transform: translateX(-0.5px);
+  }
+  .crosshair::after {
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    transform: translateY(-0.5px);
+  }
+
+  /* ── Scanline overlay utility (per-panel) ── */
+  .scanlines {
+    position: relative;
+  }
+  .scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.12) 2px,
+      rgba(0, 0, 0, 0.12) 4px
+    );
+  }
+
+  /* ── Panels / chips — no radius, no blur, hard borders ── */
   .glass {
-    @apply border border-white/[0.08] bg-white/[0.06] backdrop-blur-xl;
+    @apply border bg-surface;
+    border-color: #2a2a2a;
   }
   .glass-strong {
-    @apply border border-white/[0.08] bg-[#0F1420]/55 backdrop-blur-2xl;
+    @apply border bg-raised;
+    border-color: #2a2a2a;
   }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-chip border border-white/[0.08] bg-white/[0.06] px-3 py-1 text-[12px] text-fog backdrop-blur-md;
+    @apply inline-flex items-center gap-1.5 border bg-raised px-2.5 py-1 text-muted;
+    border-color: #2a2a2a;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 0;
   }
 
-  /* Primary CTA: muted champagne pill, not saturated yellow marquee. */
+  /* ── Buttons — square, hard borders, explicit transitions ── */
   .btn-primary {
-    @apply inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-chalk px-6 text-night transition-all duration-150 motion-safe:active:scale-[0.97] hover:bg-white;
+    @apply inline-flex min-h-[52px] items-center justify-center gap-2 border bg-foreground px-6 text-background;
+    border-color: #eaeaea;
+    border-radius: 0;
+    font-family: 'Archivo Black', Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    transition-property: background-color, color, border-color, opacity;
+    transition-duration: 150ms;
+  }
+  .btn-primary:hover {
+    background: #ffffff;
+  }
+  .btn-primary:active {
+    opacity: 0.92;
   }
   .btn-primary:disabled {
-    @apply cursor-default opacity-50;
+    @apply cursor-default opacity-40;
   }
 
-  /* Quiet secondary — glass pill. */
   .btn-ghost {
-    @apply inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-6 text-chalk backdrop-blur-md transition-colors duration-150 hover:border-white/15 hover:bg-white/[0.09];
+    @apply inline-flex min-h-[48px] items-center justify-center gap-2 border bg-transparent px-6 text-foreground;
+    border-color: #2a2a2a;
+    border-radius: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition-property: background-color, border-color, color;
+    transition-duration: 150ms;
+  }
+  .btn-ghost:hover {
+    border-color: #3a3a3a;
+    background: #141414;
+  }
+
+  /* hazard variant — only for critical alerts */
+  .btn-hazard {
+    @apply inline-flex min-h-[52px] items-center justify-center gap-2 border bg-hazard px-6 text-white;
+    border-color: #ff2a2a;
+    border-radius: 0;
+    font-family: 'Archivo Black', Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    transition-property: background-color, opacity;
+    transition-duration: 150ms;
+  }
+  .btn-hazard:hover {
+    background: #e61919;
   }
 
   .error-box {
-    @apply rounded-chip border border-ember/50 bg-ember/10 px-3 py-2 text-[13px] leading-relaxed text-spotlight;
+    @apply border px-3 py-2 text-[12px] leading-relaxed;
+    border-color: rgba(255, 42, 42, 0.5);
+    background: rgba(255, 42, 42, 0.08);
+    color: #eaeaea;
+    border-radius: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
 
   .field {
-    @apply min-h-[52px] rounded-full border border-line bg-screen/70 px-5 text-[15px] font-medium text-chalk placeholder:text-fog/60;
+    @apply min-h-[52px] w-full border bg-surface px-4 text-[13px] font-medium text-foreground placeholder:text-muted/60;
+    border-color: #2a2a2a;
+    border-radius: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    transition-property: border-color;
+    transition-duration: 150ms;
   }
   .field:hover,
   .field:focus {
-    @apply border-gold/50;
+    border-color: #3a3a3a;
+  }
+  .field:focus-visible {
+    outline: 1px solid #ff2a2a;
+    outline-offset: 1px;
   }
 
-  /* Target-set dropdown (native select, token-skinned for dark mode). */
+  /* native select — hard borders, no radius */
   .select {
-    @apply w-full appearance-none rounded-chip border border-line bg-screen px-4 py-3 pr-10 text-[15px] font-medium text-chalk;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238B93A5' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+    @apply w-full appearance-none border bg-surface px-4 py-3 pr-10 text-[13px] font-medium text-foreground;
+    border-color: #2a2a2a;
+    border-radius: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238A8A8A' stroke-width='1.5' stroke-linecap='square'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.9rem center;
+    transition-property: border-color;
+    transition-duration: 150ms;
   }
   .select:hover,
   .select:focus {
-    @apply border-gold/50;
+    border-color: #3a3a3a;
   }
   .select option {
-    background-color: #101624;
-    color: #eae4d5;
+    background-color: #141414;
+    color: #eaeaea;
   }
 
-  /* Continuous heat track: droplet thumb with trailing tail so motion reads while walking. */
+  /* ── Heat track — hard rectangular, no radius ── */
   .heat-thumb {
     left: 0%;
-    @apply rounded-full bg-chalk shadow-hot transition-[left,background-color] duration-300 ease-out;
+    @apply absolute top-1/2 -ml-1.5 h-4 w-1.5 -translate-y-1/2 bg-foreground;
+    border-radius: 0;
+    transition-property: left, background-color;
+    transition-duration: 300ms;
+    transition-timing-function: ease-out;
   }
   .heat-thumb::after {
     content: '';
     position: absolute;
     right: 100%;
     top: 50%;
-    width: 20px;
-    height: 4px;
+    width: 16px;
+    height: 2px;
     margin-right: 2px;
     transform: translateY(-50%);
-    border-radius: 2px;
-    background: linear-gradient(90deg, transparent, rgba(216, 196, 160, 0.55));
+    background: #eaeaea;
     opacity: 0;
     transition: opacity 300ms ease-out;
   }
   .heat-thumb.is-blazing {
-    @apply bg-gold;
+    background: #ff2a2a;
   }
   .heat-thumb.is-blazing::after {
     opacity: 1;
+    background: #ff2a2a;
   }
 
-  /* Sonar ping ring — compact disc (was 12×12, now 8×8) with visible resting pulse. */
+  /* ── Sonar radar — square corners, hard border ── */
   .radar-ring {
-    @apply absolute h-8 w-8 rounded-full border border-gold/60 motion-safe:animate-radar motion-reduce:opacity-40;
+    @apply absolute h-8 w-8 border motion-safe:animate-radar motion-reduce:opacity-40;
+    border-color: rgba(234, 234, 234, 0.5);
+    border-radius: 0;
   }
   .radar-ring[data-ring='1'] {
     animation-delay: 0.73s;
@@ -152,39 +997,42 @@
     animation-delay: 1.46s;
   }
 
-  /* Heat label — the word itself warms as you approach (more legible while walking). */
+  /* heat label states */
   #signal-label.heat-warm,
   #ar-signal-word.heat-warm {
-    color: #d8c4a0;
+    color: #eaeaea;
   }
   #signal-label.heat-hot,
   #ar-signal-word.heat-hot {
-    background: linear-gradient(100deg, #d8c4a0 0%, #f0e6d3 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 0 8px rgba(216, 196, 160, 0.35));
+    color: #ff2a2a;
   }
 
-  /* Recording dot in the AR timer chip. */
+  /* terminal green — ONLY for the live progress readout */
+  .terminal-live {
+    color: #4af626;
+  }
+
   .rec-dot {
-    @apply h-2 w-2 rounded-full bg-ember motion-safe:animate-pulse-lamp;
+    @apply h-2 w-2 bg-hazard motion-safe:animate-pulse-lamp;
+    border-radius: 0;
   }
 
-  /* ════════════ AR hunt surface: viewfinder, grain, vignette, controls ════════════ */
-
-  /* Camera-mode vignette: darkens corners, keeps centre clear. */
+  /* ── AR surface ── */
   .ar-vignette {
-    background: radial-gradient(120% 90% at 50% 46%, rgba(4, 6, 11, 0) 52%, rgba(4, 6, 11, 0.42) 88%, rgba(4, 6, 11, 0.62) 100%);
+    background: radial-gradient(
+      120% 90% at 50% 46%,
+      rgba(10, 10, 10, 0) 52%,
+      rgba(10, 10, 10, 0.42) 88%,
+      rgba(10, 10, 10, 0.62) 100%
+    );
   }
 
-  /* Static film grain — one tiny SVG turbulence tile, no runtime cost. */
   .ar-grain {
-    opacity: 0.055;
+    opacity: 0.04;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
-  /* Viewfinder reticle — four corner brackets + centre mark. */
+  /* reticle — square corners, hard borders */
   #ar-reticle {
     width: 132px;
     height: 132px;
@@ -193,58 +1041,64 @@
     position: absolute;
     width: 26px;
     height: 26px;
-    border-color: rgba(234, 228, 213, 0.75);
+    border-color: rgba(234, 234, 234, 0.7);
     border-style: solid;
     border-width: 0;
-    filter: drop-shadow(0 1px 2px rgba(4, 6, 11, 0.9));
   }
-  .reticle-corner.tl { left: 0; top: 0; border-left-width: 2px; border-top-width: 2px; border-top-left-radius: 6px; }
-  .reticle-corner.tr { right: 0; top: 0; border-right-width: 2px; border-top-width: 2px; border-top-right-radius: 6px; }
-  .reticle-corner.bl { left: 0; bottom: 0; border-left-width: 2px; border-bottom-width: 2px; border-bottom-left-radius: 6px; }
-  .reticle-corner.br { right: 0; bottom: 0; border-right-width: 2px; border-bottom-width: 2px; border-bottom-right-radius: 6px; }
+  .reticle-corner.tl { left: 0; top: 0; border-left-width: 1px; border-top-width: 1px; }
+  .reticle-corner.tr { right: 0; top: 0; border-right-width: 1px; border-top-width: 1px; }
+  .reticle-corner.bl { left: 0; bottom: 0; border-left-width: 1px; border-bottom-width: 1px; }
+  .reticle-corner.br { right: 0; bottom: 0; border-right-width: 1px; border-bottom-width: 1px; }
   .reticle-plus {
     position: absolute;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -52%);
-    font-family: 'Instrument Sans', system-ui, sans-serif;
-    font-size: 20px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 14px;
     line-height: 1;
-    color: rgba(234, 228, 213, 0.85);
-    text-shadow: 0 1px 2px rgba(4, 6, 11, 0.9);
+    color: rgba(234, 234, 234, 0.85);
   }
-  #ar-reticle[data-state='searching'] .reticle-corner { border-color: rgba(234, 228, 213, 0.4); animation: reticle-breathe 2.6s ease-in-out infinite; }
-  #ar-reticle[data-state='tracking'] .reticle-corner { border-color: rgba(234, 228, 213, 0.8); }
-  #ar-reticle[data-state='nearby'] .reticle-corner { border-color: rgba(243, 185, 63, 0.95); animation: reticle-breathe 1.1s ease-in-out infinite; }
+  #ar-reticle[data-state='searching'] .reticle-corner { border-color: rgba(234, 234, 234, 0.35); animation: reticle-breathe 2.6s ease-in-out infinite; }
+  #ar-reticle[data-state='tracking'] .reticle-corner { border-color: rgba(234, 234, 234, 0.75); }
+  #ar-reticle[data-state='nearby'] .reticle-corner { border-color: #ff2a2a; animation: reticle-breathe 1.1s ease-in-out infinite; }
   #ar-reticle[data-state='reveal'] { transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms ease-out; transform: translate(-50%, -50%) scale(1.7); opacity: 0; }
   @keyframes reticle-breathe {
-    0%, 100% { opacity: 0.55; }
+    0%, 100% { opacity: 0.5; }
     50% { opacity: 1; }
   }
 
-  /* Circular viewfinder control (recenter / sets / exit). */
+  /* AR circle buttons → square tactical keys */
   .ar-circle-btn {
-    @apply pointer-events-auto flex h-[52px] w-[52px] flex-col items-center justify-center gap-0.5 rounded-full border border-line bg-abyss/60 text-chalk backdrop-blur-md transition-colors duration-150;
+    @apply pointer-events-auto flex h-[48px] w-[48px] flex-col items-center justify-center gap-0.5 border bg-raised/80 text-foreground;
+    border-color: #2a2a2a;
+    border-radius: 0;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(255, 42, 42, 0.2);
+    transition-property: border-color, background-color, color;
+    transition-duration: 150ms;
   }
   .ar-circle-btn:hover {
-    @apply border-gold/50;
+    border-color: #3a3a3a;
+    background: #1a1a1a;
   }
 
-  /* Compact bottom-left signal readout over camera. */
   .signal-chip {
-    @apply rounded-chip border border-line bg-abyss/60 px-3 py-2 backdrop-blur-md;
+    @apply border bg-raised/80 px-3 py-2;
+    border-color: #2a2a2a;
+    border-radius: 0;
   }
 
-  /* Film progress dots (● ● ○ ○ ○). */
   .reel-dot {
-    @apply h-2 w-2 rounded-full border border-fog/60;
+    @apply h-2 w-2 border border-muted/60;
+    border-radius: 0;
   }
   .reel-dot.lit {
-    @apply border-gold bg-gold shadow-hot;
+    @apply border-foreground bg-foreground;
   }
 
   @keyframes locked-in {
-    0% { opacity: 0; transform: scale(1.25); letter-spacing: 0.5em; }
+    0% { opacity: 0; transform: scale(1.15); letter-spacing: 0.5em; }
     100% { opacity: 1; transform: scale(1); letter-spacing: 0.35em; }
   }
   .animate-locked-in {
@@ -252,6 +1106,64 @@
   }
 
   .sim-btn {
-    @apply rounded-chip border border-dashed border-gold/40 bg-gold/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-gold/80;
+    @apply border border-dashed px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest;
+    border-color: rgba(255, 42, 42, 0.4);
+    background: rgba(255, 42, 42, 0.06);
+    color: rgba(255, 42, 42, 0.85);
+    border-radius: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+}
+
+/* Final product-surface polish: keep the redesign local-first and tactile. */
+@layer components {
+  #screen-start .font-display,
+  #screen-start .font-sans,
+  #screen-hunt .font-display,
+  #screen-hunt .font-sans,
+  #screen-summary .font-display,
+  #screen-summary .font-sans,
+  #ar-chrome .font-display,
+  #ar-chrome .font-sans,
+  #reveal-panel .font-display,
+  #reveal-panel .font-sans {
+    font-family: 'Avenir Next', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  }
+
+  .btn-primary,
+  .btn-ghost,
+  .btn-hazard,
+  .ar-circle-btn,
+  .sheet-close-btn,
+  .sim-btn {
+    transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  .btn-primary:active,
+  .btn-ghost:active,
+  .btn-hazard:active,
+  .sheet-close-btn:active,
+  .sim-btn:active {
+    transform: translateY(1px) scale(0.985);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-primary,
+    .btn-ghost,
+    .btn-hazard,
+    .ar-circle-btn,
+    .sheet-close-btn,
+    .sim-btn {
+      transition: none;
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    #ar-bottom-bar,
+    #ar-topbar,
+    .signal-chip {
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: none;
+    }
   }
 }

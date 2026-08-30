@@ -30,7 +30,7 @@ export interface ProximityVerdict {
   insideSpot: FilmSpot | null
   /** Spot to name in copy — the chosen target, or the clearly-closest set. */
   namedSpot: FilmSpot | null
-  /** True when namedSpot was explicitly chosen (copy says "Target set"). */
+  /** True when namedSpot was explicitly chosen (copy says "Mystery"). */
   targeted: boolean
   /** Fix too fuzzy to trust — copy asks for a steadier read. */
   fuzzy: boolean

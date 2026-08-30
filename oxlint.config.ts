@@ -35,6 +35,18 @@ const config: OxlintConfig = {
     'anti-slop/no-widen-then-assert': 'error',
     'anti-slop/require-safety-comment-for-type-assertion': 'error',
   },
+  // Test doubles deliberately narrow jsdom's incomplete DOM/media types at the
+  // fixture boundary; production source remains covered by the strict rules above.
+  overrides: [
+    {
+      files: ['tests/**/*.ts'],
+      rules: {
+        'anti-slop/no-chained-type-assertions': 'off',
+        'anti-slop/no-runtime-typeof': 'off',
+        'anti-slop/require-safety-comment-for-type-assertion': 'off',
+      },
+    },
+  ],
 }
 
 export default config

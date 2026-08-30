@@ -21,6 +21,7 @@ interface Particle {
 export function fireConfetti(durationMs = 2600): void {
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
 
+  // SAFETY: index.html owns this id and renders it as a canvas element.
   const canvas = document.getElementById('confetti-canvas') as HTMLCanvasElement | null
   if (!canvas) return
   const ctx = canvas.getContext('2d')

@@ -3,8 +3,8 @@
  *
  * The timer is wall-clock based (`Date.now()`), never `setInterval`-counted,
  * so backgrounding/foregrounding the app (or brief tracking loss) can't reset
- * or drift it. State is persisted to sessionStorage so a mid-hunt reload in the
- * same tab resumes where the user was.
+ * or drift it. State is persisted locally so a reload or browser restart
+ * resumes where the user was.
  */
 
 import {FILM_SPOTS, type FilmSpot} from './data/spots'
@@ -28,7 +28,7 @@ export interface SpotRun {
   splitMs: number | null
 }
 
-const STORAGE_KEY = 'campus-film-hunt:v1'
+const STORAGE_KEY = 'campus-film-hunt:v2'
 
 interface PersistedState {
   status: HuntStatus
@@ -50,7 +50,7 @@ const isPersistedState = (value: Partial<PersistedState> | null | undefined): va
 
 const loadPersisted = (): PersistedState | null => {
   try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     return isPersistedState(parsed) ? parsed : null
@@ -96,7 +96,7 @@ export function createHunt(): HuntController {
 
   const persist = (): void => {
     try {
-      window.sessionStorage.setItem(
+      window.localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
           status,
@@ -199,6 +199,18 @@ export function createHunt(): HuntController {
         listeners = listeners.filter((l) => l !== cb)
       }
     },
+
+    reset() {
+      status = 'not_started'
+      startTimeMs = 0
+      endTimeMs = null
+      for (const run of spots) {
+        run.status = 'locked'
+        run.foundAtMs = null
+        run.splitMs = null
+      }
+      emit()
+    },
   }
 
   return controller
@@ -222,6 +234,7 @@ export interface HuntController {
   /** The score payload the marquee persists. */
   scoreSplits(): SplitEntry[]
   onChange(cb: () => void): () => void
+  reset(): void
 }
 
 /** mm:ss (or m:ss.m for sub-minute splits) — the hunt's clock language. */
