@@ -10,7 +10,9 @@ All AWS, all free tier. Region `ap-south-1` (Mumbai).
 | Provisioning | one CloudFormation/SAM template | — |
 
 The whole stack is `infra/template.yaml`. `aws cloudformation deploy` runs the
-SAM transform server-side, so no SAM CLI is needed — just the AWS CLI.
+SAM transform server-side, so no SAM CLI is needed — just the AWS CLI. The
+deploy script creates a small artifact bucket (`cmh-deploy-<account>-<region>`)
+on first run to upload the Lambda zip.
 
 ## First deploy
 
