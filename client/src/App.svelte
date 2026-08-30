@@ -1,6 +1,9 @@
 <script lang="ts">
   import {LEVEL_COUNT, LOCATIONS} from '@cmh/shared'
 
+  /** In dev, Vite proxies /api → the local worker; in prod this is the API Gateway URL. */
+  const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
+
   type Health = {ok: boolean; levels: number; locationPool: number}
   let health = $state<Health | null>(null)
   let error = $state<string | null>(null)
@@ -8,7 +11,7 @@
   async function checkHealth() {
     error = null
     try {
-      const res = await fetch('/api/health')
+      const res = await fetch(`${API_BASE}/health`)
       // SAFETY: scaffold-only health probe; the typed API client in Phase 2
       // validates every response body at this boundary.
       health = (await res.json()) as Health
@@ -28,7 +31,7 @@
     <pre>{JSON.stringify(health, null, 2)}</pre>
   {/if}
   {#if error}
-    <p class="err">API not reachable: {error} — run <code>npm run dev:worker</code></p>
+    <p class="err">API not reachable: {error} — run <code>npm run dev:api</code></p>
   {/if}
 </main>
 
