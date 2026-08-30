@@ -1,0 +1,20 @@
+{
+  "name": "@cmh/worker",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply campus_movie_hunt --local",
+    "db:migrate": "wrangler d1 migrations apply campus_movie_hunt --remote"
+  },
+  "dependencies": {
+    "@cmh/shared": "*",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0"
+  }
+}

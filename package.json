@@ -1,38 +1,29 @@
 {
-  "name": "campus-ar",
+  "name": "campus-movie-hunt",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Campus Film Hunt — a timed AR scavenger hunt. Find three movie sets on campus, catch the clapperboard reveal in world-tracking AR, and put your time on the marquee (8th Wall Engine Binary + Three.js, Tailwind-themed UI).",
+  "description": "Campus Movie Hunt — an individual, timed campus game. Recognise a movie scene, walk to where it was shot, and watch it come alive in AR. Server-authoritative, par-time scored.",
+  "workspaces": [
+    "shared",
+    "worker",
+    "client"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "build": "npm run build --workspaces --if-present",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b shared worker && npm run check --workspace client",
     "lint": "oxlint",
-    "deploy": "npm run build && wrangler pages deploy --project-name campus-ar",
-    "deploy:preview": "npm run build && wrangler pages deploy --project-name campus-ar --branch preview"
-  },
-  "dependencies": {
-    "@8thwall/engine-binary": "^1.0.0",
-    "three": "^0.185.1"
+    "dev:client": "npm run dev --workspace client",
+    "dev:worker": "npm run dev --workspace worker",
+    "gen:routes": "tsx scripts/generate-route-pool.ts"
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.80.0",
     "@types/node": "^26.2.0",
-    "@types/three": "^0.185.4",
-    "autoprefixer": "^10.4.20",
-    "ffmpeg-static": "^5.3.0",
-    "ffprobe-static": "^3.1.0",
-    "jsdom": "^30.0.1",
     "oxlint": "^1.80.0",
-    "playwright": "^1.62.1",
-    "postcss": "^8.5.1",
-    "tailwindcss": "^3.4.19",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
-    "vite": "^8.2.1",
     "vitest": "^4.1.11",
     "wrangler": "^4.124.0"
   }

@@ -1,0 +1,184 @@
+/**
+ * The ten campus locations.
+ *
+ * PLACEHOLDER CONTENT. Coordinates are spread across the Symbiosis Lavale
+ * campus footprint for demo and testing — every point must be re-surveyed
+ * on the ground before an event. Film pairings, clue ladders and campus facts
+ * are drafts for wiring, not final copy. Finalised in Phase 5 (see
+ * docs/BUILD-PLAN.md).
+ *
+ * Invariants the content must satisfy before an event:
+ *  - exactly LOCATION_POOL_SIZE entries
+ *  - every pair of locations >60 m apart
+ *  - difficulty mix of roughly 3 / 4 / 3 across tiers 1 / 2 / 3
+ *  - no clue rung names the building, the film, or a compass direction
+ */
+
+import type {GameLocation} from './types'
+
+const media = (id: string): Pick<GameLocation, 'clipUrl' | 'posterUrl' | 'sceneRefImage'> => ({
+  clipUrl: `/clips/${id}.mp4`,
+  posterUrl: `/posters/${id}.jpg`,
+  sceneRefImage: `/scene-refs/${id}.jpg`,
+})
+
+export const LOCATIONS: readonly GameLocation[] = [
+  {
+    id: 'mind-studio',
+    name: 'Mind Studio',
+    lat: 18.5342,
+    lng: 73.7333,
+    radiusM: 20,
+    difficulty: 1,
+    ...media('mind-studio'),
+    campusFact: 'The studio wing was the first building on campus wired for natural-light filming.',
+    clue: {
+      far: 'A quiet room where someone finally lets a long breath go.',
+      warm: 'Glass on one whole wall, and a lawn that catches the last of the sun.',
+      close: 'Look for the low building whose windows run floor to ceiling on the quad side.',
+    },
+  },
+  {
+    id: 'aqua-point',
+    name: 'Aqua Point',
+    lat: 18.53585,
+    lng: 73.7328,
+    radiusM: 22,
+    difficulty: 2,
+    ...media('aqua-point'),
+    campusFact: 'The reservoir here holds the campus through the dry months before the monsoon.',
+    clue: {
+      far: 'Three friends, a wide-open view, and no plan for the afternoon.',
+      warm: 'Water below, the valley beyond, a place people stop to just look.',
+      close: 'Head for the open edge where the ground drops away toward the reservoir.',
+    },
+  },
+  {
+    id: 'the-fountain',
+    name: 'The Fountain',
+    lat: 18.536,
+    lng: 73.7339,
+    radiusM: 18,
+    difficulty: 1,
+    ...media('the-fountain'),
+    campusFact: 'Every graduating class has thrown a coin in on their last day since the first batch.',
+    clue: {
+      far: 'Wherever this is, the characters keep insisting that all is well.',
+      warm: 'A circle of stone, moving water, benches worn smooth by years of waiting.',
+      close: 'The paved circle at the centre of the main walk, with water in the middle.',
+    },
+  },
+  {
+    id: 'central-library',
+    name: 'Central Library',
+    lat: 18.53668,
+    lng: 73.733,
+    radiusM: 18,
+    difficulty: 2,
+    ...media('central-library'),
+    campusFact: 'The reading room stays open through exam week for the only all-night hours on campus.',
+    clue: {
+      far: 'A frantic run up a long flight of steps, late for something that matters.',
+      warm: 'Broad steps, tall doors, and more windows than you can count in a row.',
+      close: 'The building with the widest staircase on campus, facing the central lawn.',
+    },
+  },
+  {
+    id: 'auditorium',
+    name: 'Auditorium',
+    lat: 18.5369,
+    lng: 73.7322,
+    radiusM: 22,
+    difficulty: 3,
+    ...media('auditorium'),
+    campusFact: 'The stage curtain is still raised by hand on opening night, a rule since 1968.',
+    clue: {
+      far: 'A performer pushed past breaking point to hit an impossible tempo.',
+      warm: 'Doors that only open for an audience, and a foyer that is dark by day.',
+      close: 'The tall windowless hall next to the library, set back behind its own forecourt.',
+    },
+  },
+  {
+    id: 'the-amphitheatre',
+    name: 'The Amphitheatre',
+    lat: 18.53525,
+    lng: 73.7336,
+    radiusM: 20,
+    difficulty: 2,
+    ...media('the-amphitheatre'),
+    campusFact: 'Orientation week ends with the whole incoming cohort seated on these steps.',
+    clue: {
+      far: 'A crowd on stone tiers, watching something happen down in the middle.',
+      warm: 'Curved steps cut into a slope, an open floor at the bottom, no roof.',
+      close: 'The tiered stone bowl on the hillside below the academic block.',
+    },
+  },
+  {
+    id: 'sports-pavilion',
+    name: 'Sports Pavilion',
+    lat: 18.5345,
+    lng: 73.7341,
+    radiusM: 24,
+    difficulty: 2,
+    ...media('sports-pavilion'),
+    campusFact: 'The ground floods to a shallow sheet in heavy rain and drains clear within the hour.',
+    clue: {
+      far: 'The long shot before the big match: an empty field at first light.',
+      warm: 'A covered stand looking out over the largest flat green space on campus.',
+      close: 'The roofed viewing stand along the edge of the main playing field.',
+    },
+  },
+  {
+    id: 'founders-steps',
+    name: "Founders' Steps",
+    lat: 18.53655,
+    lng: 73.7343,
+    radiusM: 18,
+    difficulty: 3,
+    ...media('founders-steps'),
+    campusFact: 'The plaque at the top lists the seven people who signed for the land in 1971.',
+    clue: {
+      far: 'Two people talk on a staircase while the whole town lies behind them.',
+      warm: 'A climb that turns back on itself, with a named plaque somewhere near the top.',
+      close: 'The switchback stone stairway connecting the lower road to the main gate.',
+    },
+  },
+  {
+    id: 'the-boulevard',
+    name: 'The Boulevard',
+    lat: 18.5347,
+    lng: 73.73262,
+    radiusM: 20,
+    difficulty: 1,
+    ...media('the-boulevard'),
+    campusFact: 'The trees along it were planted by the first five batches, one row per year.',
+    clue: {
+      far: 'A slow walk down a tree-lined avenue while the credits could roll any second.',
+      warm: 'A straight paved avenue, tall trees both sides, benches at every gap.',
+      close: 'The long tree-lined path that runs the length of the central campus.',
+    },
+  },
+  {
+    id: 'observatory-deck',
+    name: 'Observatory Deck',
+    lat: 18.5373,
+    lng: 73.73345,
+    radiusM: 22,
+    difficulty: 3,
+    ...media('observatory-deck'),
+    campusFact: 'On a clear night you can pick out four hill forts from the railing.',
+    clue: {
+      far: 'A rooftop conversation under an enormous sky, city lights far below.',
+      warm: 'The highest point you can stand on here, with a railing and nothing above it.',
+      close: 'The flat viewing platform on the roof of the northern-most building.',
+    },
+  },
+]
+
+if (LOCATIONS.length !== 10) {
+  throw new Error(`content: expected 10 locations, found ${LOCATIONS.length}`)
+}
+
+const LOCATION_BY_ID = new Map(LOCATIONS.map((l) => [l.id, l]))
+
+export const locationById = (id: string): GameLocation | undefined => LOCATION_BY_ID.get(id)

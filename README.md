@@ -1,221 +1,60 @@
-# Campus Film Hunt — AR scavenger hunt MVP
+# Campus Movie Hunt
 
-A timed, onboarding scavenger hunt for new joiners. **Three real spots on
-campus** once stood in for famous films. You walk the ground with only a coarse
-**cold / warm / hot** GPS signal — never a compass, never directions — get
-prompted to **open your camera** once you're inside a spot's radius, and catch a
-cinematic **clapperboard reveal** in AR confirming the set + showing the movie.
-Three sets, one running clock, and your total time lands on the (stubbed)
-leaderboard marquee.
+An individual, timed campus game for new joiners. Each level shows a short movie
+clip that is a clue to a place on campus. Recognise the spot, walk there, and the
+scene plays back — anchored to the real location in AR — as the reward. Fastest
+fair time wins (scored against a per-route par time).
 
-Built on the **current 8th Wall Engine Binary** (`@8thwall/engine-binary`) with
-**Three.js** world tracking — the Phase 1 SLAM pipeline is untouched; the arrow
-trail is gone.
+**This is the `v2-movie-hunt` rebuild.** The previous team-based static MVP is
+preserved under `_legacy/` and on `main` up to commit `129442e`.
 
----
+## Docs
 
-## Flow (see `DESIGN.md` for the design system)
-
-```
-Start screen → Hunt (GPS warmth, no directions)
-  → pick a mystery (or leave "Nearest mystery")
-  → inside the target's radius → "Open camera"
-  → tracking NORMAL + inside for ≥2 s → REVEAL
-    (the world-anchored screen plays the clip + opens the clue panel)
-  × 5 → Summary (total time, splits, name entry → stubbed leaderboard)
-```
-
-- **Targeted hunt:** the "Choose a mystery" dropdown re-aims the heat slider, the
-  radar, and the camera CTA at the chosen set (default: auto-nearest). When a
-  chosen target is found, the picker falls back to auto.
-- **No arrows, no waypoints, no turn-by-turn.** The proximity gate only says how
-  *warm* you are (continuous heat 0–100 on a slider; band words: Cold · Chilly ·
-  Warm · Hot · You're close). In auto mode, if more than one spot is plausibly
-  close, the signal stays ambiguous and won't name a nearest spot.
-- **Timer** is wall-clock based (`Date.now()`), persists across background /
-  foreground / brief tracking loss, and survives a mid-hunt reload or browser
-  restart (localStorage).
-- **Spot states:** `locked → unlocked → found`, shown to players as
-  `NOT FOUND → READY → FOUND`. Once found, a location stays found.
-- **Leaderboard is stubbed** — `submitScore()` in `src/leaderboard.ts` is the only
-  call the app makes. Swap its body for a real backend later without touching
-  anything else.
-
----
-
-## Stack
-
-| Piece | Choice | Why |
-| --- | --- | --- |
-| Language | TypeScript (`strict`) | Type safety for the XR8 API surface |
-| UI styling | **Tailwind CSS v3** with a custom token system | `tailwind.config.js` defines the full cinema theme (see `DESIGN.md`) |
-| Bundler / dev | Vite (v8) | Instant dev server, static build |
-| AR engine | `@8thwall/engine-binary@1` | Current engine; `slam` chunk = world tracking |
-| 3D | `three` (r185) | Clapperboard reveal device + AR scene |
-| Build output | Static → any HTTPS host | No server runtime |
-
-No frameworks beyond plain TS modules + the engine's camera-pipeline.
-
-> **Which engine?** The current [8th Wall Engine Binary](https://8thwall.org/docs/engine/overview)
-> (`@8thwall/engine-binary`), **not** the archived `8thwall/web` repo. World
-> tracking is added by the engine's `slam` chunk, which registers the classic
-> `XR8.XrController` / `XR8.Threejs` / `XR8.addCameraPipelineModules` API.
-
----
-
-## Project layout
-
-Start with [`AGENTS.md`](AGENTS.md) for the working agreement and
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the runtime ownership map.
-
-| File | Responsibility |
+| Doc | What |
 | --- | --- |
-| `src/main.ts` | App orchestrator: screens, proximity gate, timer, AR open/close, summary |
-| `src/ar.ts` | 8th Wall session manager (register modules once, `run`/`stop` per spot) + the "inside for ≥2 s + tracking NORMAL" trigger |
-| `src/reveal.ts` | The signature 3D **clapperboard** device + spotlight/can-flash animation |
-| `src/hunt.ts` | Hunt state machine + wall-clock timer + splits |
-| `src/location.ts` | Single geolocation source (no heading/bearing) + `?sim` simulator |
-| `src/leaderboard.ts` | **Stub** leaderboard — `submitScore()` is the swap point |
-| `src/data/spots.ts` | The 5 campus spots (lat/lng/radius/movie/reveal-asset/clip) |
-| `src/full-window-canvas.ts` | Keeps the camera canvas filling the viewport |
-| `DESIGN.md` | Token system + signature-element + motion plan |
-| `scripts/e2e-smoke.mjs` | Headless Playwright test of the full hunt flow |
-| `scripts/README.md` | Script purpose, debug-probe rules, and runbook |
+| [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md) | The phased build. Start here. |
+| [`docs/UI-FLOW-BRIEF.md`](docs/UI-FLOW-BRIEF.md) | Every screen, state, and transition + the design system. |
+| [`docs/PROJECT-CONTEXT-AND-AGENDA.md`](docs/PROJECT-CONTEXT-AND-AGENDA.md) | Product intent and the locked experience model. |
+| [Rulebook](https://claude.ai/code/artifact/721673ba-3c38-4f89-95c2-af5c0c2cf317) | The game rules, for the wider team. |
 
-The AR module and 8th Wall engine load only when the player enters the camera;
-the landing screen stays on the small app shell until then.
+## Layout
 
-### Setting your real campus spots
-
-`src/data/spots.ts` ships with the real Symbiosis Lavale campus pins (extracted
-from geotagged photos). To change or add spots:
-
-```ts
-{
-  id: 'fountain',                   // short slug
-  name: 'The Fountain',
-  lat: 18.5361451, lng: 73.7331103, // ← real spot
-  radiusM: 15,                      // how close you must get to unlock
-  movie: {title: '3 Idiots', blurb: '…one-liner…'},
-  asset: {color: '#4FB3D9', label: 'clip-fountain', videoUrl: '/clips/fountain.mp4'},
-}
+```
+shared/   pure TypeScript — data model, config, content, game logic (no I/O)
+worker/   Cloudflare Worker — sessions, validation, scoring, standings (D1 + Durable Objects)
+client/   Svelte 5 + Vite — the phone app
+scripts/  route-pool generation, sim, calibration
+content/  source assets (location photos, etc.)
+_legacy/  the previous build, kept for reference and AR-module salvage
 ```
 
-### Movie clips (the in-world reveal screen)
-
-Drop an `.mp4` at `public/clips/<spot-id>.mp4` (e.g. `public/clips/fountain.mp4`)
-and it plays automatically: **in-world** on a screen that fades in behind the
-clapperboard after the clap, and in the reveal panel. H.264 MP4 + AAC audio is
-the safe encode for phones; keep clips ≤ 10 s and ≤ 5 MB. Until a file exists,
-the reveal falls back to the colour swatch — nothing breaks.
-
-### Haptics
-
-`src/haptics.ts` wraps the Vibration API: ticks on band crossings, an unlock
-double-tick, a clap pattern on the reveal, and a fanfare at the summary.
-**Android browsers vibrate for real; iOS Safari does not expose the web
-vibration API at all** — there the radar pulse + screen shake carry the
-feedback (Apple limitation, not fixable from the web).
-
----
-
-## Development
+## Develop
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173 + LAN URL + tunnel-host-ready
-npm run typecheck  # tsc --noEmit
-npm test           # 27 simulated/unit tests
-npm run lint       # Oxlint; existing anti-slop findings are reported
-npm run build      # production build into dist/
-npm run preview    # serve the build locally
+npm run dev:worker     # http://localhost:8787  (wrangler)
+npm run dev:client     # http://localhost:5173  (proxies /api → the worker)
 ```
 
-### Try the whole hunt without leaving your desk (− `?sim`)
-
-`?sim` (or `?simulate`) starts a simulated GPS feed that drifts through all three
-spots and shows a **jump rail** on the hunt screen. Perfect for demos:
-
-```
-http://localhost:5173/?sim
-```
-
-**No URL tricks needed:** the start screen has a **"Try the demo — start with a
-mystery"** button, and the hunt screen offers **"Try the demo from here"** whenever
-you're hunting with real GPS (e.g. you're kilometres from the sets). Both run the
-same simulator — full flow works anywhere, and a `Demo` chip marks the run.
-
-- The signal starts **Cold**, then warms until each spot unlocks — no walking.
-- With real GPS, a fix that never lands shows an honest `···` waiting state; after
-  10 s you get a retry prompt instead of a silent dead end.
-- Kilometres from every set? The copy says so outright and points at the demo.
-- In-app browsers (Instagram/Discord/etc.) get a warning to reopen in Chrome/Safari.
-- Headless/e2e controls are exposed on `window.__campushunt` in **dev/`?sim` only**
-  (never in production builds): `jump(spotId)`, `reveal()`, `openAr()`.
-- Automated check: `node scripts/e2e-smoke.mjs` (starts the whole flow in
-  headless Chromium against the running dev server — including the no-`?sim`
-  demo-flight path).
-
----
-
-## On a real phone
-
-Camera + location need HTTPS. `http://localhost` is fine on desktop; for a phone:
+Checks (also run in CI):
 
 ```bash
-npm run dev            # terminal 1
-cloudflared tunnel --url http://localhost:5173   # terminal 2  (or: ngrok http 5173)
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
-Open the `https://…` URL on the phone, grant camera **and location**, press
-**Start the hunt**, and start walking. The HUD's last two lines show the active
-**SPOT** and its **STATE** (`locked`/`unlocked`/`found`).
+## Backend setup (first time)
 
-Testing tips:
+```bash
+npx wrangler d1 create campus_movie_hunt
+# put the returned database_id into worker/wrangler.jsonc
+npm run db:migrate:local --workspace worker
+```
 
-1. Start in a well-lit, textured area and move the phone slowly to lock tracking
-   (`Tracking: NORMAL`).
-2. The reveal needs you to stay inside the spot's radius for **2 continuous
-   seconds** while tracking is locked.
+## Status
 
----
-
-## Deployment
-
-### Cloudflare Pages
-
-The repo ships `wrangler.jsonc` + `.node-version` (Node 22.16 for Vite 8).
-
-- **Git integration:** Pages → Connect a Git repo → build `npm run build`,
-  output `dist`.
-- **CLI:** `npx wrangler login` then `npm run deploy`
-  (→ `https://campus-ar.pages.dev`).
-
-The engine binary at `public/xr8/` is gitignored; the Vite build re-copies it
-from `node_modules`, so CI builds from a fresh clone work.
-
-Any static HTTPS host works too (`base: './'`, engine served verbatim from
-`dist/xr8/`). No API keys required.
-
----
-
-## Troubleshooting
-
-| Symptom | Likely cause / fix |
-| --- | --- |
-| HUD shows `Engine: engine not loaded` | `npm install` didn't run / `public/xr8/` missing — restart Vite. |
-| Camera never prompts | Plain `http://` on non-localhost — use an HTTPS tunnel. |
-| Location error button shown | Location permission denied; tap **Enable location** to re-ask. |
-| Signal stays `Cold` while walking | Wrong/last-known coords, or the spot list in `spots.ts` needs your campus coords. |
-| Tracking stuck `LIMITED` | Too dark / no texture — move to a textured, well-lit area. |
-| Reveal never fires | Must be inside the radius *and* tracking `NORMAL` for 2 s consecutively. |
-| Works nowhere on desktop | World tracking is phone-first; desktop gets a `Desktop 3D (dev)` session. |
-
----
-
-## Links
-
-- Engine docs: <https://8thwall.org/docs/engine/overview>
-- API reference: <https://8thwall.org/docs/api/engine/xr8>
-- Official three.js world-effects example: <https://github.com/8thwall/threejs-world-effects-example>
-- Engine license: <https://github.com/8thwall/engine/blob/main/LICENSE>
+Phase 0 complete: monorepo scaffold, data model, config, 10-location content
+stub, worker + client skeletons, CI. Phase 1 (backend game engine) is next — see
+the build plan.

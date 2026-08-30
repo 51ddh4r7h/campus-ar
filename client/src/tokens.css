@@ -1,0 +1,60 @@
+/**
+ * Design tokens — from docs/UI-FLOW-BRIEF.md §2.
+ * Dark-first: this is a camera app. A light theme is not planned.
+ */
+:root {
+  --bg: #0a0b0d;
+  --surface: rgba(20, 22, 26, 0.62);
+  --surface-raised: rgba(28, 31, 36, 0.74);
+  --text: #f5f3ec;
+  --text-dim: rgba(245, 243, 236, 0.6);
+  --hairline: rgba(245, 243, 236, 0.14);
+
+  --amber: #e8a54c;
+  --amber-press: #c9863a;
+  --success: #7fd1a6;
+  --alert: #e5654a;
+  --signal-cold: #6fa8c7;
+  --signal-hot: #e8a54c;
+
+  --font-ui: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", "Roboto Mono", monospace;
+
+  --radius-card: 24px;
+  --radius-button: 20px;
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-standard: 280ms;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --surface: #16181c;
+    --surface-raised: #1c1f24;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+#app {
+  min-height: 100%;
+}

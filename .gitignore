@@ -1,11 +1,18 @@
 node_modules/
-dist/
+**/dist/
+**/.wrangler/
+**/.svelte-kit/
+.svelte-kit/
+*.tsbuildinfo
 public/xr8/
+client/public/xr8/
+.dev.vars
 .DS_Store
 *.local
-# Original high-bitrate source — 35MB .mov never committed; optimized 1.5MB lives in public/clips/
+
+# Original high-bitrate source — optimized clips live in client/public/clips/
 movie clips/
 *.mov
-# ffmpeg static binaries fetched via npm (43MB each) — not committed
-node_modules/ffmpeg-static/ffmpeg
-node_modules/ffprobe-static/
+
+# Generated route pool (regenerated per batch)
+scripts/out/

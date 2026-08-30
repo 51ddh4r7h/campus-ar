@@ -2,20 +2,19 @@ import type {OxlintConfig} from 'oxlint'
 
 const config: OxlintConfig = {
   ignorePatterns: [
+    '_legacy/**',
+    '**/dist/**',
+    '**/.svelte-kit/**',
+    'public/xr8/**',
+    'client/public/xr8/**',
+    'tools/oxlint/anti-slop/**',
     '.agent/**',
     '.agents/**',
     '.claude/**',
     '.codex/**',
-    '.continue/**',
     '.cursor/**',
     '.gemini/**',
     '.opencode/**',
-    '.pi/**',
-    '.roo/**',
-    '.windsurf/**',
-    'dist/**',
-    'public/xr8/**',
-    'tools/oxlint/anti-slop/**',
   ],
   jsPlugins: [{name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts'}],
   rules: {
@@ -35,11 +34,9 @@ const config: OxlintConfig = {
     'anti-slop/no-widen-then-assert': 'error',
     'anti-slop/require-safety-comment-for-type-assertion': 'error',
   },
-  // Test doubles deliberately narrow jsdom's incomplete DOM/media types at the
-  // fixture boundary; production source remains covered by the strict rules above.
   overrides: [
     {
-      files: ['tests/**/*.ts'],
+      files: ['**/*.test.ts', 'scripts/**/*.ts'],
       rules: {
         'anti-slop/no-chained-type-assertions': 'off',
         'anti-slop/no-runtime-typeof': 'off',
