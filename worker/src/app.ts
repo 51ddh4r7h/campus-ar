@@ -9,7 +9,7 @@ import {
   type EngineDeps,
   type GameStore,
 } from '@cmh/shared'
-import type {ApiEnv} from './env'
+import type {Env} from './env'
 import {
   BadInput,
   parseCreateBatch,
@@ -32,26 +32,35 @@ const bearer = (auth: string | undefined): string => {
   return token
 }
 
-export const createApp = (store: GameStore, env: ApiEnv) => {
-  const engine = createEngine(store, deps)
-  const app = new Hono()
-
+/**
+ * The game API as a Hono app. `makeStore` builds a GameStore from the request's
+ * bindings — the Worker passes a D1Store; tests could pass an in-memory one.
+ */
+export const createApp = (makeStore: (env: Env) => GameStore) => {
+  const app = new Hono<{Bindings: Env}>()
   app.use('/*', cors())
 
-  app.get('/health', (c) =>
-    c.json({ok: true, service: 'campus-movie-hunt-api', levels: LEVEL_COUNT, locationPool: LOCATION_POOL_SIZE}),
-  )
+  const engineFor = (env: Env) => createEngine(makeStore(env), deps)
 
-  const requireAdmin = (key: string | undefined): void => {
-    if (env.adminKey && key !== env.adminKey) {
+  const requireAdmin = (env: Env, key: string | undefined): void => {
+    if (env.ADMIN_KEY && key !== env.ADMIN_KEY) {
       throw new HTTPException(403, {message: 'bad admin key'})
     }
   }
 
+  app.get('/health', (c) =>
+    c.json({
+      ok: true,
+      service: 'campus-movie-hunt-api',
+      levels: LEVEL_COUNT,
+      locationPool: LOCATION_POOL_SIZE,
+    }),
+  )
+
   app.post('/admin/batches', async (c) => {
-    requireAdmin(c.req.header('X-Admin-Key'))
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
     const body = parseCreateBatch(await c.req.json())
-    const batch = await engine.createBatch({name: body.name})
+    const batch = await engineFor(c.env).createBatch({name: body.name})
     return c.json({
       id: batch.id,
       name: batch.name,
@@ -63,7 +72,9 @@ export const createApp = (store: GameStore, env: ApiEnv) => {
   })
 
   app.post('/admin/batches/:id/players', async (c) => {
-    requireAdmin(c.req.header('X-Admin-Key'))
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    const store = makeStore(c.env)
+    const engine = engineFor(c.env)
     const body = parseRegisterPlayers(await c.req.json())
     const batchId = c.req.param('id')
     const players = []
@@ -82,36 +93,36 @@ export const createApp = (store: GameStore, env: ApiEnv) => {
   })
 
   app.post('/session/start', async (c) =>
-    c.json(await engine.startHunt(bearer(c.req.header('Authorization')))),
+    c.json(await engineFor(c.env).startHunt(bearer(c.req.header('Authorization')))),
   )
 
   app.get('/session', async (c) =>
-    c.json(await engine.getState(bearer(c.req.header('Authorization')))),
+    c.json(await engineFor(c.env).getState(bearer(c.req.header('Authorization')))),
   )
 
   app.post('/session/arrive', async (c) => {
     const token = bearer(c.req.header('Authorization'))
     const samples = parseSamples(await c.req.json())
-    return c.json(await engine.arrive(token, samples))
+    return c.json(await engineFor(c.env).arrive(token, samples))
   })
 
   app.post('/session/hint', async (c) => {
     const token = bearer(c.req.header('Authorization'))
     const rung = parseHintRung(await c.req.json())
-    return c.json(await engine.useHint(token, rung))
+    return c.json(await engineFor(c.env).useHint(token, rung))
   })
 
   app.post('/session/breadcrumbs', async (c) => {
     const token = bearer(c.req.header('Authorization'))
     const {crumbs} = parseCrumbs(await c.req.json())
-    await engine.addBreadcrumbs(token, crumbs)
+    await engineFor(c.env).addBreadcrumbs(token, crumbs)
     return c.body(null, 204)
   })
 
   app.get('/standings/:batchId', async (c) => {
     const token = c.req.header('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
-    const selfId = token ? (await store.getPlayerByToken(token))?.id : undefined
-    return c.json({rows: await engine.standings(c.req.param('batchId'), selfId)})
+    const selfId = token ? (await makeStore(c.env).getPlayerByToken(token))?.id : undefined
+    return c.json({rows: await engineFor(c.env).standings(c.req.param('batchId'), selfId)})
   })
 
   app.onError((err, c) => {

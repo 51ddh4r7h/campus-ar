@@ -187,11 +187,13 @@ dwell_par     ~30s
 hint_penalty  Hint 1 +90s · Hint 2 +180s total · show-location +300s
 ```
 
-## Open decisions (blocking Phase 0)
+## Decisions (settled)
 
-1. **Backend stack** — Cloudflare Workers + D1 + Durable Objects, plain Node, or
-   a managed backend.
-2. **Client framework** — vanilla TS (as now), or a small framework for ~15
-   stateful screens + realtime standings.
-3. **Repo strategy** — working branch off `main` salvaging the AR modules, or
-   rebuild in place.
+1. **Backend stack** — Cloudflare **Workers + D1**, on the free plan.
+   Durable Objects (which need a paid plan) were dropped: live standings are
+   polled by the client instead. A brief detour to AWS Lambda + DynamoDB was
+   reverted — same free-tier outcome, more moving parts.
+2. **Client framework** — **Svelte 5**.
+3. **Repo strategy** — working branch `v2-movie-hunt`; previous build under
+   `_legacy/` for AR-module salvage.
+4. **Hosting** — Workers (API) + D1 (data) + Pages (client). `docs/DEPLOY.md`.

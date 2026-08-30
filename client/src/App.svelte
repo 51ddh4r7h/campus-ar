@@ -31,7 +31,7 @@
     <pre>{JSON.stringify(health, null, 2)}</pre>
   {/if}
   {#if error}
-    <p class="err">API not reachable: {error} — run <code>npm run dev:api</code></p>
+    <p class="err">API not reachable: {error} — run <code>npm run dev:worker</code></p>
   {/if}
 </main>
 

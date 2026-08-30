@@ -1,69 +1,73 @@
 # Deployment
 
-All AWS, all free tier. Region `ap-south-1` (Mumbai).
+All Cloudflare, all free plan.
 
-| Piece | Service | Free tier |
+| Piece | Service | Free plan |
 | --- | --- | --- |
-| API | Lambda (Node 22, arm64) behind API Gateway **HTTP API** | Lambda 1M req/mo always free · HTTP API 1M req/mo (first 12 mo) |
-| Data | **DynamoDB** — one table, on-demand | 25 GB always free |
-| Site | **S3 + CloudFront** (HTTPS via CloudFront) | CloudFront 1 TB/mo always free · S3 5 GB (first 12 mo) |
-| Provisioning | one CloudFormation/SAM template | — |
+| API | **Workers** (the Hono app) | 100k requests/day |
+| Data | **D1** (SQLite) | 5 GB · 5M row reads/day · 100k writes/day |
+| Site | **Pages** (static Svelte build) | unlimited |
 
-The whole stack is `infra/template.yaml`. `aws cloudformation deploy` runs the
-SAM transform server-side, so no SAM CLI is needed — just the AWS CLI. The
-deploy script creates a small artifact bucket (`cmh-deploy-<account>-<region>`)
-on first run to upload the Lambda zip.
+No Durable Objects (those need a paid plan) — live standings are polled by the
+client instead.
 
-## First deploy
+## One-time setup
 
-```bash
-# 1. API + all infrastructure (DynamoDB, Lambda, HTTP API, S3, CloudFront)
-npm run deploy:api
-
-# 2. build the client against the new API URL and publish it
-npm run deploy:client
-```
-
-`deploy:api` prints the stack outputs — `ApiUrl`, `SiteUrl`, `SiteBucketName`,
-`DistributionId`, `TableName`. The first run creates the CloudFront distribution,
-which takes ~10–15 minutes to finish rolling out even after the command returns.
-
-To require an admin key on `/admin/*` routes:
+The D1 database already exists (`campus_movie_hunt`,
+`d86d4af0-5e1f-4b83-b9f1-b5c13c56b59d`, wired in `worker/wrangler.jsonc`). Apply
+the schema:
 
 ```bash
-ADMIN_KEY='something-long' npm run deploy:api
+npm run db:migrate          # remote D1
+npm run db:migrate:local    # local D1 for `wrangler dev`
 ```
 
-## Redeploys
+Create the Pages project once (or let the first `wrangler pages deploy` prompt
+to create it):
 
 ```bash
-npm run deploy:api      # rebuilds the bundle, updates the Lambda
-npm run deploy:client   # rebuilds the client, syncs S3, invalidates CloudFront
-npm run deploy          # both
+npx wrangler pages project create campus-movie-hunt --production-branch v2-movie-hunt
 ```
 
-Overrides: `STACK=<name>` and `AWS_REGION=<region>` on any deploy command.
+## Deploy
+
+```bash
+npm run deploy
+```
+
+This deploys the Worker, detects its `*.workers.dev` URL, builds the client with
+that as `VITE_API_BASE`, and publishes to Pages. Overrides:
+
+- `VITE_API_BASE=https://…` — skip URL detection
+- `PAGES_PROJECT=…` — different Pages project
+
+Deploy just the API:
+
+```bash
+npm run deploy --workspace worker      # wrangler deploy
+```
 
 ## Local development
 
-No AWS needed — the dev API uses an in-memory store:
+`wrangler dev` runs the Worker with a local D1:
 
 ```bash
-npm run dev:api      # http://localhost:8787
-npm run dev:client   # http://localhost:5173  (proxies /api → :8787)
+npm run dev:worker    # http://localhost:8787
+npm run dev:client    # http://localhost:5173  (proxies /api → :8787)
 ```
 
-## Tear down
+## Admin key
+
+Admin routes (`/admin/*`) are open unless `ADMIN_KEY` is set as a Worker secret:
 
 ```bash
-aws s3 rm s3://<SiteBucketName> --recursive
-aws cloudformation delete-stack --stack-name campus-movie-hunt --region ap-south-1
+cd worker && npx wrangler secret put ADMIN_KEY
 ```
+
+Then callers must send `X-Admin-Key: <value>`.
 
 ## Notes
 
-- DynamoDB single-table layout is documented at the top of
-  `api/src/dynamo-store.ts`.
-- Live standings are polled by the client (`GET /standings/:batchId`), not
-  pushed. Fine for a batch of ~40 players.
-- The Lambda bundle externalises `@aws-sdk/*` — the Node 22 runtime ships it.
+- DynamoDB / AWS were briefly used, then dropped — the D1 store is
+  `worker/src/d1-store.ts`; the schema is `worker/migrations/`.
+- Live standings: the client polls `GET /standings/:batchId`.

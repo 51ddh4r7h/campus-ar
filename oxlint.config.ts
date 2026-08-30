@@ -47,7 +47,7 @@ const config: OxlintConfig = {
     {
       // The HTTP boundary parser: its whole job is to accept `unknown` request
       // bodies and validate them with Valibot before anything else sees them.
-      files: ['api/src/guards.ts'],
+      files: ['worker/src/guards.ts'],
       rules: {
         'anti-slop/no-unknown-parameters': 'off',
       },

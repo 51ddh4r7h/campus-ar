@@ -16,4 +16,3 @@ movie clips/
 
 # Generated route pool (regenerated per batch)
 scripts/out/
-infra/packaged.yaml

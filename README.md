@@ -21,12 +21,15 @@ preserved under `_legacy/` and on `main` up to commit `129442e`.
 
 ```
 shared/   pure TypeScript — data model, config, content, game logic (no I/O)
-worker/   Cloudflare Worker — sessions, validation, scoring, standings (D1 + Durable Objects)
-client/   Svelte 5 + Vite — the phone app
-scripts/  route-pool generation, sim, calibration
+worker/   Cloudflare Worker (Hono) — sessions, validation, scoring, standings; D1 store
+client/   Svelte 5 + Vite — the phone app, deploys to Cloudflare Pages
+scripts/  route-pool generation, sim, calibration, deploy
 content/  source assets (location photos, etc.)
 _legacy/  the previous build, kept for reference and AR-module salvage
 ```
+
+Hosting is all Cloudflare free plan — Workers + D1 + Pages. See
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Develop
 
@@ -47,10 +50,12 @@ npm run build
 
 ## Backend setup (first time)
 
+The D1 database already exists and is wired in `worker/wrangler.jsonc`. Apply the
+schema:
+
 ```bash
-npx wrangler d1 create campus_movie_hunt
-# put the returned database_id into worker/wrangler.jsonc
-npm run db:migrate:local --workspace worker
+npm run db:migrate:local    # local D1 for `wrangler dev`
+npm run db:migrate          # remote D1
 ```
 
 ## Status

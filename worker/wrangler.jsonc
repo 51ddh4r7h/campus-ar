@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "campus-movie-hunt-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-11-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "campus_movie_hunt",
+      "database_id": "d86d4af0-5e1f-4b83-b9f1-b5c13c56b59d",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

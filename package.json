@@ -6,21 +6,21 @@
   "description": "Campus Movie Hunt — an individual, timed campus game. Recognise a movie scene, walk to where it was shot, and watch it come alive in AR. Server-authoritative, par-time scored.",
   "workspaces": [
     "shared",
-    "api",
+    "worker",
     "client"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "vitest run",
-    "typecheck": "tsc -b shared && tsc -p scripts && npm run typecheck --workspace api && npm run check --workspace client",
+    "typecheck": "tsc -b shared worker && tsc -p scripts && npm run check --workspace client",
     "lint": "oxlint",
     "dev:client": "npm run dev --workspace client",
-    "dev:api": "npm run dev --workspace api",
+    "dev:worker": "npm run dev --workspace worker",
     "sim": "tsx scripts/sim-hunt.ts",
     "gen:routes": "tsx scripts/generate-route-pool.ts",
-    "deploy:api": "bash scripts/deploy-api.sh",
-    "deploy:client": "bash scripts/deploy-client.sh",
-    "deploy": "bash scripts/deploy-api.sh && bash scripts/deploy-client.sh"
+    "db:migrate": "npm run db:migrate --workspace worker",
+    "db:migrate:local": "npm run db:migrate:local --workspace worker",
+    "deploy": "bash scripts/deploy.sh"
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.80.0",
@@ -28,6 +28,7 @@
     "oxlint": "^1.80.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "wrangler": "^4.124.0"
   }
 }
