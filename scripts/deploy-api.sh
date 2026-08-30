@@ -11,17 +11,20 @@ echo "→ building api bundle"
 npm run build --workspace api
 
 echo "→ deploying stack '$STACK' in $REGION"
-PARAMS=()
-if [[ -n "${ADMIN_KEY:-}" ]]; then PARAMS=(--parameter-overrides "AdminKey=$ADMIN_KEY"); fi
 
-aws cloudformation deploy \
-  --template-file infra/template.yaml \
-  --stack-name "$STACK" \
-  --region "$REGION" \
-  --capabilities CAPABILITY_IAM \
-  --resolve-s3 \
-  --no-fail-on-empty-changeset \
-  "${PARAMS[@]}"
+deploy_args=(
+  --template-file infra/template.yaml
+  --stack-name "$STACK"
+  --region "$REGION"
+  --capabilities CAPABILITY_IAM
+  --resolve-s3
+  --no-fail-on-empty-changeset
+)
+if [[ -n "${ADMIN_KEY:-}" ]]; then
+  deploy_args+=(--parameter-overrides "AdminKey=$ADMIN_KEY")
+fi
+
+aws cloudformation deploy "${deploy_args[@]}"
 
 echo
 aws cloudformation describe-stacks --stack-name "$STACK" --region "$REGION" \
