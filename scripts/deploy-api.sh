@@ -10,6 +10,14 @@ REGION=${AWS_REGION:-ap-south-1}
 echo "→ building api bundle"
 npm run build --workspace api
 
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+ARTIFACTS="cmh-deploy-${ACCOUNT}-${REGION}"
+
+if ! aws s3api head-bucket --bucket "$ARTIFACTS" 2>/dev/null; then
+  echo "→ creating artifact bucket $ARTIFACTS"
+  aws s3 mb "s3://$ARTIFACTS" --region "$REGION"
+fi
+
 echo "→ deploying stack '$STACK' in $REGION"
 
 deploy_args=(
@@ -17,7 +25,8 @@ deploy_args=(
   --stack-name "$STACK"
   --region "$REGION"
   --capabilities CAPABILITY_IAM
-  --resolve-s3
+  --s3-bucket "$ARTIFACTS"
+  --s3-prefix "$STACK"
   --no-fail-on-empty-changeset
 )
 if [[ -n "${ADMIN_KEY:-}" ]]; then
