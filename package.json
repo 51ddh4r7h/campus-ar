@@ -12,10 +12,11 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "vitest run",
-    "typecheck": "tsc -b shared worker && npm run check --workspace client",
+    "typecheck": "tsc -b shared worker && tsc -p scripts && npm run check --workspace client",
     "lint": "oxlint",
     "dev:client": "npm run dev --workspace client",
     "dev:worker": "npm run dev --workspace worker",
+    "sim": "tsx scripts/sim-hunt.ts",
     "gen:routes": "tsx scripts/generate-route-pool.ts"
   },
   "devDependencies": {

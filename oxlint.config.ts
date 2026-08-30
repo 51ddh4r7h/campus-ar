@@ -40,7 +40,16 @@ const config: OxlintConfig = {
       rules: {
         'anti-slop/no-chained-type-assertions': 'off',
         'anti-slop/no-runtime-typeof': 'off',
+        'anti-slop/no-unknown-parameters': 'off',
         'anti-slop/require-safety-comment-for-type-assertion': 'off',
+      },
+    },
+    {
+      // The HTTP boundary parser: its whole job is to accept `unknown` request
+      // bodies and validate them with Valibot before anything else sees them.
+      files: ['worker/src/guards.ts'],
+      rules: {
+        'anti-slop/no-unknown-parameters': 'off',
       },
     },
   ],

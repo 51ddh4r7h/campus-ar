@@ -73,9 +73,15 @@ export interface Session {
   endTsMs: number | null
   /** 1-5 while in progress; 6 once complete. */
   currentLevel: number
-  /** elapsed − par, in ms. Null until complete. Lower is better. */
+  /** Hint rungs taken on the current level (0-3). Resets each level. */
+  currentLevelHints: number
+  /** Accumulated hint penalty across the whole hunt, in ms. */
+  penaltyMs: number
+  /** elapsed + penalties − par, in ms. Null until complete. Lower is better. */
   scoreMs: number | null
 }
+
+export type HintRung = 'warm' | 'close' | 'showLocation'
 
 export interface Split {
   playerId: string
@@ -129,8 +135,8 @@ export interface ParConstants {
   dwellParMs: number
   /** Assumed walking speed for seeding walk pars, metres per second. */
   walkSpeedMps: number
-  /** Time added to a player's elapsed for each hint rung. */
-  hintPenaltyMs: {far: number; warm: number; showLocation: number}
+  /** Time added to a player's elapsed for each hint rung, in ladder order. */
+  hintPenaltyMs: Record<HintRung, number>
 }
 
 // ---------------------------------------------------------------- API contracts
@@ -149,6 +155,8 @@ export interface ClueView {
   /** Progressive text — only rungs the player has unlocked are populated. */
   clueText: {far: string; warm: string | null; close: string | null}
   radiusHintM: number
+  /** Set only once the "show me the location" hint has been taken. */
+  revealPoint: {lat: number; lng: number} | null
 }
 
 export type ValidationFailure =

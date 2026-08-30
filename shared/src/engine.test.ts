@@ -1,0 +1,205 @@
+import {beforeEach, describe, expect, it} from 'vitest'
+import {VALIDATION} from './config'
+import {locationById} from './content'
+import {createEngine, type EngineDeps} from './engine'
+import {InMemoryStore} from './store'
+import type {GameLocation, GeoSample} from './types'
+
+/** A controllable clock + deterministic id source for the engine. */
+class TestDeps implements EngineDeps {
+  t = 1_000_000
+  private n = 0
+  now(): number {
+    return this.t
+  }
+  randomId(): string {
+    return `id-${++this.n}`
+  }
+  randomToken(): string {
+    return `tok-${++this.n}`
+  }
+  advance(ms: number): void {
+    this.t += ms
+  }
+}
+
+const parkedAt = (loc: GameLocation, endTsMs: number): GeoSample[] => {
+  const out: GeoSample[] = []
+  for (let t = endTsMs - (VALIDATION.dwellMs + 4_000); t <= endTsMs; t += 4_000) {
+    out.push({lat: loc.lat, lng: loc.lng, accuracyM: 0, tsMs: t, simulated: true})
+  }
+  return out
+}
+
+let store: InMemoryStore
+let deps: TestDeps
+let engine: ReturnType<typeof createEngine>
+
+beforeEach(() => {
+  store = new InMemoryStore()
+  deps = new TestDeps()
+  engine = createEngine(store, deps)
+})
+
+async function playThrough(token: string): Promise<void> {
+  const {clue} = await engine.startHunt(token)
+  let level = clue.level
+  while (level <= 5) {
+    const loc = locationById(
+      (await store.getRoute(
+        (await store.getPlayerByToken(token))!.id,
+      ))!.stops[level - 1]!,
+    )!
+    deps.advance(3 * 60_000) // spend three minutes on the leg
+    const res = await engine.arrive(token, parkedAt(loc, deps.now()))
+    expect(res.ok, `level ${level} should validate`).toBe(true)
+    expect(res.split?.level).toBe(level)
+    if (res.session.status === 'complete') break
+    level = res.nextClue!.level
+  }
+}
+
+describe('engine — full playthrough', () => {
+  it('registers, plays five levels, scores against par', async () => {
+    const batch = await engine.createBatch({name: 'Batch A'})
+    const {player} = await engine.registerPlayer({
+      batchId: batch.id,
+      name: 'Maya R.',
+      rosterId: 'S-001',
+    })
+
+    await playThrough(player.sessionToken)
+
+    const {session, splits} = await engine.getState(player.sessionToken)
+    expect(session.status).toBe('complete')
+    expect(session.currentLevel).toBe(6)
+    expect(splits).toHaveLength(5)
+    expect(session.scoreMs).not.toBeNull()
+    const route = (await store.getRoute(player.id))!
+    const elapsed = session.endTsMs! - session.startTsMs!
+    expect(session.scoreMs).toBe(elapsed + session.penaltyMs - route.parTotalMs)
+
+    const events = store.allEvents().map((e) => e.type)
+    expect(events).toContain('hunt_started')
+    expect(events.filter((t) => t === 'location_reached')).toHaveLength(5)
+    expect(events).toContain('hunt_completed')
+  })
+
+  it('gives two players in a batch different routes', async () => {
+    const batch = await engine.createBatch({name: 'Batch B'})
+    const a = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    const b = await engine.registerPlayer({batchId: batch.id, name: 'B', rosterId: 'r2'})
+    const ra = (await store.getRoute(a.player.id))!.stops.join('>')
+    const rb = (await store.getRoute(b.player.id))!.stops.join('>')
+    expect(ra).not.toBe(rb)
+  })
+
+  it('re-registering the same roster id is idempotent', async () => {
+    const batch = await engine.createBatch({name: 'Batch C'})
+    const first = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    const again = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    expect(again.player.id).toBe(first.player.id)
+  })
+})
+
+describe('engine — progression rules', () => {
+  it('rejects arrival before the hunt starts', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    const res = await engine.arrive(player.sessionToken, [])
+    expect(res).toMatchObject({ok: false, failure: 'not_in_progress'})
+  })
+
+  it('does not advance the level on a wrong-location arrival', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    await engine.startHunt(player.sessionToken)
+    const route = (await store.getRoute(player.id))!
+    const wrong = locationById(route.stops[2]!)! // a later stop
+    deps.advance(60_000)
+    const res = await engine.arrive(player.sessionToken, parkedAt(wrong, deps.now()))
+    expect(res.ok).toBe(false)
+    expect(res.failure).toBe('level_locked')
+    const {session} = await engine.getState(player.sessionToken)
+    expect(session.currentLevel).toBe(1)
+    expect(store.allEvents().map((e) => e.type)).toContain('skip_attempt')
+  })
+})
+
+describe('engine — hints', () => {
+  it('gates rungs by order and by time on the level', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    await engine.startHunt(player.sessionToken)
+
+    // Too soon for the first hint.
+    await expect(engine.useHint(player.sessionToken, 'warm')).rejects.toThrow()
+    // Can't skip straight to rung 2.
+    deps.advance(5 * 60_000)
+    await expect(engine.useHint(player.sessionToken, 'close')).rejects.toThrow()
+
+    const h1 = await engine.useHint(player.sessionToken, 'warm')
+    expect(h1.clue.clueText.warm).not.toBeNull()
+    expect(h1.session.penaltyMs).toBe(90_000)
+
+    deps.advance(4 * 60_000)
+    const h2 = await engine.useHint(player.sessionToken, 'close')
+    expect(h2.clue.clueText.close).not.toBeNull()
+    expect(h2.session.penaltyMs).toBe(180_000)
+  })
+
+  it('carries the hint penalty into the final score', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    await engine.startHunt(player.sessionToken)
+    deps.advance(5 * 60_000)
+    await engine.useHint(player.sessionToken, 'warm')
+
+    // Finish level 1 and the rest.
+    const route = (await store.getRoute(player.id))!
+    let level = 1
+    while (level <= 5) {
+      const loc = locationById(route.stops[level - 1]!)!
+      deps.advance(2 * 60_000)
+      const res = await engine.arrive(player.sessionToken, parkedAt(loc, deps.now()))
+      expect(res.ok).toBe(true)
+      if (level === 1) expect(res.split!.penaltyMs).toBe(90_000)
+      if (res.session.status === 'complete') break
+      level = res.nextClue!.level
+    }
+    const {session} = await engine.getState(player.sessionToken)
+    expect(session.penaltyMs).toBe(90_000)
+  })
+})
+
+describe('engine — standings', () => {
+  it('ranks finishers by score and marks self', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const p1 = await engine.registerPlayer({batchId: batch.id, name: 'Fast', rosterId: 'r1'})
+    const p2 = await engine.registerPlayer({batchId: batch.id, name: 'Slow', rosterId: 'r2'})
+
+    await playThrough(p1.player.sessionToken)
+    // p2 takes much longer per leg.
+    const t0 = deps.t
+    const s2 = await engine.startHunt(p2.player.sessionToken)
+    let level = s2.clue.level
+    const route2 = (await store.getRoute(p2.player.id))!
+    while (level <= 5) {
+      deps.advance(8 * 60_000)
+      const res = await engine.arrive(
+        p2.player.sessionToken,
+        parkedAt(locationById(route2.stops[level - 1]!)!, deps.now()),
+      )
+      if (res.session.status === 'complete') break
+      level = res.nextClue!.level
+    }
+    expect(deps.t).toBeGreaterThan(t0)
+
+    const rows = await engine.standings(batch.id, p1.player.id)
+    expect(rows[0]!.playerName).toBe('Fast')
+    expect(rows[0]!.isSelf).toBe(true)
+    expect(rows[0]!.rank).toBe(1)
+    expect(rows[1]!.playerName).toBe('Slow')
+    expect(rows[0]!.scoreMs!).toBeLessThan(rows[1]!.scoreMs!)
+  })
+})

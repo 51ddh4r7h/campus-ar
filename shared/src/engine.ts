@@ -1,0 +1,386 @@
+/**
+ * The game engine. Pure orchestration over a GameStore: session lifecycle,
+ * strict level progression, arrival validation, hint gating, par scoring and
+ * standings. No HTTP, no storage details, no time or randomness of its own —
+ * those come in through `deps` so tests are deterministic.
+ */
+
+import {
+  DEFAULT_PAR_CONSTANTS,
+  HINT_GATES,
+  LEVEL_COUNT,
+} from './config'
+import {LOCATIONS, START_POINT, locationById} from './content'
+import {generateRoutePool} from './routes'
+import {assignRoute} from './routes'
+import {sessionScoreMs} from './scoring'
+import {evaluateArrival} from './validation'
+import type {GameStore, StoredBatch} from './store'
+import type {
+  ClueView,
+  GameEvent,
+  GameEventType,
+  GameLocation,
+  GeoSample,
+  HintRung,
+  ParConstants,
+  Player,
+  Route,
+  Session,
+  Split,
+  StandingRow,
+  StartHuntResponse,
+  ValidationResult,
+} from './types'
+
+export type EngineErrorCode =
+  | 'batch_not_found'
+  | 'bad_token'
+  | 'already_started'
+  | 'not_in_progress'
+  | 'hint_locked'
+  | 'pool_empty'
+
+export class EngineError extends Error {
+  constructor(readonly code: EngineErrorCode, message?: string) {
+    super(message ?? code)
+    this.name = 'EngineError'
+  }
+}
+
+export interface EngineDeps {
+  now(): number
+  randomId(): string
+  randomToken(): string
+}
+
+const HINT_ORDER: readonly HintRung[] = ['warm', 'close', 'showLocation']
+
+/** Sum of the first `count` hint-rung penalties, in ms. */
+const hintPenaltyForCount = (count: number, pc: ParConstants): number => {
+  let total = 0
+  for (let i = 0; i < count && i < HINT_ORDER.length; i++) {
+    total += pc.hintPenaltyMs[HINT_ORDER[i]!]
+  }
+  return total
+}
+
+export interface CreateBatchInput {
+  name: string
+  parConstants?: ParConstants
+}
+
+export interface RegisterPlayerInput {
+  batchId: string
+  name: string
+  rosterId: string
+}
+
+export const createEngine = (store: GameStore, deps: EngineDeps) => {
+  const event = (
+    playerId: string,
+    type: GameEventType,
+    payload: GameEvent['payload'] = {},
+  ): Promise<void> =>
+    store.appendEvent({playerId, type, tsMs: deps.now(), payload})
+
+  const resolveStops = (route: Route): GameLocation[] =>
+    route.stops.map((id) => {
+      const loc = locationById(id)
+      if (!loc) throw new Error(`engine: unknown location "${id}" in route`)
+      return loc
+    })
+
+  const clueView = (route: Route, session: Session): ClueView => {
+    const level = session.currentLevel
+    const loc = resolveStops(route)[level - 1]!
+    const hints = session.currentLevelHints
+    return {
+      level,
+      clipUrl: loc.clipUrl,
+      posterUrl: loc.posterUrl,
+      sceneRefImage: loc.sceneRefImage,
+      clueText: {
+        far: loc.clue.far,
+        warm: hints >= 1 ? loc.clue.warm : null,
+        close: hints >= 2 ? loc.clue.close : null,
+      },
+      radiusHintM: loc.radiusM,
+      revealPoint: hints >= 3 ? {lat: loc.lat, lng: loc.lng} : null,
+    }
+  }
+
+  const prevReachedTs = (session: Session, splits: readonly Split[]): number => {
+    if (session.currentLevel <= 1) return session.startTsMs ?? deps.now()
+    const prior = splits.find((s) => s.level === session.currentLevel - 1)
+    return prior?.reachedTsMs ?? session.startTsMs ?? deps.now()
+  }
+
+  async function authed(token: string): Promise<{
+    player: Player
+    session: Session
+    route: Route
+    batch: StoredBatch
+  }> {
+    const player = await store.getPlayerByToken(token)
+    if (!player) throw new EngineError('bad_token')
+    const [session, route, batch] = await Promise.all([
+      store.getSession(player.id),
+      store.getRoute(player.id),
+      store.getBatch(player.batchId),
+    ])
+    if (!session || !route || !batch) throw new EngineError('bad_token')
+    return {player, session, route, batch}
+  }
+
+  return {
+    async createBatch(input: CreateBatchInput): Promise<StoredBatch> {
+      const pc = input.parConstants ?? DEFAULT_PAR_CONSTANTS
+      const id = deps.randomId()
+      const seed = deps.randomId()
+      const pool = generateRoutePool(LOCATIONS, START_POINT, pc, seed)
+      if (pool.routes.length === 0) throw new EngineError('pool_empty')
+      const batch: StoredBatch = {
+        id,
+        name: input.name,
+        status: 'open',
+        createdAtMs: deps.now(),
+        routePoolSeed: seed,
+        parConstants: pc,
+        pool,
+      }
+      await store.putBatch(batch)
+      return batch
+    },
+
+    async registerPlayer(
+      input: RegisterPlayerInput,
+    ): Promise<{player: Player; session: Session}> {
+      const batch = await store.getBatch(input.batchId)
+      if (!batch) throw new EngineError('batch_not_found')
+
+      const existing = await store.getPlayerByRoster(input.batchId, input.rosterId)
+      if (existing) {
+        const session = await store.getSession(existing.id)
+        if (session) return {player: existing, session}
+      }
+
+      const assigned = await store.assignedRouteKeys(input.batchId)
+      const tmpl = assignRoute(batch.pool, assigned)
+
+      const player: Player = {
+        id: deps.randomId(),
+        batchId: input.batchId,
+        name: input.name,
+        rosterId: input.rosterId,
+        sessionToken: deps.randomToken(),
+      }
+      const route: Route = {
+        playerId: player.id,
+        stops: tmpl.stops,
+        parTotalMs: tmpl.parTotalMs,
+        legParMs: tmpl.legParMs,
+      }
+      const session: Session = {
+        playerId: player.id,
+        status: 'not_started',
+        startTsMs: null,
+        endTsMs: null,
+        currentLevel: 1,
+        currentLevelHints: 0,
+        penaltyMs: 0,
+        scoreMs: null,
+      }
+      await store.putPlayer(player)
+      await store.putRoute(route)
+      await store.putSession(session)
+      return {player, session}
+    },
+
+    async startHunt(token: string): Promise<StartHuntResponse> {
+      const {session, route} = await authed(token)
+      if (session.status === 'in_progress') {
+        return {session, clue: clueView(route, session)}
+      }
+      if (session.status !== 'not_started') throw new EngineError('already_started')
+
+      const started: Session = {
+        ...session,
+        status: 'in_progress',
+        startTsMs: deps.now(),
+        currentLevel: 1,
+        currentLevelHints: 0,
+      }
+      await store.putSession(started)
+      await event(started.playerId, 'hunt_started')
+      const clue = clueView(route, started)
+      await event(started.playerId, 'clue_served', {level: clue.level})
+      return {session: started, clue}
+    },
+
+    async getState(token: string): Promise<{
+      session: Session
+      clue: ClueView | null
+      splits: Split[]
+    }> {
+      const {session, route} = await authed(token)
+      const splits = await store.listSplits(session.playerId)
+      const clue =
+        session.status === 'in_progress' ? clueView(route, session) : null
+      return {session, clue, splits}
+    },
+
+    async arrive(token: string, samples: readonly GeoSample[]): Promise<ValidationResult> {
+      const {session, route, batch} = await authed(token)
+      if (session.status !== 'in_progress') {
+        return {
+          ok: false,
+          failure: 'not_in_progress',
+          session,
+          split: null,
+          nextClue: null,
+        }
+      }
+
+      const stops = resolveStops(route)
+      const splits = await store.listSplits(session.playerId)
+      const prev = prevReachedTs(session, splits)
+
+      const outcome = evaluateArrival({
+        routeStops: stops,
+        currentLevel: session.currentLevel,
+        prevReachedTsMs: prev,
+        samples,
+        nowMs: deps.now(),
+      })
+
+      if (!outcome.ok || outcome.reachedTsMs === null) {
+        if (outcome.failure === 'level_locked') {
+          await event(session.playerId, 'skip_attempt', {level: session.currentLevel})
+        }
+        return {
+          ok: false,
+          failure: outcome.failure,
+          session,
+          split: null,
+          nextClue: clueView(route, session),
+        }
+      }
+
+      const target = stops[session.currentLevel - 1]!
+      const penaltyMs = hintPenaltyForCount(session.currentLevelHints, batch.parConstants)
+      const split: Split = {
+        playerId: session.playerId,
+        level: session.currentLevel,
+        locationId: target.id,
+        reachedTsMs: outcome.reachedTsMs,
+        splitMs: outcome.reachedTsMs - prev,
+        hintsUsed: session.currentLevelHints,
+        penaltyMs,
+      }
+      await store.putSplit(split)
+      await event(session.playerId, 'location_reached', {
+        level: split.level,
+        splitMs: split.splitMs,
+      })
+      if (outcome.flagged) {
+        await event(session.playerId, 'speed_flag', {level: split.level})
+      }
+
+      const nextLevel = session.currentLevel + 1
+      const complete = nextLevel > LEVEL_COUNT
+      const next: Session = {
+        ...session,
+        currentLevel: nextLevel,
+        currentLevelHints: 0,
+        status: complete ? 'complete' : 'in_progress',
+        endTsMs: complete ? outcome.reachedTsMs : null,
+        scoreMs: complete
+          ? sessionScoreMs(
+              outcome.reachedTsMs - (session.startTsMs ?? outcome.reachedTsMs),
+              session.penaltyMs,
+              route.parTotalMs,
+            )
+          : null,
+      }
+      await store.putSession(next)
+      if (complete) {
+        await event(session.playerId, 'hunt_completed', {scoreMs: next.scoreMs ?? 0})
+      }
+
+      return {
+        ok: true,
+        failure: null,
+        session: next,
+        split,
+        nextClue: complete ? null : clueView(route, next),
+      }
+    },
+
+    async useHint(
+      token: string,
+      rung: HintRung,
+    ): Promise<{clue: ClueView; penaltyMs: number; session: Session}> {
+      const {session, route, batch} = await authed(token)
+      if (session.status !== 'in_progress') throw new EngineError('not_in_progress')
+
+      const rungIndex = HINT_ORDER.indexOf(rung)
+      if (rungIndex !== session.currentLevelHints) throw new EngineError('hint_locked')
+
+      const splits = await store.listSplits(session.playerId)
+      const onLevelForMs = deps.now() - prevReachedTs(session, splits)
+      const gate =
+        rung === 'warm'
+          ? HINT_GATES.warmAfterMs
+          : rung === 'close'
+            ? HINT_GATES.closeAfterMs
+            : HINT_GATES.showLocationAfterMs
+      if (onLevelForMs < gate) throw new EngineError('hint_locked')
+
+      const penaltyMs = batch.parConstants.hintPenaltyMs[rung]
+      const next: Session = {
+        ...session,
+        currentLevelHints: session.currentLevelHints + 1,
+        penaltyMs: session.penaltyMs + penaltyMs,
+      }
+      await store.putSession(next)
+      await event(session.playerId, 'hint_used', {level: next.currentLevel, rung})
+      return {clue: clueView(route, next), penaltyMs, session: next}
+    },
+
+    async addBreadcrumbs(
+      token: string,
+      crumbs: ReadonlyArray<{lat: number; lng: number; accuracyM: number; tsMs: number}>,
+    ): Promise<void> {
+      const {player} = await authed(token)
+      await store.addBreadcrumbs(crumbs.map((c) => ({playerId: player.id, ...c})))
+    },
+
+    async standings(batchId: string, selfPlayerId?: string): Promise<StandingRow[]> {
+      const [players, sessions] = await Promise.all([
+        store.listPlayers(batchId),
+        store.listSessions(batchId),
+      ])
+      const nameById = new Map(players.map((p) => [p.id, p.name]))
+      const sorted = sessions
+        .filter((s) => s.status === 'complete' || s.status === 'in_progress')
+        .sort((a, b) => {
+          const aDone = a.status === 'complete'
+          const bDone = b.status === 'complete'
+          if (aDone && bDone) return (a.scoreMs ?? 0) - (b.scoreMs ?? 0)
+          if (aDone) return -1
+          if (bDone) return 1
+          return b.currentLevel - a.currentLevel
+        })
+      return sorted.map((s, i) => ({
+        rank: i + 1,
+        playerName: nameById.get(s.playerId) ?? '—',
+        isSelf: s.playerId === selfPlayerId,
+        scoreMs: s.status === 'complete' ? s.scoreMs : null,
+        level: s.status === 'complete' ? null : s.currentLevel,
+      }))
+    },
+  }
+}
+
+export type GameEngine = ReturnType<typeof createEngine>

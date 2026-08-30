@@ -14,7 +14,15 @@
  *  - no clue rung names the building, the film, or a compass direction
  */
 
+import type {LatLng} from './geo'
 import type {GameLocation} from './types'
+
+/**
+ * Shared assembly point. Every player's clock and Level-1 walk par start here,
+ * so the opening leg is fair regardless of which clue they draw first. A batch
+ * may override this; the value is a placeholder pending survey.
+ */
+export const START_POINT: LatLng = {lat: 18.53390, lng: 73.73340}
 
 const media = (id: string): Pick<GameLocation, 'clipUrl' | 'posterUrl' | 'sceneRefImage'> => ({
   clipUrl: `/clips/${id}.mp4`,

@@ -15,8 +15,8 @@ export const VALIDATION = {
   maxAccuracyM: 35,
   /** Continuous time inside the radius (with good fixes) before a level validates. */
   dwellMs: 20_000,
-  /** Fixes older than this are ignored as stale. */
-  maxFixAgeMs: 20_000,
+  /** Fixes older than this are ignored as stale — must exceed dwellMs. */
+  maxFixAgeMs: 25_000,
   /**
    * Fastest believable travel between two stop centres, metres per second.
    * ~2.8 m/s ≈ a brisk jog; anything faster between two completions is flagged.
@@ -27,10 +27,12 @@ export const VALIDATION = {
 } as const
 
 export const DEFAULT_PAR_CONSTANTS: ParConstants = {
-  identifyParMs: {1: 90_000, 2: 180_000, 3: 300_000},
-  dwellParMs: 30_000,
+  // Generous first drafts — a new joiner unfamiliar with campus, not an expert.
+  // Recalibrate from real median leg times after the first batch.
+  identifyParMs: {1: 75_000, 2: 135_000, 3: 210_000},
+  dwellParMs: 25_000,
   walkSpeedMps: 1.3,
-  hintPenaltyMs: {far: 90_000, warm: 90_000, showLocation: 300_000},
+  hintPenaltyMs: {warm: 90_000, close: 90_000, showLocation: 300_000},
 }
 
 /** How long a player must be stuck on a level before each hint rung unlocks. */

@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@cmh/shared": "*",
-    "hono": "^4.6.14"
+    "hono": "^4.6.14",
+    "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0"

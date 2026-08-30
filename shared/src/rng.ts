@@ -1,0 +1,36 @@
+/** Deterministic PRNG so route pools are reproducible from a batch seed. */
+
+export type Rng = () => number
+
+/** mulberry32 — small, fast, good enough for shuffling a route pool. */
+export const mulberry32 = (seed: number): Rng => {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296
+  }
+}
+
+/** FNV-1a string hash → 32-bit seed. */
+export const seedFromString = (s: string): number => {
+  let h = 2_166_136_261 >>> 0
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16_777_619)
+  }
+  return h >>> 0
+}
+
+/** Fisher-Yates, returns a new array; does not mutate the input. */
+export const shuffled = <T>(items: readonly T[], rng: Rng): T[] => {
+  const out = items.slice()
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    const tmp = out[i]!
+    out[i] = out[j]!
+    out[j] = tmp
+  }
+  return out
+}

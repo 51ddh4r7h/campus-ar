@@ -55,6 +55,12 @@ npm run db:migrate:local --workspace worker
 
 ## Status
 
-Phase 0 complete: monorepo scaffold, data model, config, 10-location content
-stub, worker + client skeletons, CI. Phase 1 (backend game engine) is next — see
-the build plan.
+- **Phase 0** — monorepo scaffold, data model, content stub, CI. ✅
+- **Phase 1** — backend game engine: balanced route generation, session
+  lifecycle, strict progression, geofence + dwell + leg-time + speed validation,
+  par scoring, event log, standings. Pure logic in `shared/`, D1 + HTTP in
+  `worker/`. `npm run sim` plays a full scored hunt; `npm run gen:routes` builds
+  and inspects a batch's route pool. ✅
+- **Phase 2** — the Svelte client. Next.
+
+See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md).
