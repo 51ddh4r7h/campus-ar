@@ -51,38 +51,71 @@
     }
   }
 
-  function playNow() {
+  function startVideo(): void {
     video.muted = false
-    void video.play().then(() => (needsTap = false)).catch(() => {})
+    void video
+      .play()
+      .then(() => (needsTap = false))
+      .catch(() => {
+        // Unmuted play blocked — fall back to a silent clip so something shows.
+        video.muted = true
+        void video
+          .play()
+          .then(() => (needsTap = false))
+          .catch(() => {})
+      })
+  }
+  const playNow = startVideo
+
+  function report(where: string): void {
+    const e = video.error ? `err${video.error.code}` : 'ok'
+    diag =
+      `${where} | ar sup=${ar.supported} perm=${ar.permission} read=${ar.hasReading} useAr=${useAr}` +
+      ` | vid paused=${video.paused} rs=${video.readyState} ${e} src=${video.currentSrc ? 'y' : 'n'}`
   }
 
   onMount(() => {
     let disposed = false
-    void video.play().catch(() => {})
+
+    // Make sure the clip has a source even if priming was skipped.
+    if (r?.clipUrl && !video.currentSrc) {
+      video.src = r.clipUrl
+      video.load()
+    }
+    startVideo()
 
     const decide = async () => {
       // Last-chance grab in case the camera step was skipped (Android: instant).
       await ar.ensure()
       if (ar.worthTrying) {
-        for (let i = 0; i < 25 && !ar.hasReading && !disposed; i++) {
+        for (let i = 0; i < 18 && !ar.hasReading && !disposed; i++) {
           await new Promise((res) => setTimeout(res, 100))
         }
       }
       if (disposed) return
-      useAr = ar.ready
-      diag = `supported=${ar.supported} perm=${ar.permission} reading=${ar.hasReading} → ${useAr ? 'AR' : 'flat panel'}`
-      await Promise.resolve()
+
+      // Prefer the floating screen whenever the device can plausibly do it.
+      // The stage still renders (world-locked, no head tracking) if a sensor
+      // reading never arrives — better than dropping to the flat panel.
+      useAr = ar.worthTrying && canvas !== null
+      report('decide')
 
       if (useAr && canvas) {
-        const {createArStage} = await import('../lib/ar/stage')
-        if (disposed || !canvas) return
-        stage = await createArStage(canvas, video, r?.posterUrl)
-        stage.showScreen()
+        try {
+          const {createArStage} = await import('../lib/ar/stage')
+          if (disposed || !canvas) return
+          stage = await createArStage(canvas, video, r?.posterUrl)
+          stage.showScreen()
+        } catch {
+          useAr = false
+          report('stage-failed')
+        }
       }
       setTimeout(() => haptics.revealLock(), useAr ? 720 : 200)
       setTimeout(() => {
         if (!disposed && video.paused) needsTap = true
-      }, 900)
+        report('t+1200')
+      }, 1200)
     }
     void decide()
 
