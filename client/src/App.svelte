@@ -5,7 +5,9 @@
   import {nav} from './lib/stores/nav.svelte'
   import {location} from './lib/stores/location.svelte'
   import {camera} from './lib/stores/camera.svelte'
+  import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
+  import {haptics} from './lib/haptics'
 
   import Splash from './screens/Splash.svelte'
   import Welcome from './screens/Welcome.svelte'
@@ -65,14 +67,20 @@
     const token = game.token
     let armed = false
     const arm = setTimeout(() => (armed = true), 9_000)
-    const probe = async () => {
+    const run = async () => {
       const r = await api.nearby(token, location.recent()).catch(() => null)
-      if (armed && r?.atTarget && nav.sheet !== 'here') nav.open('here')
+      if (r) probe.last = r
+      if (armed && r?.atTarget && nav.sheet !== 'here') {
+        haptics.arrive()
+        nav.open('here')
+      }
     }
-    const id = setInterval(probe, 6_000)
+    void run()
+    const id = setInterval(run, 5_000)
     return () => {
       clearInterval(id)
       clearTimeout(arm)
+      probe.reset()
     }
   })
 

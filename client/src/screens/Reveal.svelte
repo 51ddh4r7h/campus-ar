@@ -1,35 +1,76 @@
 <script lang="ts">
+  import {onMount} from 'svelte'
   import {formatMarquee} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
+  import {ar} from '../lib/stores/ar.svelte'
+  import {probe} from '../lib/stores/probe.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
+  import {haptics} from '../lib/haptics'
+  import type {ArStage} from '../lib/ar/stage'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
 
   const r = $derived(game.lastReveal)
+  // Camera denial is fine — CameraFeed shows a gradient and the AR screen still reads.
+  const useAr = ar.ready
+
+  let video = $state<HTMLVideoElement | null>(null)
+  let canvas = $state<HTMLCanvasElement | null>(null)
+  let stage: ArStage | null = null
   let videoBroken = $state(false)
   let posterBroken = $state(false)
 
+  onMount(() => {
+    let disposed = false
+    if (useAr && canvas && video) {
+      import('../lib/ar/stage').then(async ({createArStage}) => {
+        if (disposed || !canvas || !video) return
+        stage = await createArStage(canvas, video)
+        stage.showScreen()
+        setTimeout(() => haptics.revealLock(), 720)
+      })
+    } else {
+      haptics.revealLock()
+    }
+    return () => {
+      disposed = true
+      stage?.dispose()
+      stage = null
+    }
+  })
+
+  $effect(() => {
+    stage?.setHeat(probe.last?.heat ?? 100)
+  })
+
   function next() {
+    haptics.levelDone()
     nav.go(r?.huntComplete ? 'finish' : 'clue')
   }
 </script>
 
 <CameraFeed />
 
-<div class="reveal">
-  <div class="screen">
-    {#if r && !videoBroken}
-      <video src={r.clipUrl} poster={r.posterUrl} autoplay loop playsinline onerror={() => (videoBroken = true)}>
-        <track kind="captions" />
-      </video>
-    {:else if r && !posterBroken}
-      <img src={r.posterUrl} alt="" onerror={() => (posterBroken = true)} />
-    {:else}
-      <div class="ph"></div>
-    {/if}
-  </div>
+{#if useAr}
+  <canvas bind:this={canvas} class="ar-canvas"></canvas>
+{/if}
+
+<div class="reveal" class:ar={useAr}>
+  {#if !useAr}
+    <div class="screen">
+      {#if r && !videoBroken}
+        <video bind:this={video} src={r.clipUrl} poster={r.posterUrl} autoplay loop playsinline onerror={() => (videoBroken = true)}>
+          <track kind="captions" />
+        </video>
+      {:else if r && !posterBroken}
+        <img src={r.posterUrl} alt="" onerror={() => (posterBroken = true)} />
+      {:else}
+        <div class="ph"></div>
+      {/if}
+    </div>
+  {/if}
 
   <div class="info">
     <p class="mono">
@@ -41,15 +82,54 @@
     <p class="film"><b>{r?.movie.title}</b> · filmed here</p>
     <div class="fact">{r?.campusFact}</div>
     <div class="actions">
-      <Button variant="secondary" onclick={() => toasts.show('Photo mode arrives with the AR build')}>
-        <Icon name="camera" size={18} /> Take a photo
-      </Button>
+      {#if useAr}
+        <Button variant="secondary" onclick={() => stage?.recenter()}>
+          <Icon name="crosshair" size={18} /> Recentre
+        </Button>
+      {:else}
+        <Button variant="secondary" onclick={() => toasts.show('Photo mode arrives soon')}>
+          <Icon name="camera" size={18} /> Take a photo
+        </Button>
+      {/if}
       <Button onclick={next}>{r?.huntComplete ? 'See your result' : 'Next scene'}</Button>
     </div>
   </div>
 </div>
 
+{#if useAr}
+  <!-- off-screen but kept a real size so browsers don't pause it -->
+  <video
+    bind:this={video}
+    src={r?.clipUrl}
+    autoplay
+    loop
+    muted
+    playsinline
+    preload="auto"
+    class="tex-src"
+    onerror={() => (videoBroken = true)}
+  >
+    <track kind="captions" />
+  </video>
+{/if}
+
 <style>
+  .ar-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .tex-src {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    width: 64px;
+    height: 36px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+  }
   .reveal {
     position: fixed;
     inset: 0;
@@ -60,6 +140,13 @@
     justify-content: center;
     gap: var(--sp-4);
     padding: calc(var(--safe-top) + var(--sp-6)) var(--edge) calc(var(--safe-bottom) + var(--sp-4));
+    pointer-events: none;
+  }
+  .reveal.ar {
+    justify-content: flex-end;
+  }
+  .reveal :global(button) {
+    pointer-events: auto;
   }
   .reveal::before,
   .reveal::after {
@@ -77,6 +164,9 @@
   }
   .reveal::after {
     bottom: 0;
+  }
+  .reveal.ar::after {
+    display: none;
   }
   .screen {
     width: 100%;

@@ -3,6 +3,7 @@
   import {game} from '../lib/stores/game.svelte'
   import {location} from '../lib/stores/location.svelte'
   import {camera} from '../lib/stores/camera.svelte'
+  import {ar} from '../lib/stores/ar.svelte'
   import {startDemo} from '../lib/demo'
   import {toasts} from '../lib/stores/toast.svelte'
   import Button from '../lib/components/Button.svelte'
@@ -27,8 +28,9 @@
 
   async function askCamera() {
     phase = 'waiting'
-    await camera.start()
-    // Denial is fine — the game still works on GPS. Move on either way.
+    // Same gesture: camera stream + iOS motion permission for the AR screen.
+    await Promise.all([camera.start(), ar.requestPermission()])
+    // Denial of either is fine — the game still works on GPS. Move on.
     await proceed()
   }
 

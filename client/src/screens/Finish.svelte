@@ -1,11 +1,15 @@
 <script lang="ts">
+  import {onMount} from 'svelte'
   import {formatMarquee, formatScore, locationById} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {standings} from '../lib/stores/standings.svelte'
   import {clock} from '../lib/stores/clock.svelte'
+  import {haptics} from '../lib/haptics'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+
+  onMount(() => haptics.fanfare())
 
   const score = $derived(game.session?.scoreMs ?? 0)
   const self = $derived(standings.self)

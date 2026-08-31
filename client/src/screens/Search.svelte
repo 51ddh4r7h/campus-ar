@@ -5,6 +5,7 @@
   import {toasts} from '../lib/stores/toast.svelte'
   import HudBar from '../lib/components/HudBar.svelte'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
+  import HeatMeter from '../lib/components/HeatMeter.svelte'
   import Icon from '../lib/components/Icon.svelte'
 
   const clue = $derived(game.clue)
@@ -18,6 +19,7 @@
 <CameraFeed />
 
 <HudBar />
+<HeatMeter />
 
 <button class="compare-thumb" onclick={() => (comparing = true)}>
   {#if clue}<img src={clue.posterUrl} alt="" />{/if}

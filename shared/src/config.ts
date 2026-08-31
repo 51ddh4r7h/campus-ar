@@ -35,6 +35,12 @@ export const DEFAULT_PAR_CONSTANTS: ParConstants = {
   hintPenaltyMs: {warm: 90_000, close: 90_000, showLocation: 300_000},
 }
 
+/**
+ * The warm/cold heat signal only carries information within this range of the
+ * current target. Beyond it, heat reads a flat cold — no cross-campus homing.
+ */
+export const HEAT_ACTIVE_RANGE_M = 160
+
 /** How long a player must be stuck on a level before each hint rung unlocks. */
 export const HINT_GATES = {
   warmAfterMs: 4 * 60_000,

@@ -9,6 +9,8 @@ export default defineConfig({
     cssCodeSplit: false,
     modulePreload: {polyfill: false},
     reportCompressedSize: false,
+    // three.js is a deliberate lazy chunk — only loads at the AR reveal.
+    chunkSizeWarningLimit: 900,
   },
   server: {
     host: true,

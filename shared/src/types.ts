@@ -204,6 +204,10 @@ export interface NearbyResult {
   dwellNeededMs: number
   /** False when only poor-accuracy fixes reach the target. */
   signalOk: boolean
+  /** Warmth toward the current target: 0 (cold) - 100 (on it). Only informative
+   *  within the active range; a flat 0 beyond it. Never a coordinate. */
+  heat: number
+  band: import('./heat').HeatBand
   /** Present when the probe would fail for a reason worth surfacing. */
   failure: ValidationFailure | null
 }

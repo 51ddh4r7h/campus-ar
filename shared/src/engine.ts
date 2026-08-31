@@ -15,6 +15,8 @@ import {generateRoutePool} from './routes'
 import {assignRoute} from './routes'
 import {routePar, sessionScoreMs} from './scoring'
 import {VALIDATION} from './config'
+import {haversineM} from './geo'
+import {bandFromHeat, heatFromDistance} from './heat'
 import {evaluateArrival} from './validation'
 import type {GameStore, StoredBatch} from './store'
 import type {
@@ -255,16 +257,34 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     ): Promise<import('./types').NearbyResult> {
       const {session, route} = await authed(token)
       if (session.status !== 'in_progress') {
-        return {atTarget: false, dwellMs: 0, dwellNeededMs: VALIDATION.dwellMs, signalOk: true, failure: 'not_in_progress'}
+        return {
+          atTarget: false,
+          dwellMs: 0,
+          dwellNeededMs: VALIDATION.dwellMs,
+          signalOk: true,
+          heat: 0,
+          band: 0,
+          failure: 'not_in_progress',
+        }
       }
+      const stops = resolveStops(route)
+      const target = stops[session.currentLevel - 1]!
       const splits = await store.listSplits(session.playerId)
       const outcome = evaluateArrival({
-        routeStops: resolveStops(route),
+        routeStops: stops,
         currentLevel: session.currentLevel,
         prevReachedTsMs: prevReachedTs(session, splits),
         samples,
         nowMs: deps.now(),
       })
+
+      // Warmth from the closest fresh, trustworthy fix. Never a coordinate.
+      const now = deps.now()
+      const dists = samples
+        .filter((s) => now - s.tsMs <= VALIDATION.maxFixAgeMs && (s.simulated || s.accuracyM <= VALIDATION.maxAccuracyM))
+        .map((s) => haversineM(s, target))
+      const heat = dists.length > 0 ? heatFromDistance(Math.min(...dists), target.radiusM) : 0
+
       const atRadius =
         outcome.ok || outcome.failure === 'dwell' || outcome.failure === 'too_fast'
       return {
@@ -272,6 +292,8 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         dwellMs: outcome.insideMs,
         dwellNeededMs: VALIDATION.dwellMs,
         signalOk: outcome.failure !== 'signal',
+        heat: Math.round(heat),
+        band: bandFromHeat(heat),
         failure: outcome.ok ? null : outcome.failure,
       }
     },
