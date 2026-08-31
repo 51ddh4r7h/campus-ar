@@ -40,14 +40,15 @@
   .placeholder {
     background: radial-gradient(120% 80% at 50% 0%, #1c2430 0%, #0c0f13 60%, #08090b 100%);
   }
-  /* film grain + a faint warm bias — a viewfinder, not a raw feed */
+  /* film grain only — the warm bias on top of it was tinting the whole world
+     orange once the AR bloom was in front of it too */
   .grade {
     position: absolute;
     inset: 0;
     mix-blend-mode: overlay;
-    opacity: 0.5;
+    opacity: 0.22;
     background:
-      linear-gradient(0deg, rgba(232, 165, 76, 0.06), rgba(232, 165, 76, 0.06)),
+      linear-gradient(0deg, rgba(232, 165, 76, 0.02), rgba(232, 165, 76, 0.02)),
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   }
   .vignette {

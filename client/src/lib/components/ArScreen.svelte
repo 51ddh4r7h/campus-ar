@@ -92,6 +92,8 @@
       video.load()
     }
     video.muted = muted
+    const onError = () => (broken = true)
+    video.addEventListener('error', onError)
     play()
 
     const start = async () => {
@@ -131,6 +133,7 @@
 
     return () => {
       disposed = true
+      video.removeEventListener('error', onError)
       stage?.dispose()
       stage = null
       video.pause()

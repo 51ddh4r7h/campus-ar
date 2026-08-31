@@ -5,7 +5,7 @@
  * by compass heading. Recenter snaps it back in front of you.
  *
  * 6DoF (walk-around) is a later add: swap the orientation-only pose for an
- * 8th Wall pose source; the screen + spill code is unchanged.
+ * 8th Wall pose source; the screen and bloom code is unchanged.
  */
 
 import type * as THREE_NS from 'three'
@@ -22,7 +22,7 @@ export interface ArStage {
   /** Assembly progress, 0-1. Only meaningful after showScreen({assemble: true}). */
   setBuild(p: number): void
   setMuted(muted: boolean): void
-  /** Brighten the warm spill as the player closes in (heat 0-100). */
+  /** Brighten the bloom as the player closes in (heat 0-100). */
   setHeat(heat: number): void
   /** Debug: frames rendered / current screen opacity. */
   stats(): string
@@ -39,7 +39,14 @@ const phase = (p: number, a: number, b: number): number => clamp01((p - a) / (b 
  * field of view so the screen always fills `FILL` of the frame's width, on any
  * phone, in any orientation.
  */
-const SCREEN = {width: 3.0, height: 1.26, y: -0.35, sag: 0.4}
+const SCREEN = {width: 3.0, height: 1.26, y: -0.12}
+
+/**
+ * Curvature, as a multiple of the screen width. A real cinemascope screen is a
+ * shallow cylinder section that wraps *towards* the audience; 1.8x width is
+ * about a 16-degree wrap, which reads as curved without distorting the image.
+ */
+const CURVE_RADIUS = 1.8
 
 /** Typical phone rear-camera horizontal field of view. */
 const CAMERA_HFOV_DEG = 66
@@ -89,7 +96,7 @@ export async function createArStage(
   const anchor = new THREE.Group()
   scene.add(anchor)
 
-  const geo = curvedGeometry(THREE, SCREEN.width, SCREEN.height, SCREEN.sag)
+  const geo = curvedGeometry(THREE, SCREEN.width, SCREEN.height)
   const videoTex = new THREE.VideoTexture(video)
   videoTex.colorSpace = THREE.SRGBColorSpace
   const posterTex = posterUrl ? new THREE.TextureLoader().load(posterUrl) : null
@@ -145,36 +152,37 @@ export async function createArStage(
     depthWrite: false,
   })
   const frame = new THREE.Mesh(
-    curvedGeometry(THREE, SCREEN.width + 0.06, SCREEN.height + 0.06, SCREEN.sag),
+    curvedGeometry(THREE, SCREEN.width + 0.05, SCREEN.height + 0.05, SCREEN.width),
     frameMat,
   )
   frame.renderOrder = 1
   anchor.add(frame)
 
-  // warm spill on the ground in front of the screen
-  const spillMat = new THREE.MeshBasicMaterial({
-    color: 0xe8a54c,
+  // Warm bloom bleeding off the edges of the picture. This replaced a big
+  // additive disc lying on the ground, whose near rim reached the camera and
+  // washed the whole lower half of the view orange.
+  const glowTex = glowTexture(THREE)
+  const glowMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthTest: false,
     depthWrite: false,
   })
-  const spill = new THREE.Mesh(new THREE.CircleGeometry(3.4, 40), spillMat)
-  spill.rotation.x = -Math.PI / 2
-  spill.renderOrder = 0
-  anchor.add(spill)
-
-  const light = new THREE.PointLight(0xffd9a8, 0, 12)
-  anchor.add(light)
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(SCREEN.width * 1.7, SCREEN.height * 2.6),
+    glowMat,
+  )
+  glow.renderOrder = 0
+  anchor.add(glow)
 
   /** Re-place everything for the current `distance`. */
   function fit(): void {
     screen.position.set(0, SCREEN.y, -distance)
     back.position.set(0, SCREEN.y, -distance - 0.02)
     frame.position.set(0, SCREEN.y, -distance - 0.04)
-    spill.position.set(0, SCREEN.y - 1.15, -distance + 0.6)
-    light.position.set(0, SCREEN.y, -distance + 1.5)
+    glow.position.set(0, SCREEN.y, -distance - 0.12)
   }
   resize()
 
@@ -282,7 +290,8 @@ export async function createArStage(
       screenMat.dispose()
       backMat.dispose()
       frameMat.dispose()
-      spillMat.dispose()
+      glowMat.dispose()
+      glowTex.dispose()
       videoTex.dispose()
       posterTex?.dispose()
       renderer.dispose()
@@ -321,8 +330,7 @@ export async function createArStage(
     backMat.opacity = (assembling ? phase(p, 0.18, 0.58) : p) * 0.88
     screenMat.opacity = assembling ? phase(p, 0.5, 1) : p
 
-    light.intensity = (0.4 + heatK * 2.2) * p
-    spillMat.opacity = (0.14 + heatK * 0.22) * p
+    glowMat.opacity = (0.35 + heatK * 0.4) * p
 
     const s = 0.96 + p * 0.04
     screen.scale.setScalar(s)
@@ -336,19 +344,48 @@ export async function createArStage(
   return stage
 }
 
+/**
+ * A shallow cylinder section: the ends wrap *towards* the viewer, the way a
+ * real cinemascope screen does. Bending each vertex around a true arc (rather
+ * than displacing z on a flat grid) keeps the arc length equal to `w`, so the
+ * picture stays evenly spaced across the curve instead of stretching at the
+ * ends. The extra height segments matter too — a curve interpolated across a
+ * single tall quad shears the texture.
+ */
 function curvedGeometry(
   THREE: typeof THREE_NS,
   w: number,
   h: number,
-  sag: number,
+  /** Curve about this width, so a surround stays concentric with the picture. */
+  curveAbout = w,
 ): THREE_NS.BufferGeometry {
-  const geo = new THREE.PlaneGeometry(w, h, 40, 1)
+  const geo = new THREE.PlaneGeometry(w, h, 48, 8)
+  const radius = curveAbout * CURVE_RADIUS
+  const halfAngle = w / (2 * radius)
   const pos = geo.getAttribute('position')
   for (let i = 0; i < pos.count; i++) {
-    const nx = pos.getX(i) / (w / 2)
-    pos.setZ(i, -sag * (nx * nx * (0.7 + 0.3 * Math.abs(nx))))
+    const theta = (pos.getX(i) / (w / 2)) * halfAngle
+    pos.setX(i, radius * Math.sin(theta))
+    pos.setZ(i, radius * (1 - Math.cos(theta)))
   }
   pos.needsUpdate = true
   geo.computeVertexNormals()
   return geo
+}
+
+/** A soft elliptical bloom, drawn once into a canvas and reused as a texture. */
+function glowTexture(THREE: typeof THREE_NS): THREE_NS.Texture {
+  const c = document.createElement('canvas')
+  c.width = 128
+  c.height = 128
+  const g = c.getContext('2d')!
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64)
+  grad.addColorStop(0, 'rgba(255,206,150,0.55)')
+  grad.addColorStop(0.45, 'rgba(255,180,110,0.16)')
+  grad.addColorStop(1, 'rgba(255,160,80,0)')
+  g.fillStyle = grad
+  g.fillRect(0, 0, 128, 128)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  return t
 }
