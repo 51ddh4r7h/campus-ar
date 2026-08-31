@@ -4,6 +4,7 @@
   import {game} from './lib/stores/game.svelte'
   import {nav} from './lib/stores/nav.svelte'
   import {location} from './lib/stores/location.svelte'
+  import {camera} from './lib/stores/camera.svelte'
   import {standings} from './lib/stores/standings.svelte'
 
   import Splash from './screens/Splash.svelte'
@@ -44,24 +45,35 @@
     }
   })
 
-  // GPS lifecycle — run through the playing screens, stop elsewhere.
+  // GPS + camera lifecycle — run through the playing screens, stop elsewhere.
   $effect(() => {
     const playing = game.inProgress && ['clue', 'search', 'reveal'].includes(nav.screen)
     if (playing && location.mode === 'off') location.start(game.demo ? 'sim' : 'real')
-    if (!playing && (nav.screen === 'finish' || nav.screen === 'welcome')) location.stop()
+    if (playing && (nav.screen === 'search' || nav.screen === 'reveal') && !camera.active) {
+      void camera.start()
+    }
+    if (nav.screen === 'finish' || nav.screen === 'welcome') {
+      location.stop()
+      camera.stop()
+    }
   })
 
-  // "Am I there yet?" probe while searching.
+  // "Am I there yet?" probe while searching. A grace period keeps the sheet
+  // from popping the instant the screen opens.
   $effect(() => {
     if (nav.screen !== 'search' || !game.inProgress || !game.token) return
     const token = game.token
+    let armed = false
+    const arm = setTimeout(() => (armed = true), 9_000)
     const probe = async () => {
       const r = await api.nearby(token, location.recent()).catch(() => null)
-      if (r?.atTarget && nav.sheet !== 'here') nav.open('here')
+      if (armed && r?.atTarget && nav.sheet !== 'here') nav.open('here')
     }
-    void probe()
-    const id = setInterval(probe, 8000)
-    return () => clearInterval(id)
+    const id = setInterval(probe, 6_000)
+    return () => {
+      clearInterval(id)
+      clearTimeout(arm)
+    }
   })
 
   // Poll standings whenever we belong to a batch.

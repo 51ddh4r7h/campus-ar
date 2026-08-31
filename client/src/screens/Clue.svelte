@@ -62,13 +62,13 @@
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: var(--sp-8);
     padding: calc(var(--safe-top) + 72px) var(--edge) calc(var(--safe-bottom) + var(--sp-6));
   }
   .stack {
+    flex: 1;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: var(--sp-4);
   }
   .label {

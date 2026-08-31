@@ -13,6 +13,8 @@ export type PermissionState = 'unknown' | 'granted' | 'denied' | 'unavailable'
 
 const BUFFER_MS = 60_000
 const CRUMB_FLUSH_MS = 15_000
+/** How long the demo simulator takes to "walk" one leg. */
+const SIM_LEG_MS = 22_000
 
 class Location {
   mode = $state<Mode>('off')
@@ -114,7 +116,7 @@ class Location {
         if (this.fix) this.ingest({...this.fix, tsMs: Date.now()})
         return
       }
-      const t = Math.min(1, (performance.now() - this.simStart) / 5_000)
+      const t = Math.min(1, (performance.now() - this.simStart) / SIM_LEG_MS)
       const eased = t * t * (3 - 2 * t)
       const lat = this.simFrom.lat + (target.lat - this.simFrom.lat) * eased
       const lng = this.simFrom.lng + (target.lng - this.simFrom.lng) * eased

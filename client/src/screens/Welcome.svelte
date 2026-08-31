@@ -25,9 +25,9 @@
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding: calc(var(--safe-top) + var(--sp-12)) var(--edge) calc(var(--safe-bottom) + var(--sp-6));
-    gap: var(--sp-8);
+    justify-content: center;
+    gap: clamp(var(--sp-8), 12vh, 96px);
+    padding: calc(var(--safe-top) + var(--sp-8)) var(--edge) calc(var(--safe-bottom) + var(--sp-6));
   }
   h1 {
     font-family: var(--font-display);
@@ -38,7 +38,7 @@
   }
   .tag {
     color: var(--text-dim);
-    margin: 0 0 var(--sp-8);
+    margin: 0 0 var(--sp-6);
     max-width: 30ch;
   }
   ul {
