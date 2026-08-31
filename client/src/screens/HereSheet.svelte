@@ -8,10 +8,11 @@
   import Sheet from '../lib/components/Sheet.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
-  import {api} from '../lib/api'
+  import {api, ApiError} from '../lib/api'
 
   let probe = $state<NearbyResult | null>(null)
   let revealing = $state(false)
+  let retrying = $state(false)
 
   function failureMessage(f: ValidationFailure | null): string {
     switch (f) {
@@ -40,28 +41,47 @@
     if (probe && !probe.atTarget && probe.failure === 'wrong_location') nav.close()
   }
 
+  let cancelled = false
+
   async function reveal() {
-    if (!game.token) return
+    if (!game.token || revealing) return
     revealing = true
-    try {
-      const res = await game.arrive(location.recent())
-      if (res.ok) {
-        nav.go('reveal')
-      } else {
+    // Keep trying through a flaky signal — the player is standing at the spot.
+    for (let attempt = 0; attempt < 20 && !cancelled; attempt++) {
+      try {
+        const res = await game.arrive(location.recent())
+        retrying = false
+        if (res.ok) {
+          nav.go('reveal')
+        } else {
+          revealing = false
+          toasts.show(failureMessage(res.failure), 'alert')
+          if (res.failure === 'wrong_location' || res.failure === 'level_locked') nav.close()
+        }
+        return
+      } catch (err) {
+        if (err instanceof ApiError && (err.code === 'offline' || err.code === 'server')) {
+          retrying = true
+          await new Promise((r) => setTimeout(r, 3500))
+          continue
+        }
         revealing = false
-        toasts.show(failureMessage(res.failure), 'alert')
-        if (res.failure === 'wrong_location' || res.failure === 'level_locked') nav.close()
+        retrying = false
+        toasts.show('Something went wrong — try again', 'alert')
+        return
       }
-    } catch {
-      revealing = false
-      toasts.show('Connection problem — try again', 'alert')
     }
+    revealing = false
+    retrying = false
   }
 
   onMount(() => {
     void tick()
     const id = setInterval(tick, 2500)
-    return () => clearInterval(id)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   })
 </script>
 
@@ -71,9 +91,13 @@
     <h2>This looks like the place.</h2>
     <p>{ready ? 'The scene is ready.' : 'Hold still for a moment while we lock the scene.'}</p>
     <div class="ring" style="--p: {pct}"></div>
-    {#if !ready}<span class="ring-cap">Getting a steady signal…</span>{/if}
-    <Button disabled={!ready || revealing} onclick={reveal}>
-      {revealing ? 'Revealing…' : 'Reveal the scene'}
+    {#if retrying}
+      <span class="ring-cap">Reconnecting… holding your spot</span>
+    {:else if !ready}
+      <span class="ring-cap">Getting a steady signal…</span>
+    {/if}
+    <Button disabled={(!ready && !retrying) || (revealing && !retrying)} onclick={reveal}>
+      {retrying ? 'Reconnecting…' : revealing ? 'Revealing…' : 'Reveal the scene'}
     </Button>
   </div>
 </Sheet>

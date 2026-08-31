@@ -5,6 +5,7 @@
 
 import type {ClueView, GeoSample, HintRung, RevealView, Session, Split} from '@cmh/shared'
 import {api, ApiError} from '../api'
+import {net} from './net.svelte'
 
 const LS_TOKEN = 'cmh.token'
 const LS_BATCH = 'cmh.batch'
@@ -52,7 +53,10 @@ class Game {
 
   /** True once we have a valid token + a session snapshot. */
   loaded = $state(false)
-  online = $state(true)
+
+  get online(): boolean {
+    return net.online
+  }
 
   get inProgress(): boolean {
     return this.session?.status === 'in_progress'
@@ -81,19 +85,24 @@ class Game {
     save(LS_DEMO_STOPS, opts.demoStops ? JSON.stringify(opts.demoStops) : null)
   }
 
-  async refresh(): Promise<void> {
-    if (!this.token) return
+  /** @returns true once a session snapshot was loaded. */
+  async refresh(): Promise<boolean> {
+    if (!this.token) return false
     try {
       const state = await api.getState(this.token)
       this.session = state.session
       this.clue = state.clue
       this.splits = state.splits
       this.loaded = true
-      this.online = true
+      return true
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'offline') this.online = false
-      else if (err instanceof ApiError && err.status === 401) this.reset()
-      else throw err
+      if (err instanceof ApiError && err.status === 401) {
+        this.reset()
+        return false
+      }
+      // offline / server — net store already flagged it; caller retries.
+      if (err instanceof ApiError) return false
+      throw err
     }
   }
 
@@ -102,7 +111,6 @@ class Game {
     const res = await api.startHunt(this.token)
     this.session = res.session
     this.clue = res.clue
-    this.online = true
   }
 
   async arrive(samples: GeoSample[]): Promise<import('@cmh/shared').ValidationResult> {
@@ -112,7 +120,6 @@ class Game {
     if (res.split) this.splits = [...this.splits.filter((s) => s.level !== res.split!.level), res.split]
     if (res.reveal) this.lastReveal = res.reveal
     if (res.nextClue) this.clue = res.nextClue
-    this.online = true
     return res
   }
 

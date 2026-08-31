@@ -19,7 +19,7 @@ import {
   parseSamples,
 } from './guards'
 
-const deps: EngineDeps = {
+const realDeps: EngineDeps = {
   now: () => Date.now(),
   randomId: () => crypto.randomUUID(),
   randomToken: () =>
@@ -36,14 +36,17 @@ const bearer = (auth: string | undefined): string => {
  * The game API as a Hono app. `makeStore` builds a GameStore from the request's
  * bindings — the Worker passes a D1Store; tests could pass an in-memory one.
  */
-export const createApp = (makeStore: (env: Env) => GameStore) => {
+export const createApp = (
+  makeStore: (env: Env) => GameStore,
+  deps: EngineDeps = realDeps,
+) => {
   const app = new Hono<{Bindings: Env}>()
   app.use('/*', cors())
 
   const engineFor = (env: Env) => createEngine(makeStore(env), deps)
 
-  const requireAdmin = (env: Env, key: string | undefined): void => {
-    if (env.ADMIN_KEY && key !== env.ADMIN_KEY) {
+  const requireAdmin = (env: Env | undefined, key: string | undefined): void => {
+    if (env?.ADMIN_KEY && key !== env.ADMIN_KEY) {
       throw new HTTPException(403, {message: 'bad admin key'})
     }
   }

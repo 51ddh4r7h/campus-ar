@@ -6,10 +6,26 @@
   import {standings} from '../lib/stores/standings.svelte'
   import {clock} from '../lib/stores/clock.svelte'
   import {haptics} from '../lib/haptics'
+  import {startDemo} from '../lib/demo'
+  import {toasts} from '../lib/stores/toast.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
 
   onMount(() => haptics.fanfare())
+
+  let starting = $state(false)
+  async function playAgain() {
+    starting = true
+    try {
+      game.reset()
+      await startDemo()
+      await game.start()
+      nav.go('clue')
+    } catch {
+      toasts.show('Could not start a new run', 'alert')
+      starting = false
+    }
+  }
 
   const score = $derived(game.session?.scoreMs ?? 0)
   const self = $derived(standings.self)
@@ -48,7 +64,7 @@
 
   <div class="actions">
     <Button variant="secondary" onclick={() => nav.open('standings')}>View standings</Button>
-    <Button onclick={() => { game.reset(); window.location.reload() }}>Play again</Button>
+    <Button disabled={starting} onclick={playAgain}>{starting ? 'Starting…' : 'Play again'}</Button>
     <Button variant="text" onclick={() => navigator.share?.({title: 'Campus Movie Hunt', text: `I finished ${formatScore(score)} vs par!`})}>
       Share result
     </Button>

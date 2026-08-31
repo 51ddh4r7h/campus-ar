@@ -6,6 +6,7 @@
 
 import {START_POINT, VALIDATION, haversineM, locationById, type GeoSample} from '@cmh/shared'
 import {api} from '../api'
+import {recentSamples, trimBuffer} from '../geo-buffer'
 import {game} from './game.svelte'
 
 type Mode = 'off' | 'real' | 'sim'
@@ -39,8 +40,7 @@ class Location {
 
   /** Samples from the last ~30s — what an arrival check is evaluated against. */
   recent(): GeoSample[] {
-    const cutoff = Date.now() - 30_000
-    return this.buffer.filter((s) => s.tsMs >= cutoff)
+    return recentSamples(this.buffer, Date.now())
   }
 
   start(mode: 'real' | 'sim'): void {
@@ -64,8 +64,7 @@ class Location {
     this.fix = s
     this.buffer.push(s)
     this.crumbs.push(s)
-    const cutoff = Date.now() - BUFFER_MS
-    this.buffer = this.buffer.filter((x) => x.tsMs >= cutoff)
+    this.buffer = trimBuffer(this.buffer, Date.now(), BUFFER_MS)
   }
 
   private async flush(): Promise<void> {

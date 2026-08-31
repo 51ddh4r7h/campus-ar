@@ -55,7 +55,13 @@ const config: OxlintConfig = {
     {
       // Browser-capability detection — feature-testing platform APIs (Vibration,
       // DeviceOrientation, WebGL) genuinely needs `typeof`/`in`/narrowing casts.
-      files: ['client/src/lib/haptics.ts', 'client/src/lib/stores/ar.svelte.ts', 'client/src/lib/ar/**/*.ts'],
+      files: [
+        'client/src/lib/haptics.ts',
+        'client/src/lib/env.ts',
+        'client/src/lib/stores/ar.svelte.ts',
+        'client/src/lib/stores/camera.svelte.ts',
+        'client/src/lib/ar/**/*.ts',
+      ],
       rules: {
         'anti-slop/no-runtime-typeof': 'off',
         'anti-slop/no-chained-type-assertions': 'off',

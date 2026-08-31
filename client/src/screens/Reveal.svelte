@@ -13,9 +13,8 @@
   import Icon from '../lib/components/Icon.svelte'
 
   const r = $derived(game.lastReveal)
-  // Camera denial is fine — CameraFeed shows a gradient and the AR screen still reads.
-  const useAr = ar.ready
 
+  let useAr = $state(false)
   let video = $state<HTMLVideoElement | null>(null)
   let canvas = $state<HTMLCanvasElement | null>(null)
   let stage: ArStage | null = null
@@ -24,16 +23,31 @@
 
   onMount(() => {
     let disposed = false
-    if (useAr && canvas && video) {
-      import('../lib/ar/stage').then(async ({createArStage}) => {
+
+    // Decide once: AR needs a live motion sensor. Give it a brief grace, then
+    // commit — otherwise the flat letterbox panel (the guaranteed path).
+    const decide = async () => {
+      if (ar.supported && ar.permission === 'granted') {
+        for (let i = 0; i < 15 && !ar.hasReading && !disposed; i++) {
+          await new Promise((res) => setTimeout(res, 100))
+        }
+      }
+      if (disposed) return
+      useAr = ar.ready
+      await Promise.resolve() // let the canvas/video render
+
+      if (useAr && canvas && video) {
+        const {createArStage} = await import('../lib/ar/stage')
         if (disposed || !canvas || !video) return
         stage = await createArStage(canvas, video)
         stage.showScreen()
         setTimeout(() => haptics.revealLock(), 720)
-      })
-    } else {
-      haptics.revealLock()
+      } else {
+        haptics.revealLock()
+      }
     }
+    void decide()
+
     return () => {
       disposed = true
       stage?.dispose()
@@ -53,24 +67,30 @@
 
 <CameraFeed />
 
-{#if useAr}
-  <canvas bind:this={canvas} class="ar-canvas"></canvas>
-{/if}
+<canvas bind:this={canvas} class="ar-canvas" class:hidden={!useAr}></canvas>
 
 <div class="reveal" class:ar={useAr}>
-  {#if !useAr}
-    <div class="screen">
-      {#if r && !videoBroken}
-        <video bind:this={video} src={r.clipUrl} poster={r.posterUrl} autoplay loop playsinline onerror={() => (videoBroken = true)}>
-          <track kind="captions" />
-        </video>
-      {:else if r && !posterBroken}
-        <img src={r.posterUrl} alt="" onerror={() => (posterBroken = true)} />
-      {:else}
-        <div class="ph"></div>
-      {/if}
-    </div>
-  {/if}
+  <div class="screen" class:offscreen={useAr}>
+    {#if r && !videoBroken}
+      <video
+        bind:this={video}
+        src={r.clipUrl}
+        poster={r.posterUrl}
+        autoplay
+        loop
+        muted={useAr}
+        playsinline
+        preload="auto"
+        onerror={() => (videoBroken = true)}
+      >
+        <track kind="captions" />
+      </video>
+    {:else if r && !posterBroken}
+      <img src={r.posterUrl} alt="" onerror={() => (posterBroken = true)} />
+    {:else}
+      <div class="ph"></div>
+    {/if}
+  </div>
 
   <div class="info">
     <p class="mono">
@@ -96,23 +116,6 @@
   </div>
 </div>
 
-{#if useAr}
-  <!-- off-screen but kept a real size so browsers don't pause it -->
-  <video
-    bind:this={video}
-    src={r?.clipUrl}
-    autoplay
-    loop
-    muted
-    playsinline
-    preload="auto"
-    class="tex-src"
-    onerror={() => (videoBroken = true)}
-  >
-    <track kind="captions" />
-  </video>
-{/if}
-
 <style>
   .ar-canvas {
     position: fixed;
@@ -120,15 +123,8 @@
     z-index: 5;
     pointer-events: none;
   }
-  .tex-src {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    width: 64px;
-    height: 36px;
-    opacity: 0;
-    pointer-events: none;
-    z-index: -1;
+  .hidden {
+    display: none;
   }
   .reveal {
     position: fixed;
@@ -180,6 +176,18 @@
       0 24px 80px rgba(232, 165, 76, 0.28),
       0 0 120px 20px rgba(232, 165, 76, 0.12);
     animation: rise 0.9s var(--ease-spring);
+  }
+  .screen.offscreen {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    width: 64px;
+    height: 36px;
+    max-width: none;
+    opacity: 0;
+    box-shadow: none;
+    z-index: -1;
+    animation: none;
   }
   .screen video,
   .screen img,

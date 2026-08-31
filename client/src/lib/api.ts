@@ -13,6 +13,7 @@ import type {
   StartHuntResponse,
   ValidationResult,
 } from '@cmh/shared'
+import {net} from './stores/net.svelte'
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/api'
 
@@ -32,8 +33,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${BASE}${path}`, init)
   } catch (cause) {
+    net.mark(false)
     throw new ApiError(0, 'offline', cause instanceof Error ? cause.message : 'network error')
   }
+  if (res.status >= 500) {
+    net.mark(false)
+    throw new ApiError(res.status, 'server', 'server error')
+  }
+  net.mark(true)
   if (res.status === 204) {
     // SAFETY: a 204 has no body; void-returning callers type T as void.
     return undefined as T

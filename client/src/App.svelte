@@ -38,8 +38,14 @@
     }
 
     if (game.token) {
-      await game.refresh()
-      if (game.complete) nav.go('finish')
+      // Retry through a bad connection on cold start — the session is on the server.
+      let ok = await game.refresh()
+      for (let i = 0; i < 20 && !ok && game.token; i++) {
+        await new Promise((r) => setTimeout(r, 2500))
+        ok = await game.refresh()
+      }
+      if (!game.token) nav.go('welcome')
+      else if (game.complete) nav.go('finish')
       else if (game.inProgress) nav.go('clue')
       else nav.go('ready')
     } else {
@@ -102,8 +108,16 @@
 {#if nav.sheet === 'standings'}<StandingsSheet />{/if}
 {#if nav.sheet === 'here'}<HereSheet />{/if}
 
-{#if !game.online}
+{#if !game.online && ['clue', 'search', 'reveal'].includes(nav.screen)}
   <div class="offline" role="status">Reconnecting…</div>
+{/if}
+
+{#if camera.lost && ['search', 'reveal'].includes(nav.screen)}
+  <div class="recover" role="alertdialog" aria-label="Camera turned off">
+    <p><b>Camera turned off</b></p>
+    <p class="dim">Turn it back on to keep playing — your timer's still running.</p>
+    <button onclick={() => void camera.retry()}>Enable camera</button>
+  </div>
 {/if}
 
 <Toaster />
@@ -122,5 +136,36 @@
     background: var(--surface);
     backdrop-filter: blur(var(--blur));
     border: var(--glass-border);
+  }
+  .recover {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+    padding: var(--edge);
+    text-align: center;
+    background: rgba(10, 11, 13, 0.86);
+    backdrop-filter: blur(8px);
+  }
+  .recover p {
+    margin: 0;
+    max-width: 30ch;
+  }
+  .recover .dim {
+    color: var(--text-dim);
+    font-size: var(--step-15);
+  }
+  .recover button {
+    margin-top: var(--sp-3);
+    height: 52px;
+    padding: 0 var(--sp-8);
+    border-radius: var(--radius-button);
+    font-weight: 600;
+    color: var(--amber-ink);
+    background: var(--amber);
   }
 </style>
