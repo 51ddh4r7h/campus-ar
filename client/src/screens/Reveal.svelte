@@ -5,27 +5,58 @@
   import {game} from '../lib/stores/game.svelte'
   import {ar} from '../lib/stores/ar.svelte'
   import {probe} from '../lib/stores/probe.svelte'
-  import {toasts} from '../lib/stores/toast.svelte'
   import {haptics} from '../lib/haptics'
+  import {revealVideo} from '../lib/reveal-video'
   import type {ArStage} from '../lib/ar/stage'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
 
   const r = $derived(game.lastReveal)
+  const video = revealVideo()
 
   let useAr = $state(false)
-  let video = $state<HTMLVideoElement | null>(null)
   let canvas = $state<HTMLCanvasElement | null>(null)
   let stage: ArStage | null = null
-  let videoBroken = $state(false)
+  let needsTap = $state(false)
   let posterBroken = $state(false)
+
+  /** Flat panel: drop the shared <video> into the screen box, filling it. */
+  function panel(node: Element) {
+    Object.assign(video.style, {
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      opacity: '1',
+      zIndex: '0',
+    })
+    node.appendChild(video)
+    return () => {
+      Object.assign(video.style, {
+        position: 'fixed',
+        inset: 'auto',
+        right: '0',
+        bottom: '0',
+        width: '2px',
+        height: '2px',
+        opacity: '0',
+        zIndex: '-1',
+      })
+      document.body.appendChild(video)
+    }
+  }
+
+  function playNow() {
+    video.muted = false
+    void video.play().then(() => (needsTap = false)).catch(() => {})
+  }
 
   onMount(() => {
     let disposed = false
+    void video.play().catch(() => {})
 
-    // Decide once: AR needs a live motion sensor. Give it a brief grace, then
-    // commit — otherwise the flat letterbox panel (the guaranteed path).
     const decide = async () => {
       if (ar.supported && ar.permission === 'granted') {
         for (let i = 0; i < 15 && !ar.hasReading && !disposed; i++) {
@@ -34,17 +65,18 @@
       }
       if (disposed) return
       useAr = ar.ready
-      await Promise.resolve() // let the canvas/video render
+      await Promise.resolve()
 
-      if (useAr && canvas && video) {
+      if (useAr && canvas) {
         const {createArStage} = await import('../lib/ar/stage')
-        if (disposed || !canvas || !video) return
-        stage = await createArStage(canvas, video)
+        if (disposed || !canvas) return
+        stage = await createArStage(canvas, video, r?.posterUrl)
         stage.showScreen()
-        setTimeout(() => haptics.revealLock(), 720)
-      } else {
-        haptics.revealLock()
       }
+      setTimeout(() => haptics.revealLock(), useAr ? 720 : 200)
+      setTimeout(() => {
+        if (!disposed && video.paused) needsTap = true
+      }, 900)
     }
     void decide()
 
@@ -52,6 +84,7 @@
       disposed = true
       stage?.dispose()
       stage = null
+      video.pause()
     }
   })
 
@@ -70,27 +103,20 @@
 <canvas bind:this={canvas} class="ar-canvas" class:hidden={!useAr}></canvas>
 
 <div class="reveal" class:ar={useAr}>
-  <div class="screen" class:offscreen={useAr}>
-    {#if r && !videoBroken}
-      <video
-        bind:this={video}
-        src={r.clipUrl}
-        poster={r.posterUrl}
-        autoplay
-        loop
-        muted={useAr}
-        playsinline
-        preload="auto"
-        onerror={() => (videoBroken = true)}
-      >
-        <track kind="captions" />
-      </video>
-    {:else if r && !posterBroken}
-      <img src={r.posterUrl} alt="" onerror={() => (posterBroken = true)} />
-    {:else}
-      <div class="ph"></div>
-    {/if}
-  </div>
+  {#if !useAr}
+    <div class="screen" {@attach panel}>
+      {#if r && posterBroken}
+        <div class="ph"></div>
+      {/if}
+    </div>
+  {/if}
+
+  {#if needsTap}
+    <button class="tap" onclick={playNow} aria-label="Play the scene">
+      <Icon name="play" size={30} />
+      <span>Play the scene</span>
+    </button>
+  {/if}
 
   <div class="info">
     <p class="mono">
@@ -106,15 +132,13 @@
         <Button variant="secondary" onclick={() => stage?.recenter()}>
           <Icon name="crosshair" size={18} /> Recentre
         </Button>
-      {:else}
-        <Button variant="secondary" onclick={() => toasts.show('Photo mode arrives soon')}>
-          <Icon name="camera" size={18} /> Take a photo
-        </Button>
       {/if}
       <Button onclick={next}>{r?.huntComplete ? 'See your result' : 'Next scene'}</Button>
     </div>
   </div>
 </div>
+
+<img src={r?.posterUrl} alt="" class="probe-poster" onerror={() => (posterBroken = true)} />
 
 <style>
   .ar-canvas {
@@ -125,6 +149,13 @@
   }
   .hidden {
     display: none;
+  }
+  .probe-poster {
+    position: fixed;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
   }
   .reveal {
     position: fixed;
@@ -165,6 +196,7 @@
     display: none;
   }
   .screen {
+    position: relative;
     width: 100%;
     max-width: 520px;
     aspect-ratio: 2.39 / 1;
@@ -177,28 +209,29 @@
       0 0 120px 20px rgba(232, 165, 76, 0.12);
     animation: rise 0.9s var(--ease-spring);
   }
-  .screen.offscreen {
-    position: fixed;
-    right: 0;
-    bottom: 0;
-    width: 64px;
-    height: 36px;
-    max-width: none;
-    opacity: 0;
-    box-shadow: none;
-    z-index: -1;
-    animation: none;
-  }
-  .screen video,
-  .screen img,
-  .screen .ph {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
   .ph {
+    position: absolute;
+    inset: 0;
     background: linear-gradient(160deg, #1a2230, #0a0d12);
+  }
+  .tap {
+    position: fixed;
+    top: 44%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 12;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-6);
+    border-radius: 999px;
+    color: var(--text);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    font-size: var(--step-13);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
   .info {
     width: 100%;

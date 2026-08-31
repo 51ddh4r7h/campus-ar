@@ -109,11 +109,11 @@ export const api = {
     }),
 
   // Dev/registration helpers — real events pre-register players out of band.
-  createBatch: (name: string) =>
-    request<{id: string; name: string; poolSize: number}>('/admin/batches', {
+  createBatch: (name: string, demo = false) =>
+    request<{id: string; name: string; isDemo: boolean; poolSize: number}>('/admin/batches', {
       method: 'POST',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify({name}),
+      body: JSON.stringify({name, demo}),
     }),
 
   registerPlayers: (

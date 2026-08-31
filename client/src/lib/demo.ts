@@ -14,7 +14,7 @@ const suffix = () => Math.random().toString(36).slice(2, 6)
 const DEMO_ROUTE = ['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium']
 
 export async function startDemo(): Promise<void> {
-  const batch = await api.createBatch(`Demo ${new Date().toISOString().slice(0, 16)}`)
+  const batch = await api.createBatch(`Demo ${new Date().toISOString().slice(0, 16)}`, true)
   const {players} = await api.registerPlayers(batch.id, [
     {name: 'Demo Player', rosterId: `demo-${suffix()}`, route: DEMO_ROUTE},
   ])

@@ -4,6 +4,7 @@
   import {location} from '../lib/stores/location.svelte'
   import {camera} from '../lib/stores/camera.svelte'
   import {ar} from '../lib/stores/ar.svelte'
+  import {demoAllowed} from '../lib/mode'
   import {startDemo} from '../lib/demo'
   import {toasts} from '../lib/stores/toast.svelte'
   import Button from '../lib/components/Button.svelte'
@@ -35,6 +36,10 @@
   }
 
   async function proceed() {
+    if (!game.token && !demoAllowed) {
+      nav.go('join')
+      return
+    }
     try {
       if (!game.token) await startDemo()
       nav.go('ready')

@@ -16,7 +16,7 @@ export class BadInput extends Error {
 const NonEmpty = v.pipe(v.string(), v.minLength(1))
 const Finite = v.pipe(v.number(), v.finite())
 
-const CreateBatchSchema = v.object({name: NonEmpty})
+const CreateBatchSchema = v.object({name: NonEmpty, demo: v.optional(v.boolean(), false)})
 
 const RegisterPlayersSchema = v.object({
   players: v.pipe(
@@ -64,7 +64,7 @@ const parse = <TSchema extends v.GenericSchema>(
   return result.output
 }
 
-export const parseCreateBatch = (raw: unknown): {name: string} => parse(CreateBatchSchema, raw)
+export const parseCreateBatch = (raw: unknown): {name: string; demo: boolean} => parse(CreateBatchSchema, raw)
 
 export const parseRegisterPlayers = (
   raw: unknown,

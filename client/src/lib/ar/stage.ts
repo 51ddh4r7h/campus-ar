@@ -24,6 +24,7 @@ const SCREEN = {distance: 4.2, width: 3.0, height: 1.26, y: 0.9, sag: 0.42}
 export async function createArStage(
   canvas: HTMLCanvasElement,
   video: HTMLVideoElement,
+  posterUrl?: string,
 ): Promise<ArStage> {
   const THREE = await import('three')
 
@@ -48,15 +49,29 @@ export async function createArStage(
   scene.add(anchor)
 
   const geo = curvedGeometry(THREE, SCREEN.width, SCREEN.height, SCREEN.sag)
-  const tex = new THREE.VideoTexture(video)
-  tex.colorSpace = THREE.SRGBColorSpace
-  const screenMat = new THREE.MeshBasicMaterial({map: tex, transparent: true, opacity: 0, toneMapped: false})
+  const videoTex = new THREE.VideoTexture(video)
+  videoTex.colorSpace = THREE.SRGBColorSpace
+  const posterTex = posterUrl ? new THREE.TextureLoader().load(posterUrl) : null
+  if (posterTex) posterTex.colorSpace = THREE.SRGBColorSpace
+  const screenMat = new THREE.MeshBasicMaterial({
+    map: posterTex ?? videoTex,
+    transparent: true,
+    opacity: 0,
+    toneMapped: false,
+  })
 
-  // Keep the clip playing — some browsers pause an off-screen <video>.
+  // Keep the clip playing (browsers pause an off-screen <video>) and switch the
+  // screen from poster → live video once it's actually running.
+  let onVideo = !posterTex
   const keepPlaying = () => {
     if (video.paused) void video.play().catch(() => {})
+    if (!onVideo && !video.paused && video.currentTime > 0 && video.readyState >= 2) {
+      screenMat.map = videoTex
+      screenMat.needsUpdate = true
+      onVideo = true
+    }
   }
-  const playPoll = setInterval(keepPlaying, 1000)
+  const playPoll = setInterval(keepPlaying, 500)
   const screen = new THREE.Mesh(geo, screenMat)
   screen.position.set(0, SCREEN.y, -SCREEN.distance)
   anchor.add(screen)
@@ -153,7 +168,8 @@ export async function createArStage(
       screenMat.dispose()
       frameMat.dispose()
       spillMat.dispose()
-      tex.dispose()
+      videoTex.dispose()
+      posterTex?.dispose()
       renderer.dispose()
     },
   }

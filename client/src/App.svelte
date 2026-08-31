@@ -8,8 +8,10 @@
   import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
   import {haptics} from './lib/haptics'
+  import {playerLink, demoAllowed} from './lib/mode'
 
   import Splash from './screens/Splash.svelte'
+  import Join from './screens/Join.svelte'
   import Welcome from './screens/Welcome.svelte'
   import Permissions from './screens/Permissions.svelte'
   import Ready from './screens/Ready.svelte'
@@ -23,18 +25,16 @@
   import StandingsSheet from './screens/StandingsSheet.svelte'
   import HereSheet from './screens/HereSheet.svelte'
   import Toaster from './lib/components/Toaster.svelte'
+  import DemoBadge from './lib/components/DemoBadge.svelte'
 
-  const screens = {splash: Splash, welcome: Welcome, permissions: Permissions, ready: Ready, clue: Clue, search: Search, reveal: Reveal, finish: Finish}
+  const screens = {splash: Splash, join: Join, welcome: Welcome, permissions: Permissions, ready: Ready, clue: Clue, search: Search, reveal: Reveal, finish: Finish}
   const Screen = $derived(screens[nav.screen])
 
   onMount(async () => {
-    // A pre-registered player's link: ?t=<token>&b=<batchId>
-    const url = new URL(window.location.href)
-    const t = url.searchParams.get('t')
-    const b = url.searchParams.get('b')
-    if (t && b) {
-      game.setCredentials(t, b, url.searchParams.get('n') ?? 'Player', {demo: false})
-      history.replaceState(null, '', url.pathname)
+    // A pre-registered player's personal link.
+    if (playerLink && !game.token) {
+      game.setCredentials(playerLink.token, playerLink.batchId, playerLink.name, {demo: false})
+      history.replaceState(null, '', window.location.pathname)
     }
 
     if (game.token) {
@@ -44,12 +44,12 @@
         await new Promise((r) => setTimeout(r, 2500))
         ok = await game.refresh()
       }
-      if (!game.token) nav.go('welcome')
+      if (!game.token) nav.go(demoAllowed ? 'welcome' : 'join')
       else if (game.complete) nav.go('finish')
       else if (game.inProgress) nav.go('clue')
-      else nav.go('ready')
+      else nav.go('welcome')
     } else {
-      setTimeout(() => nav.go('welcome'), 1400)
+      setTimeout(() => nav.go(demoAllowed ? 'welcome' : 'join'), 1400)
     }
   })
 
@@ -110,6 +110,10 @@
 
 {#if !game.online && ['clue', 'search', 'reveal'].includes(nav.screen)}
   <div class="offline" role="status">Reconnecting…</div>
+{/if}
+
+{#if game.demo && ['ready', 'clue', 'search', 'reveal', 'finish'].includes(nav.screen)}
+  <DemoBadge />
 {/if}
 
 {#if camera.lost && ['search', 'reveal'].includes(nav.screen)}

@@ -58,6 +58,7 @@ const config: OxlintConfig = {
       files: [
         'client/src/lib/haptics.ts',
         'client/src/lib/env.ts',
+        'client/src/lib/mode.ts',
         'client/src/lib/stores/ar.svelte.ts',
         'client/src/lib/stores/camera.svelte.ts',
         'client/src/lib/ar/**/*.ts',

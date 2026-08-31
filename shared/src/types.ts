@@ -43,6 +43,8 @@ export interface Batch {
   /** Seed used to generate this batch's balanced route pool. */
   routePoolSeed: string
   parConstants: ParConstants
+  /** A throwaway practice batch — never mixed with real event results. */
+  isDemo: boolean
 }
 
 export interface Player {

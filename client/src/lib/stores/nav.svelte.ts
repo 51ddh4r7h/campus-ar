@@ -2,6 +2,7 @@
 
 export type Screen =
   | 'splash'
+  | 'join'
   | 'welcome'
   | 'permissions'
   | 'ready'

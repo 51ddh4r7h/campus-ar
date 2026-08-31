@@ -5,6 +5,7 @@
   import {game} from '../lib/stores/game.svelte'
   import {location} from '../lib/stores/location.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
+  import {primeReveal} from '../lib/reveal-video'
   import Sheet from '../lib/components/Sheet.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
@@ -45,6 +46,8 @@
 
   async function reveal() {
     if (!game.token || revealing) return
+    // Carry this user gesture into playback so mobile lets the clip start.
+    if (game.clue?.clipUrl) primeReveal(game.clue.clipUrl)
     revealing = true
     // Keep trying through a flaky signal — the player is standing at the spot.
     for (let attempt = 0; attempt < 20 && !cancelled; attempt++) {

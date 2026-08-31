@@ -26,6 +26,7 @@ interface BatchRow {
   created_at_ms: number
   route_pool_seed: string
   par_constants: string
+  is_demo: number
   pool: string
 }
 interface PlayerRow {
@@ -70,6 +71,7 @@ const toBatch = (r: BatchRow): StoredBatch => ({
   createdAtMs: r.created_at_ms,
   routePoolSeed: r.route_pool_seed,
   parConstants: json(r.par_constants),
+  isDemo: r.is_demo === 1,
   pool: json(r.pool),
 })
 
@@ -117,10 +119,10 @@ export class D1Store implements GameStore {
   async putBatch(b: StoredBatch): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO batch (id, name, status, created_at_ms, route_pool_seed, par_constants, pool)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        `INSERT INTO batch (id, name, status, created_at_ms, route_pool_seed, par_constants, is_demo, pool)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(id) DO UPDATE SET
-           name = ?2, status = ?3, par_constants = ?6, pool = ?7`,
+           name = ?2, status = ?3, par_constants = ?6, pool = ?8`,
       )
       .bind(
         b.id,
@@ -129,6 +131,7 @@ export class D1Store implements GameStore {
         b.createdAtMs,
         b.routePoolSeed,
         JSON.stringify(b.parConstants),
+        b.isDemo ? 1 : 0,
         JSON.stringify(b.pool),
       )
       .run()

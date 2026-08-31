@@ -71,6 +71,7 @@ const hintPenaltyForCount = (count: number, pc: ParConstants): number => {
 export interface CreateBatchInput {
   name: string
   parConstants?: ParConstants
+  isDemo?: boolean
 }
 
 export interface RegisterPlayerInput {
@@ -153,6 +154,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         createdAtMs: deps.now(),
         routePoolSeed: seed,
         parConstants: pc,
+        isDemo: input.isDemo ?? false,
         pool,
       }
       await store.putBatch(batch)

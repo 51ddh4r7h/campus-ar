@@ -63,11 +63,12 @@ export const createApp = (
   app.post('/admin/batches', async (c) => {
     requireAdmin(c.env, c.req.header('X-Admin-Key'))
     const body = parseCreateBatch(await c.req.json())
-    const batch = await engineFor(c.env).createBatch({name: body.name})
+    const batch = await engineFor(c.env).createBatch({name: body.name, isDemo: body.demo})
     return c.json({
       id: batch.id,
       name: batch.name,
       status: batch.status,
+      isDemo: batch.isDemo,
       poolSize: batch.pool.routes.length,
       relaxed: batch.pool.relaxed,
       stats: batch.pool.stats,
