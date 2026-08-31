@@ -21,7 +21,18 @@ export interface ArStage {
   dispose(): void
 }
 
-const SCREEN = {distance: 3.6, width: 3.0, height: 1.26, y: 0.15, sag: 0.4}
+/**
+ * The screen is 2.39:1 cinemascope, `width` metres across, sitting slightly
+ * below eye level. Its distance is not fixed: `fit()` derives it from the live
+ * field of view so the screen always fills `FILL` of the frame's width, on any
+ * phone, in any orientation.
+ */
+const SCREEN = {width: 3.0, height: 1.26, y: -0.35, sag: 0.4}
+
+/** Typical phone rear-camera horizontal field of view. */
+const CAMERA_HFOV_DEG = 66
+/** Fraction of the frame's width the screen should occupy. */
+const FILL = 0.62
 
 export async function createArStage(
   canvas: HTMLCanvasElement,
@@ -33,7 +44,11 @@ export async function createArStage(
   const renderer = new THREE.WebGLRenderer({canvas, alpha: true, antialias: true})
   renderer.setClearAlpha(0)
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 100)
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 100)
+  const deg2rad = Math.PI / 180
+
+  /** Distance at which the screen fills FILL of the frame width. Set by fit(). */
+  let distance = 4
 
   const resize = () => {
     const w = window.innerWidth
@@ -41,9 +56,17 @@ export async function createArStage(
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
     renderer.setSize(w, h, false)
     camera.aspect = w / h
+
+    // three's `fov` is vertical; we want to match the phone camera's *horizontal*
+    // view, which on a portrait screen means a very tall vertical fov. Deriving
+    // it keeps our screen the same apparent size as the real world behind it.
+    const halfH = Math.tan((CAMERA_HFOV_DEG * deg2rad) / 2)
+    camera.fov = (2 * Math.atan(halfH / camera.aspect)) / deg2rad
     camera.updateProjectionMatrix()
+
+    distance = SCREEN.width / (FILL * 2 * halfH)
+    fit()
   }
-  resize()
   window.addEventListener('resize', resize)
 
   // ---- the anchored group (heading-locked) -------------------------------
@@ -55,11 +78,16 @@ export async function createArStage(
   videoTex.colorSpace = THREE.SRGBColorSpace
   const posterTex = posterUrl ? new THREE.TextureLoader().load(posterUrl) : null
   if (posterTex) posterTex.colorSpace = THREE.SRGBColorSpace
+  // depthTest off throughout: the scene is a single flat composition drawn over
+  // the camera feed, and the frame sits only 4cm behind the screen — close
+  // enough that depth testing z-fights and makes the picture strobe.
   const screenMat = new THREE.MeshBasicMaterial({
     map: posterTex ?? videoTex,
     transparent: true,
     opacity: 0,
     toneMapped: false,
+    depthTest: false,
+    depthWrite: false,
   })
 
   // Keep the clip playing (browsers pause an off-screen <video>) and switch the
@@ -75,17 +103,22 @@ export async function createArStage(
   }
   const playPoll = setInterval(keepPlaying, 500)
   const screen = new THREE.Mesh(geo, screenMat)
-  screen.position.set(0, SCREEN.y, -SCREEN.distance)
+  screen.renderOrder = 2
   anchor.add(screen)
 
   // thin bright frame
-  const frameMat = new THREE.MeshBasicMaterial({color: 0xf5f3ec, transparent: true, opacity: 0})
+  const frameMat = new THREE.MeshBasicMaterial({
+    color: 0xf5f3ec,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+  })
   const frame = new THREE.Mesh(
     curvedGeometry(THREE, SCREEN.width + 0.06, SCREEN.height + 0.06, SCREEN.sag),
     frameMat,
   )
-  frame.position.copy(screen.position)
-  frame.position.z -= 0.02
+  frame.renderOrder = 1
   anchor.add(frame)
 
   // warm spill on the ground in front of the screen
@@ -94,23 +127,31 @@ export async function createArStage(
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
+    depthTest: false,
     depthWrite: false,
   })
   const spill = new THREE.Mesh(new THREE.CircleGeometry(3.4, 40), spillMat)
   spill.rotation.x = -Math.PI / 2
-  spill.position.set(0, 0.02, -SCREEN.distance + 0.6)
+  spill.renderOrder = 0
   anchor.add(spill)
 
   const light = new THREE.PointLight(0xffd9a8, 0, 12)
-  light.position.set(0, SCREEN.y, -SCREEN.distance + 1.5)
   anchor.add(light)
+
+  /** Re-place everything for the current `distance`. */
+  function fit(): void {
+    screen.position.set(0, SCREEN.y, -distance)
+    frame.position.set(0, SCREEN.y, -distance - 0.04)
+    spill.position.set(0, SCREEN.y - 1.15, -distance + 0.6)
+    light.position.set(0, SCREEN.y, -distance + 1.5)
+  }
+  resize()
 
   // ---- device orientation → camera quaternion ---------------------------
   const zee = new THREE.Vector3(0, 0, 1)
   const euler = new THREE.Euler()
   const q0 = new THREE.Quaternion()
   const qMinusHalfPiX = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2)
-  const deg2rad = Math.PI / 180
   let orient = {alpha: 0, beta: 0, gamma: 0}
   let headingOffset = 0
   let haveReading = false
@@ -152,16 +193,26 @@ export async function createArStage(
     if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1)
     fwd.normalize()
     headingOffset = Math.atan2(-fwd.x, -fwd.z)
+    anchor.rotation.y = headingOffset
   }
 
   // ---- show / hide / recenter -----------------------------------------
   let visible = false
   let shownAt = 0
+  /**
+   * Anchoring needs a real pose. showScreen() usually runs a few milliseconds
+   * after the listeners are attached — before the first orientation event — so
+   * we defer the capture to the first frame that actually has a reading.
+   * Without this the screen anchors to yaw 0 and ends up behind the player,
+   * and only a manual Recentre brings it into view.
+   */
+  let needsAnchor = false
 
   const stage: ArStage = {
     showScreen() {
       visible = true
       shownAt = performance.now()
+      needsAnchor = true
       faceForward()
       void video.play().catch(() => {})
     },
@@ -169,6 +220,8 @@ export async function createArStage(
       visible = false
     },
     recenter() {
+      needsAnchor = false
+      shownAt = Math.min(shownAt, performance.now() - 700)
       faceForward()
     },
     setHeat(heat: number) {
@@ -202,6 +255,13 @@ export async function createArStage(
     if (!running) return
     requestAnimationFrame(tick)
     frames++
+
+    // The first real reading is also the first chance to anchor correctly.
+    if (needsAnchor && haveReading) {
+      needsAnchor = false
+      shownAt = performance.now()
+      faceForward()
+    }
     if (haveReading) applyPose()
 
     // ease the screen in
@@ -209,10 +269,8 @@ export async function createArStage(
     const eased = t * t * (3 - 2 * t)
     screenMat.opacity = eased
     frameMat.opacity = eased * 0.9
-    screen.scale.setScalar(0.9 + eased * 0.1)
+    screen.scale.setScalar(0.96 + eased * 0.04)
     frame.scale.copy(screen.scale)
-    // subtle life
-    anchor.position.y = Math.sin(performance.now() / 1400) * 0.015
 
     renderer.render(scene, camera)
   }
