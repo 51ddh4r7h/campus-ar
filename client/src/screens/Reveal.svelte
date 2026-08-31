@@ -119,7 +119,15 @@
     }
     void decide()
 
+    const diagTimer = debugMode
+      ? setInterval(() => {
+          report('live')
+          if (stage) diag += ` :: ${stage.stats()}`
+        }, 1000)
+      : null
+
     return () => {
+      if (diagTimer) clearInterval(diagTimer)
       disposed = true
       stage?.dispose()
       stage = null

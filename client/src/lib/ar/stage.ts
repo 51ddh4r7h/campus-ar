@@ -16,10 +16,12 @@ export interface ArStage {
   recenter(): void
   /** Brighten the warm spill as the player closes in (heat 0-100). */
   setHeat(heat: number): void
+  /** Debug: frames rendered / current screen opacity. */
+  stats(): string
   dispose(): void
 }
 
-const SCREEN = {distance: 4.2, width: 3.0, height: 1.26, y: 0.9, sag: 0.42}
+const SCREEN = {distance: 3.6, width: 3.0, height: 1.26, y: 0.15, sag: 0.4}
 
 export async function createArStage(
   canvas: HTMLCanvasElement,
@@ -135,8 +137,21 @@ export async function createArStage(
     camera.quaternion.setFromEuler(euler)
     camera.quaternion.multiply(qMinusHalfPiX)
     camera.quaternion.multiply(q0.setFromAxisAngle(zee, -screenAngle() * deg2rad))
-    // heading-lock the anchor: rotate it opposite the captured heading
     anchor.rotation.y = headingOffset
+  }
+
+  // Point the anchor at wherever the camera is looking *right now*, flattened to
+  // the horizon. Placing the screen along the camera's real forward vector — not
+  // a hand-rolled compass formula — means it is always dead-centre when it
+  // appears, whatever the orientation-event conventions of this device.
+  const fwd = new THREE.Vector3()
+  const faceForward = () => {
+    if (haveReading) applyPose()
+    camera.getWorldDirection(fwd)
+    fwd.y = 0
+    if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1)
+    fwd.normalize()
+    headingOffset = Math.atan2(-fwd.x, -fwd.z)
   }
 
   // ---- show / hide / recenter -----------------------------------------
@@ -147,20 +162,22 @@ export async function createArStage(
     showScreen() {
       visible = true
       shownAt = performance.now()
-      // anchor to whatever direction you're facing right now
-      headingOffset = -orient.alpha * deg2rad
+      faceForward()
       void video.play().catch(() => {})
     },
     hideScreen() {
       visible = false
     },
     recenter() {
-      headingOffset = -orient.alpha * deg2rad
+      faceForward()
     },
     setHeat(heat: number) {
       const k = Math.max(0, Math.min(1, heat / 100))
       light.intensity = 0.4 + k * 2.2
       spillMat.opacity = visible ? 0.14 + k * 0.22 : 0
+    },
+    stats() {
+      return `f=${frames} op=${screenMat.opacity.toFixed(2)} vis=${visible} read=${haveReading} yaw=${((headingOffset * 180) / Math.PI).toFixed(0)} gl=${renderer.getContext().isContextLost() ? 'LOST' : 'ok'}`
     },
     dispose() {
       running = false
@@ -180,9 +197,11 @@ export async function createArStage(
 
   // ---- render loop ----------------------------------------------------
   let running = true
+  let frames = 0
   const tick = () => {
     if (!running) return
     requestAnimationFrame(tick)
+    frames++
     if (haveReading) applyPose()
 
     // ease the screen in
