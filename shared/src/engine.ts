@@ -18,6 +18,7 @@ import {VALIDATION} from './config'
 import {haversineM} from './geo'
 import {bandFromHeat, heatFromDistance} from './heat'
 import {evaluateArrival} from './validation'
+import type {ArrivalOutcome} from './validation'
 import type {GameStore, StoredBatch} from './store'
 import type {
   ClueView,
@@ -33,6 +34,7 @@ import type {
   Split,
   StandingRow,
   StartHuntResponse,
+  ValidationFailure,
   ValidationResult,
 } from './types'
 
@@ -67,6 +69,46 @@ const hintPenaltyForCount = (count: number, pc: ParConstants): number => {
   }
   return total
 }
+
+/** An arrival that actually landed, with its timestamp narrowed to a number. */
+type ReachedOutcome = ArrivalOutcome & {reachedTsMs: number}
+
+const reached = (o: ArrivalOutcome): o is ReachedOutcome => o.ok && o.reachedTsMs !== null
+
+/** An arrival the server refused. The clock keeps running; nothing is written. */
+const rejectArrival = (
+  session: Session,
+  failure: ValidationFailure | null,
+  nextClue: ClueView | null,
+): ValidationResult => ({ok: false, failure, session, split: null, reveal: null, nextClue})
+
+/** Move the player on to the next level, or close out the hunt on the last one. */
+const advanceSession = (session: Session, route: Route, reachedTsMs: number): Session => {
+  const nextLevel = session.currentLevel + 1
+  const complete = nextLevel > LEVEL_COUNT
+  const elapsedMs = reachedTsMs - (session.startTsMs ?? reachedTsMs)
+  return {
+    ...session,
+    currentLevel: nextLevel,
+    currentLevelHints: 0,
+    status: complete ? 'complete' : 'in_progress',
+    endTsMs: complete ? reachedTsMs : null,
+    scoreMs: complete ? sessionScoreMs(elapsedMs, session.penaltyMs, route.parTotalMs) : null,
+  }
+}
+
+/** The reward payload for a level just completed. */
+const revealView = (target: GameLocation, split: Split, huntComplete: boolean) => ({
+  level: split.level,
+  locationName: target.name,
+  movie: target.movie,
+  campusFact: target.campusFact,
+  clipUrl: target.clipUrl,
+  posterUrl: target.posterUrl,
+  splitMs: split.splitMs,
+  penaltyMs: split.penaltyMs,
+  huntComplete,
+})
 
 export interface CreateBatchInput {
   name: string
@@ -121,6 +163,34 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     if (session.currentLevel <= 1) return session.startTsMs ?? deps.now()
     const prior = splits.find((s) => s.level === session.currentLevel - 1)
     return prior?.reachedTsMs ?? session.startTsMs ?? deps.now()
+  }
+
+  /** Persist the split for the level just finished, and its telemetry. */
+  const recordSplit = async (
+    session: Session,
+    target: GameLocation,
+    outcome: ReachedOutcome,
+    prevTsMs: number,
+    pc: ParConstants,
+  ): Promise<Split> => {
+    const split: Split = {
+      playerId: session.playerId,
+      level: session.currentLevel,
+      locationId: target.id,
+      reachedTsMs: outcome.reachedTsMs,
+      splitMs: outcome.reachedTsMs - prevTsMs,
+      hintsUsed: session.currentLevelHints,
+      penaltyMs: hintPenaltyForCount(session.currentLevelHints, pc),
+    }
+    await store.putSplit(split)
+    await event(session.playerId, 'location_reached', {
+      level: split.level,
+      splitMs: split.splitMs,
+    })
+    if (outcome.flagged) {
+      await event(session.playerId, 'speed_flag', {level: split.level})
+    }
+    return split
   }
 
   async function authed(token: string): Promise<{
@@ -303,14 +373,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     async arrive(token: string, samples: readonly GeoSample[]): Promise<ValidationResult> {
       const {session, route, batch} = await authed(token)
       if (session.status !== 'in_progress') {
-        return {
-          ok: false,
-          failure: 'not_in_progress',
-          session,
-          split: null,
-          reveal: null,
-          nextClue: null,
-        }
+        return rejectArrival(session, 'not_in_progress', null)
       }
 
       const stops = resolveStops(route)
@@ -325,56 +388,18 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         nowMs: deps.now(),
       })
 
-      if (!outcome.ok || outcome.reachedTsMs === null) {
+      if (!reached(outcome)) {
         if (outcome.failure === 'level_locked') {
           await event(session.playerId, 'skip_attempt', {level: session.currentLevel})
         }
-        return {
-          ok: false,
-          failure: outcome.failure,
-          session,
-          split: null,
-          reveal: null,
-          nextClue: clueView(route, session),
-        }
+        return rejectArrival(session, outcome.failure, clueView(route, session))
       }
 
       const target = stops[session.currentLevel - 1]!
-      const penaltyMs = hintPenaltyForCount(session.currentLevelHints, batch.parConstants)
-      const split: Split = {
-        playerId: session.playerId,
-        level: session.currentLevel,
-        locationId: target.id,
-        reachedTsMs: outcome.reachedTsMs,
-        splitMs: outcome.reachedTsMs - prev,
-        hintsUsed: session.currentLevelHints,
-        penaltyMs,
-      }
-      await store.putSplit(split)
-      await event(session.playerId, 'location_reached', {
-        level: split.level,
-        splitMs: split.splitMs,
-      })
-      if (outcome.flagged) {
-        await event(session.playerId, 'speed_flag', {level: split.level})
-      }
+      const split = await recordSplit(session, target, outcome, prev, batch.parConstants)
+      const next = advanceSession(session, route, outcome.reachedTsMs)
+      const complete = next.status === 'complete'
 
-      const nextLevel = session.currentLevel + 1
-      const complete = nextLevel > LEVEL_COUNT
-      const next: Session = {
-        ...session,
-        currentLevel: nextLevel,
-        currentLevelHints: 0,
-        status: complete ? 'complete' : 'in_progress',
-        endTsMs: complete ? outcome.reachedTsMs : null,
-        scoreMs: complete
-          ? sessionScoreMs(
-              outcome.reachedTsMs - (session.startTsMs ?? outcome.reachedTsMs),
-              session.penaltyMs,
-              route.parTotalMs,
-            )
-          : null,
-      }
       await store.putSession(next)
       if (complete) {
         await event(session.playerId, 'hunt_completed', {scoreMs: next.scoreMs ?? 0})
@@ -385,17 +410,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         failure: null,
         session: next,
         split,
-        reveal: {
-          level: split.level,
-          locationName: target.name,
-          movie: target.movie,
-          campusFact: target.campusFact,
-          clipUrl: target.clipUrl,
-          posterUrl: target.posterUrl,
-          splitMs: split.splitMs,
-          penaltyMs: split.penaltyMs,
-          huntComplete: complete,
-        },
+        reveal: revealView(target, split, complete),
         nextClue: complete ? null : clueView(route, next),
       }
     },

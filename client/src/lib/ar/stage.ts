@@ -298,6 +298,29 @@ export async function createArStage(
     },
   }
 
+  /** Entry progress 0-1: the 700ms ease, or the externally-driven assembly. */
+  const entryProgress = (): number => {
+    if (!visible) return 0
+    if (assembling) return buildP
+    const t = Math.min(1, (performance.now() - shownAt) / 700)
+    return t * t * (3 - 2 * t)
+  }
+
+  /**
+   * The screen builds outward-in: frame edges, then the dark panel, then the
+   * picture. Off the assembly path all three windows collapse into one fade.
+   */
+  const applyEntry = (p: number): void => {
+    frameMat.opacity = (assembling ? phase(p, 0, 0.3) : p) * 0.9
+    backMat.opacity = (assembling ? phase(p, 0.18, 0.58) : p) * 0.88
+    screenMat.opacity = assembling ? phase(p, 0.5, 1) : p
+    glowMat.opacity = (0.35 + heatK * 0.4) * p
+
+    screen.scale.setScalar(0.96 + p * 0.04)
+    back.scale.copy(screen.scale)
+    frame.scale.copy(screen.scale)
+  }
+
   // ---- render loop ----------------------------------------------------
   let running = true
   let frames = 0
@@ -313,30 +336,7 @@ export async function createArStage(
       faceForward()
     }
     if (haveReading) applyPose()
-
-    // Entry progress: either the 700ms ease, or the externally-driven assembly.
-    let p = 0
-    if (visible) {
-      if (assembling) p = buildP
-      else {
-        const t = Math.min(1, (performance.now() - shownAt) / 700)
-        p = t * t * (3 - 2 * t)
-      }
-    }
-
-    // The screen builds outward-in: frame edges, then the dark panel, then the
-    // picture. Off the assembly path all three windows overlap into one fade.
-    frameMat.opacity = (assembling ? phase(p, 0, 0.3) : p) * 0.9
-    backMat.opacity = (assembling ? phase(p, 0.18, 0.58) : p) * 0.88
-    screenMat.opacity = assembling ? phase(p, 0.5, 1) : p
-
-    glowMat.opacity = (0.35 + heatK * 0.4) * p
-
-    const s = 0.96 + p * 0.04
-    screen.scale.setScalar(s)
-    back.scale.copy(screen.scale)
-    frame.scale.copy(screen.scale)
-
+    applyEntry(entryProgress())
     renderer.render(scene, camera)
   }
   tick()

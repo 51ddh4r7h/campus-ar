@@ -18,6 +18,9 @@ const config: OxlintConfig = {
   ],
   jsPlugins: [{name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts'}],
   rules: {
+    // Anything past 10 is in "refactor now" territory: split it into named
+    // steps rather than raising this number.
+    complexity: ['error', {max: 10}],
     'anti-slop/no-chained-type-assertions': 'error',
     'anti-slop/no-conditional-empty-object-spread': 'error',
     'anti-slop/no-known-value-widening': 'error',

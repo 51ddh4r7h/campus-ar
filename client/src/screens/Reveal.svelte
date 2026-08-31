@@ -5,7 +5,7 @@
    * is what builds it. When the dwell completes the server validates, the sound
    * comes up, and the scene plays where it was actually shot.
    */
-  import type {ValidationFailure} from '@cmh/shared'
+  import type {ValidationFailure, ValidationResult} from '@cmh/shared'
   import {formatMarquee} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
@@ -42,55 +42,65 @@
         : null,
   )
 
-  function failureMessage(f: ValidationFailure | null): string {
-    switch (f) {
-      case 'dwell':
-        return 'Hold still a moment longer'
-      case 'signal':
-        return 'Move to more open ground for a clearer signal'
-      case 'too_fast':
-        return 'Take a moment — you got here very quickly'
-      case 'wrong_location':
-        return "This isn't your scene. Keep looking."
-      case 'level_locked':
-        return 'Finish the earlier scenes first'
-      default:
-        return 'Not yet'
-    }
-  }
+  const FAILURE_MESSAGE = {
+    dwell: 'Hold still a moment longer',
+    signal: 'Move to more open ground for a clearer signal',
+    too_fast: 'Take a moment — you got here very quickly',
+    wrong_location: "This isn't your scene. Keep looking.",
+    level_locked: 'Finish the earlier scenes first',
+    not_in_progress: 'This hunt is over',
+  } satisfies Record<ValidationFailure, string>
+
+  /** Failures that mean you're not where you think — back to searching. */
+  const sendsYouBack = (f: ValidationFailure | null): boolean =>
+    f === 'wrong_location' || f === 'level_locked'
+
+  /** A wobbly signal is worth another go; anything else is final. */
+  const isTransient = (err: ApiError): boolean => err.code === 'offline' || err.code === 'server'
 
   let cancelled = false
   $effect(() => () => (cancelled = true))
 
+  function abandon(message: string): void {
+    validating = false
+    retrying = false
+    toasts.show(message, 'alert')
+  }
+
+  /** Act on a verdict the server actually returned. */
+  function settle(res: ValidationResult): void {
+    retrying = false
+    if (res.ok) {
+      played = true
+      haptics.revealLock()
+      screen?.replay()
+      return
+    }
+    validating = false
+    if (sendsYouBack(res.failure)) {
+      toasts.show(res.failure ? FAILURE_MESSAGE[res.failure] : 'Not yet', 'alert')
+      nav.go('search')
+    }
+  }
+
+  /** One claim at a time, only while we hold a session and haven't locked yet. */
+  const canClaim = (): boolean => game.token !== null && !validating && !played
+
   async function claim() {
-    if (!game.token || validating || played) return
+    if (!canClaim()) return
     validating = true
     // The player is standing on the spot — keep trying through a flaky signal.
     for (let attempt = 0; attempt < 20 && !cancelled; attempt++) {
       try {
-        const res = await game.arrive(location.recent())
-        retrying = false
-        if (res.ok) {
-          played = true
-          haptics.revealLock()
-          screen?.replay()
-        } else {
-          validating = false
-          if (res.failure === 'wrong_location' || res.failure === 'level_locked') {
-            toasts.show(failureMessage(res.failure), 'alert')
-            nav.go('search')
-          }
-        }
+        settle(await game.arrive(location.recent()))
         return
       } catch (err) {
-        if (err instanceof ApiError && (err.code === 'offline' || err.code === 'server')) {
+        if (err instanceof ApiError && isTransient(err)) {
           retrying = true
           await new Promise((res) => setTimeout(res, 3500))
           continue
         }
-        validating = false
-        retrying = false
-        toasts.show('Something went wrong — hold tight', 'alert')
+        abandon('Something went wrong — hold tight')
         return
       }
     }

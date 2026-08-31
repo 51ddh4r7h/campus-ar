@@ -3,6 +3,7 @@
   import {api} from './lib/api'
   import {game} from './lib/stores/game.svelte'
   import {nav} from './lib/stores/nav.svelte'
+  import type {Screen as ScreenName} from './lib/stores/nav.svelte'
   import {location} from './lib/stores/location.svelte'
   import {camera} from './lib/stores/camera.svelte'
   import {probe} from './lib/stores/probe.svelte'
@@ -29,6 +30,26 @@
   const screens = {splash: Splash, join: Join, welcome: Welcome, permissions: Permissions, ready: Ready, clue: Clue, search: Search, reveal: Reveal, finish: Finish}
   const Screen = $derived(screens[nav.screen])
 
+  /** Where someone with no live session lands. */
+  const entryScreen = (): ScreenName => (demoAllowed ? 'welcome' : 'join')
+
+  /** The session lives on the server — keep asking through a bad cold start. */
+  async function restoreSession(): Promise<void> {
+    let ok = await game.refresh()
+    for (let i = 0; i < 20 && !ok && game.token; i++) {
+      await new Promise((r) => setTimeout(r, 2500))
+      ok = await game.refresh()
+    }
+  }
+
+  /** Drop the player back exactly where the server says they are. */
+  function routeToSession(): void {
+    if (!game.token) nav.go(entryScreen())
+    else if (game.complete) nav.go('finish')
+    else if (game.inProgress) nav.go('clue')
+    else nav.go('welcome')
+  }
+
   onMount(async () => {
     // A pre-registered player's personal link.
     if (playerLink && !game.token) {
@@ -36,30 +57,28 @@
       history.replaceState(null, '', window.location.pathname)
     }
 
-    if (game.token) {
-      // Retry through a bad connection on cold start — the session is on the server.
-      let ok = await game.refresh()
-      for (let i = 0; i < 20 && !ok && game.token; i++) {
-        await new Promise((r) => setTimeout(r, 2500))
-        ok = await game.refresh()
-      }
-      if (!game.token) nav.go(demoAllowed ? 'welcome' : 'join')
-      else if (game.complete) nav.go('finish')
-      else if (game.inProgress) nav.go('clue')
-      else nav.go('welcome')
-    } else {
-      setTimeout(() => nav.go(demoAllowed ? 'welcome' : 'join'), 1400)
+    if (!game.token) {
+      setTimeout(() => nav.go(entryScreen()), 1400)
+      return
     }
+    await restoreSession()
+    routeToSession()
   })
+
+  const PLAYING: readonly ScreenName[] = ['clue', 'search', 'reveal']
+  /** Screens shot through the live camera. */
+  const THROUGH_LENS: readonly ScreenName[] = ['search', 'reveal']
+  /** Screens where the hunt isn't running, so the sensors should be off. */
+  const IDLE: readonly ScreenName[] = ['finish', 'welcome']
+
+  const playing = $derived(game.inProgress && PLAYING.includes(nav.screen))
+  const wantsCamera = $derived(playing && THROUGH_LENS.includes(nav.screen))
 
   // GPS + camera lifecycle — run through the playing screens, stop elsewhere.
   $effect(() => {
-    const playing = game.inProgress && ['clue', 'search', 'reveal'].includes(nav.screen)
     if (playing && location.mode === 'off') location.start(game.demo ? 'sim' : 'real')
-    if (playing && (nav.screen === 'search' || nav.screen === 'reveal') && !camera.active) {
-      void camera.start()
-    }
-    if (nav.screen === 'finish' || nav.screen === 'welcome') {
+    if (wantsCamera && !camera.active) void camera.start()
+    if (IDLE.includes(nav.screen)) {
       location.stop()
       camera.stop()
     }
@@ -108,7 +127,7 @@
 {#if nav.sheet === 'hint'}<HintSheet />{/if}
 {#if nav.sheet === 'standings'}<StandingsSheet />{/if}
 
-{#if !game.online && ['clue', 'search', 'reveal'].includes(nav.screen)}
+{#if !game.online && PLAYING.includes(nav.screen)}
   <div class="offline" role="status">Reconnecting…</div>
 {/if}
 
@@ -116,7 +135,7 @@
   <DemoBadge />
 {/if}
 
-{#if camera.lost && ['search', 'reveal'].includes(nav.screen)}
+{#if camera.lost && THROUGH_LENS.includes(nav.screen)}
   <div class="recover" role="alertdialog" aria-label="Camera turned off">
     <p><b>Camera turned off</b></p>
     <p class="dim">Turn it back on to keep playing — your timer's still running.</p>

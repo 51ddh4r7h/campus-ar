@@ -28,7 +28,12 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Fetch, mapping the two failures that mean "the network or the server is
+ * down" onto ApiError and flipping the shared online flag. Everything it
+ * returns is a response the caller can actually read.
+ */
+async function send(path: string, init?: RequestInit): Promise<Response> {
   let res: Response
   try {
     res = await fetch(`${BASE}${path}`, init)
@@ -41,6 +46,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(res.status, 'server', 'server error')
   }
   net.mark(true)
+  return res
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await send(path, init)
   if (res.status === 204) {
     // SAFETY: a 204 has no body; void-returning callers type T as void.
     return undefined as T

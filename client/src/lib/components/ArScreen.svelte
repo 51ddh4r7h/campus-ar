@@ -96,38 +96,51 @@
     video.addEventListener('error', onError)
     play()
 
+    /** A pose-less AR screen looks wrong, so give the sensor a moment to report. */
+    const waitForSensor = async () => {
+      if (!ar.worthTrying) return
+      for (let i = 0; i < 18 && !ar.hasReading && !disposed; i++) {
+        await new Promise((res) => setTimeout(res, 100))
+      }
+    }
+
+    /** Build the three.js stage. False means fall back to the flat panel. */
+    const mountStage = async (): Promise<boolean> => {
+      if (!canvas) return false
+      try {
+        const {createArStage} = await import('../ar/stage')
+        if (disposed || !canvas) return false
+        stage = await createArStage(canvas, video, posterUrl)
+        stage.setHeat(heat)
+        if (build !== null) stage.setBuild(build)
+        stage.showScreen({assemble: build !== null})
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    /** A missing clip is a content gap, not something a tap can fix. */
+    const checkPlayback = () => {
+      if (disposed) return
+      if (video.error) broken = true
+      else if (video.paused) needsTap = true
+    }
+
     const start = async () => {
       await ar.ensure()
-      if (ar.worthTrying) {
-        for (let i = 0; i < 18 && !ar.hasReading && !disposed; i++) {
-          await new Promise((res) => setTimeout(res, 100))
-        }
-      }
+      await waitForSensor()
       if (disposed) return
+
+      // Reveal the canvas *before* mounting: three.js sizes to a laid-out
+      // element, and a display:none canvas gives it a zero-size viewport.
       useAr = ar.worthTrying && canvas !== null
       await Promise.resolve()
+      if (useAr) useAr = await mountStage()
 
-      if (useAr && canvas) {
-        try {
-          const {createArStage} = await import('../ar/stage')
-          if (disposed || !canvas) return
-          stage = await createArStage(canvas, video, posterUrl)
-          stage.setHeat(heat)
-          if (build !== null) stage.setBuild(build)
-          stage.showScreen({assemble: build !== null})
-        } catch {
-          useAr = false
-        }
-      }
       ready = true
       onshown?.(useAr)
-      setTimeout(() => {
-        if (disposed) return
-        // A missing clip is a content gap, not something a tap can fix — show
-        // the empty screen rather than a button that does nothing.
-        if (video.error) broken = true
-        else if (video.paused) needsTap = true
-      }, 1200)
+      setTimeout(checkPlayback, 1200)
     }
     void start()
 

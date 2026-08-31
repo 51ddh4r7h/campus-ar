@@ -112,6 +112,46 @@ function tightestWindow(sortedByPar: Candidate[], size: number): Candidate[] {
   return sortedByPar.slice(bestStart, bestStart + size)
 }
 
+/** Candidates bucketed by their total difficulty. */
+const bucketByDifficulty = (candidates: readonly Candidate[]): Map<number, Candidate[]> => {
+  const bySum = new Map<number, Candidate[]>()
+  for (const c of candidates) {
+    const bucket = bySum.get(c.difficultySum) ?? []
+    bucket.push(c)
+    bySum.set(c.difficultySum, bucket)
+  }
+  return bySum
+}
+
+/**
+ * Which total-difficulty values a route may have. Routes are allowed to differ
+ * by one point of difficulty, so we anchor on the pair of adjacent sums holding
+ * the most candidates — that keeps the pool both large and tightly banded.
+ */
+const allowedDifficultySums = (candidates: readonly Candidate[]): ReadonlySet<number> => {
+  const bySum = bucketByDifficulty(candidates)
+  const sums = [...bySum.keys()].sort((a, b) => a - b)
+  const sizeAt = (s: number): number => bySum.get(s)?.length ?? 0
+
+  let anchor = sums[0] ?? 0
+  let anchorCount = 0
+  for (const s of sums) {
+    const pairCount = sizeAt(s) + sizeAt(s + 1)
+    if (pairCount > anchorCount) {
+      anchorCount = pairCount
+      anchor = s
+    }
+  }
+  return new Set(ROUTE_POOL.difficultySpread >= 1 ? [anchor, anchor + 1] : [anchor])
+}
+
+/** Gap between the fastest and slowest par time in an already-sorted window. */
+const parSpreadMs = (window: readonly Candidate[]): number => {
+  const first = window[0]
+  const last = window[window.length - 1]
+  return first && last ? last.parTotalMs - first.parTotalMs : 0
+}
+
 export const generateRoutePool = (
   locations: readonly GameLocation[],
   startPoint: LatLng,
@@ -121,36 +161,13 @@ export const generateRoutePool = (
   const rng = mulberry32(seedFromString(seed))
   const candidates = buildCandidates(locations, startPoint, pc)
 
-  // Group by total difficulty; anchor on the pair of adjacent sums with the
-  // most candidates (spread of 1 is allowed between any two routes).
-  const bySum = new Map<number, Candidate[]>()
-  for (const c of candidates) {
-    const bucket = bySum.get(c.difficultySum) ?? []
-    bucket.push(c)
-    bySum.set(c.difficultySum, bucket)
-  }
-  const sums = [...bySum.keys()].sort((a, b) => a - b)
-  let anchor = sums[0] ?? 0
-  let anchorCount = 0
-  for (const s of sums) {
-    const count = (bySum.get(s)?.length ?? 0) + (bySum.get(s + 1)?.length ?? 0)
-    if (count > anchorCount) {
-      anchorCount = count
-      anchor = s
-    }
-  }
-  const allowedSums = new Set(
-    ROUTE_POOL.difficultySpread >= 1 ? [anchor, anchor + 1] : [anchor],
-  )
+  const allowedSums = allowedDifficultySums(candidates)
   const balanced = candidates
     .filter((c) => allowedSums.has(c.difficultySum))
     .sort((a, b) => a.parTotalMs - b.parTotalMs)
 
   const window = tightestWindow(balanced, ROUTE_POOL.size)
-  const walkSpreadMs =
-    window.length > 0
-      ? window[window.length - 1]!.parTotalMs - window[0]!.parTotalMs
-      : 0
+  const walkSpreadMs = parSpreadMs(window)
   const relaxed = window.length < ROUTE_POOL.size || walkSpreadMs > ROUTE_POOL.walkTimeBandMs
 
   const routes = shuffled(window, rng).map(
