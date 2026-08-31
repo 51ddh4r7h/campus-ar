@@ -28,10 +28,15 @@ import type {GameLocation} from './types'
  */
 export const START_POINT: LatLng = {lat: 18.53390, lng: 73.73340}
 
+/**
+ * Reward media is served from the app's own origin (`client/public/clips/`) —
+ * no third-party host, no cross-origin load to fail, no CORS taint on the AR
+ * video texture.
+ */
 const media = (id: string): Pick<GameLocation, 'clipUrl' | 'posterUrl' | 'sceneRefImage'> => ({
   clipUrl: `/clips/${id}.mp4`,
-  posterUrl: `/posters/${id}.jpg`,
-  sceneRefImage: `/scene-refs/${id}.jpg`,
+  posterUrl: `/clips/${id}-poster.jpg`,
+  sceneRefImage: `/clips/${id}-poster.jpg`,
 })
 
 export const LOCATIONS: readonly GameLocation[] = [
@@ -42,9 +47,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     lng: 73.7332691,
     radiusM: 18,
     difficulty: 1,
-    clipUrl: 'https://campus-ar-clips-204685625918-ap-south-1.s3.ap-south-1.amazonaws.com/clips/mind-studio.mp4',
-    posterUrl: 'https://campus-ar-clips-204685625918-ap-south-1.s3.ap-south-1.amazonaws.com/clips/mind-studio-poster.jpg',
-    sceneRefImage: 'https://campus-ar-clips-204685625918-ap-south-1.s3.ap-south-1.amazonaws.com/clips/mind-studio-poster.jpg',
+    ...media('mind-studio'),
     movie: {title: 'The Quiet Quarter', blurb: 'Every hero gets the scene where they finally exhale.'},
     campusFact: 'The studio wing was the first building on campus wired for natural-light filming.',
     clue: {
