@@ -20,7 +20,14 @@ const CreateBatchSchema = v.object({name: NonEmpty})
 
 const RegisterPlayersSchema = v.object({
   players: v.pipe(
-    v.array(v.object({name: NonEmpty, rosterId: NonEmpty})),
+    v.array(
+      v.object({
+        name: NonEmpty,
+        rosterId: NonEmpty,
+        /** Demo/testing: pin an exact 5-stop route. */
+        route: v.optional(v.pipe(v.array(NonEmpty), v.length(5))),
+      }),
+    ),
     v.minLength(1),
     v.maxLength(200),
   ),
@@ -61,7 +68,8 @@ export const parseCreateBatch = (raw: unknown): {name: string} => parse(CreateBa
 
 export const parseRegisterPlayers = (
   raw: unknown,
-): {players: ReadonlyArray<{name: string; rosterId: string}>} => parse(RegisterPlayersSchema, raw)
+): {players: ReadonlyArray<{name: string; rosterId: string; route?: string[] | undefined}>} =>
+  parse(RegisterPlayersSchema, raw)
 
 export const parseSamples = (raw: unknown): GeoSample[] => parse(SamplesSchema, raw).samples
 

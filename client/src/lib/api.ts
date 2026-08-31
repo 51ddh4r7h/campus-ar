@@ -109,7 +109,10 @@ export const api = {
       body: JSON.stringify({name}),
     }),
 
-  registerPlayers: (batchId: string, players: Array<{name: string; rosterId: string}>) =>
+  registerPlayers: (
+    batchId: string,
+    players: Array<{name: string; rosterId: string; route?: string[]}>,
+  ) =>
     request<{
       players: Array<{playerId: string; name: string; rosterId: string; sessionToken: string; stops: string[]}>
     }>(`/admin/batches/${batchId}/players`, {

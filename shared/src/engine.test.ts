@@ -96,6 +96,25 @@ describe('engine — full playthrough', () => {
     expect(ra).not.toBe(rb)
   })
 
+  it('honours a pinned route (demo)', async () => {
+    const batch = await engine.createBatch({name: 'Batch P'})
+    const pinned = ['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium']
+    const {player} = await engine.registerPlayer({
+      batchId: batch.id,
+      name: 'Demo',
+      rosterId: 'd1',
+      pinnedRoute: pinned,
+    })
+    expect((await store.getRoute(player.id))!.stops).toEqual(pinned)
+  })
+
+  it('rejects a malformed pinned route', async () => {
+    const batch = await engine.createBatch({name: 'Batch Q'})
+    await expect(
+      engine.registerPlayer({batchId: batch.id, name: 'x', rosterId: 'q1', pinnedRoute: ['mind-studio', 'nope', 'a', 'b', 'c']}),
+    ).rejects.toThrow()
+  })
+
   it('re-registering the same roster id is idempotent', async () => {
     const batch = await engine.createBatch({name: 'Batch C'})
     const first = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})

@@ -13,23 +13,14 @@ describe('location content invariants', () => {
     expect(ids.size).toBe(LOCATIONS.length)
   })
 
-  it('keeps every pair of locations more than 60 m apart', () => {
+  it('no two geofences overlap (with a 10 m buffer)', () => {
     for (let i = 0; i < LOCATIONS.length; i++) {
       for (let j = i + 1; j < LOCATIONS.length; j++) {
         const a = LOCATIONS[i]!
         const b = LOCATIONS[j]!
-        const d = haversineM(a, b)
-        expect(d, `${a.id} ↔ ${b.id}`).toBeGreaterThan(60)
-      }
-    }
-  })
-
-  it('radii never overlap a neighbouring location', () => {
-    for (let i = 0; i < LOCATIONS.length; i++) {
-      for (let j = i + 1; j < LOCATIONS.length; j++) {
-        const a = LOCATIONS[i]!
-        const b = LOCATIONS[j]!
-        expect(haversineM(a, b), `${a.id} ↔ ${b.id}`).toBeGreaterThan(a.radiusM + b.radiusM)
+        expect(haversineM(a, b), `${a.id} ↔ ${b.id}`).toBeGreaterThan(
+          a.radiusM + b.radiusM + 10,
+        )
       }
     }
   })

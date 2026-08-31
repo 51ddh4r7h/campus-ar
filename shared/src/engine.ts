@@ -13,7 +13,7 @@ import {
 import {LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool} from './routes'
 import {assignRoute} from './routes'
-import {sessionScoreMs} from './scoring'
+import {routePar, sessionScoreMs} from './scoring'
 import {VALIDATION} from './config'
 import {evaluateArrival} from './validation'
 import type {GameStore, StoredBatch} from './store'
@@ -75,6 +75,9 @@ export interface RegisterPlayerInput {
   batchId: string
   name: string
   rosterId: string
+  /** Pin an exact route (5 distinct location ids) instead of drawing from the
+   *  balanced pool. Demo / testing only. */
+  pinnedRoute?: readonly string[]
 }
 
 export const createEngine = (store: GameStore, deps: EngineDeps) => {
@@ -166,9 +169,6 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         if (session) return {player: existing, session}
       }
 
-      const assigned = await store.assignedRouteKeys(input.batchId)
-      const tmpl = assignRoute(batch.pool, assigned)
-
       const player: Player = {
         id: deps.randomId(),
         batchId: input.batchId,
@@ -176,12 +176,30 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         rosterId: input.rosterId,
         sessionToken: deps.randomToken(),
       }
-      const route: Route = {
-        playerId: player.id,
-        stops: tmpl.stops,
-        parTotalMs: tmpl.parTotalMs,
-        legParMs: tmpl.legParMs,
+
+      let stops: Route['stops']
+      let parTotalMs: number
+      let legParMs: Route['legParMs']
+      if (input.pinnedRoute) {
+        const pinned = input.pinnedRoute
+        const locs = pinned.map((id) => locationById(id))
+        if (pinned.length !== LEVEL_COUNT || new Set(pinned).size !== LEVEL_COUNT || locs.some((l) => !l)) {
+          throw new EngineError('pool_empty', 'pinnedRoute must be 5 distinct known location ids')
+        }
+        // SAFETY: the guard above proved every entry resolves and the length is 5.
+        const resolved = locs as GameLocation[]
+        const par = routePar(resolved, START_POINT, batch.parConstants)
+        stops = [pinned[0]!, pinned[1]!, pinned[2]!, pinned[3]!, pinned[4]!]
+        parTotalMs = par.totalMs
+        legParMs = par.legMs
+      } else {
+        const assigned = await store.assignedRouteKeys(input.batchId)
+        const tmpl = assignRoute(batch.pool, assigned)
+        stops = tmpl.stops
+        parTotalMs = tmpl.parTotalMs
+        legParMs = tmpl.legParMs
       }
+      const route: Route = {playerId: player.id, stops, parTotalMs, legParMs}
       const session: Session = {
         playerId: player.id,
         status: 'not_started',

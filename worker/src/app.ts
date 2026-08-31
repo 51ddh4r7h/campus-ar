@@ -79,7 +79,13 @@ export const createApp = (makeStore: (env: Env) => GameStore) => {
     const batchId = c.req.param('id')
     const players = []
     for (const p of body.players) {
-      const {player} = await engine.registerPlayer({batchId, name: p.name, rosterId: p.rosterId})
+      const reg: Parameters<typeof engine.registerPlayer>[0] = {
+        batchId,
+        name: p.name,
+        rosterId: p.rosterId,
+      }
+      if (p.route) reg.pinnedRoute = p.route
+      const {player} = await engine.registerPlayer(reg)
       const route = await store.getRoute(player.id)
       players.push({
         playerId: player.id,

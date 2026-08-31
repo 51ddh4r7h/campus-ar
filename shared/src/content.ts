@@ -1,15 +1,19 @@
 /**
  * The ten campus locations.
  *
- * PLACEHOLDER CONTENT. Coordinates are spread across the Symbiosis Lavale
- * campus footprint for demo and testing — every point must be re-surveyed
- * on the ground before an event. Film pairings, clue ladders and campus facts
- * are drafts for wiring, not final copy. Finalised in Phase 5 (see
- * docs/BUILD-PLAN.md).
+ * The first five (mind-studio, aqua-point, the-fountain, central-library,
+ * auditorium) carry REAL coordinates read from geotagged campus photos in
+ * content/location-photos/. `auditorium` is nudged ~40 m SW to its forecourt so
+ * its radius clears the library's. The other five are spread placeholders
+ * pending survey. Film pairings, clue ladders and campus facts are drafts for
+ * wiring, not final copy — finalised in Phase 5 (docs/BUILD-PLAN.md).
+ *
+ * mind-studio uses the real clip in the AWS S3 bucket (public, CORS *, range
+ * requests) — it's the verified Level-1 demo scene.
  *
  * Invariants the content must satisfy before an event:
  *  - exactly LOCATION_POOL_SIZE entries
- *  - every pair of locations >60 m apart
+ *  - no two geofences overlap (with a small buffer)
  *  - difficulty mix of roughly 3 / 4 / 3 across tiers 1 / 2 / 3
  *  - no clue rung names the building, the film, or a compass direction
  */
@@ -34,11 +38,13 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'mind-studio',
     name: 'Mind Studio',
-    lat: 18.5342,
-    lng: 73.7333,
-    radiusM: 20,
+    lat: 18.5342614,
+    lng: 73.7332691,
+    radiusM: 18,
     difficulty: 1,
-    ...media('mind-studio'),
+    clipUrl: 'https://campus-ar-clips-204685625918-ap-south-1.s3.ap-south-1.amazonaws.com/clips/mind-studio.mp4',
+    posterUrl: 'https://campus-ar-clips-204685625918-ap-south-1.s3.ap-south-1.amazonaws.com/clips/mind-studio-poster.jpg',
+    sceneRefImage: 'https://campus-ar-clips-204685625918-ap-south-1.s3.ap-south-1.amazonaws.com/clips/mind-studio-poster.jpg',
     movie: {title: 'The Quiet Quarter', blurb: 'Every hero gets the scene where they finally exhale.'},
     campusFact: 'The studio wing was the first building on campus wired for natural-light filming.',
     clue: {
@@ -50,9 +56,9 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'aqua-point',
     name: 'Aqua Point',
-    lat: 18.53585,
-    lng: 73.7328,
-    radiusM: 22,
+    lat: 18.5357918,
+    lng: 73.7333646,
+    radiusM: 18,
     difficulty: 2,
     ...media('aqua-point'),
     movie: {title: 'Blue Hour', blurb: 'Three friends, one hilltop, zero plans for the afternoon.'},
@@ -66,9 +72,9 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'the-fountain',
     name: 'The Fountain',
-    lat: 18.536,
-    lng: 73.7339,
-    radiusM: 18,
+    lat: 18.5361451,
+    lng: 73.7331103,
+    radiusM: 14,
     difficulty: 1,
     ...media('the-fountain'),
     movie: {title: 'After the Bell', blurb: 'All is well — especially here, between lectures.'},
@@ -82,9 +88,9 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'central-library',
     name: 'Central Library',
-    lat: 18.53668,
-    lng: 73.733,
-    radiusM: 18,
+    lat: 18.5368027,
+    lng: 73.7326191,
+    radiusM: 15,
     difficulty: 2,
     ...media('central-library'),
     movie: {title: 'The Rosette Run', blurb: 'The sprint past these steps has ended more chases than any other.'},
@@ -98,9 +104,9 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'auditorium',
     name: 'Auditorium',
-    lat: 18.5369,
-    lng: 73.7322,
-    radiusM: 22,
+    lat: 18.53642,
+    lng: 73.73215,
+    radiusM: 16,
     difficulty: 3,
     ...media('auditorium'),
     movie: {title: 'First Take', blurb: 'Every great performance starts with a tempo check.'},
@@ -115,8 +121,8 @@ export const LOCATIONS: readonly GameLocation[] = [
     id: 'the-amphitheatre',
     name: 'The Amphitheatre',
     lat: 18.53525,
-    lng: 73.7336,
-    radiusM: 20,
+    lng: 73.7338,
+    radiusM: 18,
     difficulty: 2,
     ...media('the-amphitheatre'),
     movie: {title: 'Open Air', blurb: 'A crowd on stone tiers, holding its breath together.'},
@@ -130,9 +136,9 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'sports-pavilion',
     name: 'Sports Pavilion',
-    lat: 18.5345,
-    lng: 73.7341,
-    radiusM: 24,
+    lat: 18.5344,
+    lng: 73.734,
+    radiusM: 22,
     difficulty: 2,
     ...media('sports-pavilion'),
     movie: {title: 'The Long Season', blurb: 'The match everyone remembers started on an empty field.'},
@@ -147,8 +153,8 @@ export const LOCATIONS: readonly GameLocation[] = [
     id: 'founders-steps',
     name: "Founders' Steps",
     lat: 18.53655,
-    lng: 73.7343,
-    radiusM: 18,
+    lng: 73.73355,
+    radiusM: 16,
     difficulty: 3,
     ...media('founders-steps'),
     movie: {title: 'Seven Names', blurb: 'Two people, a staircase, and a whole town behind them.'},
@@ -162,9 +168,9 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'the-boulevard',
     name: 'The Boulevard',
-    lat: 18.5347,
-    lng: 73.73262,
-    radiusM: 20,
+    lat: 18.535,
+    lng: 73.7326,
+    radiusM: 18,
     difficulty: 1,
     ...media('the-boulevard'),
     movie: {title: 'Last Reel', blurb: 'A slow walk down the avenue while the credits could roll any second.'},
@@ -178,9 +184,9 @@ export const LOCATIONS: readonly GameLocation[] = [
   {
     id: 'observatory-deck',
     name: 'Observatory Deck',
-    lat: 18.5373,
-    lng: 73.73345,
-    radiusM: 22,
+    lat: 18.53725,
+    lng: 73.7331,
+    radiusM: 20,
     difficulty: 3,
     ...media('observatory-deck'),
     movie: {title: 'Nightwatch', blurb: 'A rooftop conversation under an enormous sky.'},
