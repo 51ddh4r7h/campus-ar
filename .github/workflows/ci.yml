@@ -1,9 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [main, v2-movie-hunt]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   check:

@@ -29,23 +29,40 @@ to create it):
 npx wrangler pages project create campus-movie-hunt --production-branch v2-movie-hunt
 ```
 
-## Deploy
+## CI/CD (the normal path)
+
+`.github/workflows/deploy.yml` runs on every push to `v2-movie-hunt` (and
+`main`): lint + typecheck + test, then apply D1 migrations, deploy the Worker,
+build the client against the Worker's URL, and deploy Pages. Pull requests run
+`ci.yml` (checks only, no deploy).
+
+**One-time GitHub setup** — repo → Settings → Secrets and variables → Actions:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Secret | `CLOUDFLARE_API_TOKEN` | a custom token (see below) |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | from `npx wrangler whoami` |
+| Variable | `VITE_API_BASE` | `https://campus-movie-hunt-api.<subdomain>.workers.dev` (fallback if the Worker URL isn't auto-detected) |
+
+Create the API token at **dash.cloudflare.com → My Profile → API Tokens →
+Create Token → Custom token** with these permissions (all *Account*-scoped to
+your account):
+
+- Workers Scripts — Edit
+- Cloudflare Pages — Edit
+- D1 — Edit
+- Workers KV Storage — Edit
+- Account Settings — Read
+
+## Deploy manually
 
 ```bash
 npm run deploy
 ```
 
-This deploys the Worker, detects its `*.workers.dev` URL, builds the client with
-that as `VITE_API_BASE`, and publishes to Pages. Overrides:
-
-- `VITE_API_BASE=https://…` — skip URL detection
-- `PAGES_PROJECT=…` — different Pages project
-
-Deploy just the API:
-
-```bash
-npm run deploy --workspace worker      # wrangler deploy
-```
+Deploys the Worker, detects its `*.workers.dev` URL, builds the client with that
+as `VITE_API_BASE`, and publishes to Pages. Overrides: `VITE_API_BASE=https://…`,
+`PAGES_PROJECT=…`. API only: `npm run deploy --workspace worker`.
 
 ## Local development
 
