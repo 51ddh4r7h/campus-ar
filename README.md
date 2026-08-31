@@ -66,6 +66,11 @@ npm run db:migrate          # remote D1
   par scoring, event log, standings. Pure logic in `shared/`, D1 + HTTP in
   `worker/`. `npm run sim` plays a full scored hunt; `npm run gen:routes` builds
   and inspects a batch's route pool. ✅
-- **Phase 2** — the Svelte client. Next.
+- **Phase 2** — the Svelte client: every screen (Splash → Finish), the dark
+  design system + components, wired to the Worker, wall-clock timer, hint
+  ladder, live standings polling, and a GPS simulator so the whole flow plays
+  in demo mode without campus. Reveal is a full-screen clip — AR is Phase 3.
+  Bundle: ~31 KB gzip JS. ✅
+- **Phase 3** — the AR layer. Next.
 
 See [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md).

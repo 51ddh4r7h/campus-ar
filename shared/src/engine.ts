@@ -14,6 +14,7 @@ import {LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool} from './routes'
 import {assignRoute} from './routes'
 import {sessionScoreMs} from './scoring'
+import {VALIDATION} from './config'
 import {evaluateArrival} from './validation'
 import type {GameStore, StoredBatch} from './store'
 import type {
@@ -230,6 +231,33 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       return {session, clue, splits}
     },
 
+    async nearby(
+      token: string,
+      samples: readonly GeoSample[],
+    ): Promise<import('./types').NearbyResult> {
+      const {session, route} = await authed(token)
+      if (session.status !== 'in_progress') {
+        return {atTarget: false, dwellMs: 0, dwellNeededMs: VALIDATION.dwellMs, signalOk: true, failure: 'not_in_progress'}
+      }
+      const splits = await store.listSplits(session.playerId)
+      const outcome = evaluateArrival({
+        routeStops: resolveStops(route),
+        currentLevel: session.currentLevel,
+        prevReachedTsMs: prevReachedTs(session, splits),
+        samples,
+        nowMs: deps.now(),
+      })
+      const atRadius =
+        outcome.ok || outcome.failure === 'dwell' || outcome.failure === 'too_fast'
+      return {
+        atTarget: atRadius,
+        dwellMs: outcome.insideMs,
+        dwellNeededMs: VALIDATION.dwellMs,
+        signalOk: outcome.failure !== 'signal',
+        failure: outcome.ok ? null : outcome.failure,
+      }
+    },
+
     async arrive(token: string, samples: readonly GeoSample[]): Promise<ValidationResult> {
       const {session, route, batch} = await authed(token)
       if (session.status !== 'in_progress') {
@@ -238,6 +266,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
           failure: 'not_in_progress',
           session,
           split: null,
+          reveal: null,
           nextClue: null,
         }
       }
@@ -263,6 +292,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
           failure: outcome.failure,
           session,
           split: null,
+          reveal: null,
           nextClue: clueView(route, session),
         }
       }
@@ -313,6 +343,17 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         failure: null,
         session: next,
         split,
+        reveal: {
+          level: split.level,
+          locationName: target.name,
+          movie: target.movie,
+          campusFact: target.campusFact,
+          clipUrl: target.clipUrl,
+          posterUrl: target.posterUrl,
+          splitMs: split.splitMs,
+          penaltyMs: split.penaltyMs,
+          huntComplete: complete,
+        },
         nextClue: complete ? null : clueView(route, next),
       }
     },

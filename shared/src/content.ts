@@ -39,6 +39,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 20,
     difficulty: 1,
     ...media('mind-studio'),
+    movie: {title: 'The Quiet Quarter', blurb: 'Every hero gets the scene where they finally exhale.'},
     campusFact: 'The studio wing was the first building on campus wired for natural-light filming.',
     clue: {
       far: 'A quiet room where someone finally lets a long breath go.',
@@ -54,6 +55,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 22,
     difficulty: 2,
     ...media('aqua-point'),
+    movie: {title: 'Blue Hour', blurb: 'Three friends, one hilltop, zero plans for the afternoon.'},
     campusFact: 'The reservoir here holds the campus through the dry months before the monsoon.',
     clue: {
       far: 'Three friends, a wide-open view, and no plan for the afternoon.',
@@ -69,6 +71,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 18,
     difficulty: 1,
     ...media('the-fountain'),
+    movie: {title: 'After the Bell', blurb: 'All is well — especially here, between lectures.'},
     campusFact: 'Every graduating class has thrown a coin in on their last day since the first batch.',
     clue: {
       far: 'Wherever this is, the characters keep insisting that all is well.',
@@ -84,6 +87,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 18,
     difficulty: 2,
     ...media('central-library'),
+    movie: {title: 'The Rosette Run', blurb: 'The sprint past these steps has ended more chases than any other.'},
     campusFact: 'The reading room stays open through exam week for the only all-night hours on campus.',
     clue: {
       far: 'A frantic run up a long flight of steps, late for something that matters.',
@@ -99,6 +103,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 22,
     difficulty: 3,
     ...media('auditorium'),
+    movie: {title: 'First Take', blurb: 'Every great performance starts with a tempo check.'},
     campusFact: 'The stage curtain is still raised by hand on opening night, a rule since 1968.',
     clue: {
       far: 'A performer pushed past breaking point to hit an impossible tempo.',
@@ -114,6 +119,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 20,
     difficulty: 2,
     ...media('the-amphitheatre'),
+    movie: {title: 'Open Air', blurb: 'A crowd on stone tiers, holding its breath together.'},
     campusFact: 'Orientation week ends with the whole incoming cohort seated on these steps.',
     clue: {
       far: 'A crowd on stone tiers, watching something happen down in the middle.',
@@ -129,6 +135,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 24,
     difficulty: 2,
     ...media('sports-pavilion'),
+    movie: {title: 'The Long Season', blurb: 'The match everyone remembers started on an empty field.'},
     campusFact: 'The ground floods to a shallow sheet in heavy rain and drains clear within the hour.',
     clue: {
       far: 'The long shot before the big match: an empty field at first light.',
@@ -144,6 +151,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 18,
     difficulty: 3,
     ...media('founders-steps'),
+    movie: {title: 'Seven Names', blurb: 'Two people, a staircase, and a whole town behind them.'},
     campusFact: 'The plaque at the top lists the seven people who signed for the land in 1971.',
     clue: {
       far: 'Two people talk on a staircase while the whole town lies behind them.',
@@ -159,6 +167,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 20,
     difficulty: 1,
     ...media('the-boulevard'),
+    movie: {title: 'Last Reel', blurb: 'A slow walk down the avenue while the credits could roll any second.'},
     campusFact: 'The trees along it were planted by the first five batches, one row per year.',
     clue: {
       far: 'A slow walk down a tree-lined avenue while the credits could roll any second.',
@@ -174,6 +183,7 @@ export const LOCATIONS: readonly GameLocation[] = [
     radiusM: 22,
     difficulty: 3,
     ...media('observatory-deck'),
+    movie: {title: 'Nightwatch', blurb: 'A rooftop conversation under an enormous sky.'},
     campusFact: 'On a clear night you can pick out four hill forts from the railing.',
     clue: {
       far: 'A rooftop conversation under an enormous sky, city lights far below.',

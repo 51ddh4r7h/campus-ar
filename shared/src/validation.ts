@@ -27,13 +27,16 @@ export interface ArrivalOutcome {
   reachedTsMs: number | null
   /** True when a check passed but looked suspicious (recorded, not blocked here). */
   flagged: boolean
+  /** Continuous time held inside the target radius so far, ms (for a dwell UI). */
+  insideMs: number
 }
 
-const fail = (failure: ValidationFailure): ArrivalOutcome => ({
+const fail = (failure: ValidationFailure, insideMs = 0): ArrivalOutcome => ({
   ok: false,
   failure,
   reachedTsMs: null,
   flagged: false,
+  insideMs,
 })
 
 const fresh = (s: GeoSample, nowMs: number): boolean =>
@@ -74,12 +77,13 @@ export const evaluateArrival = (ctx: ArrivalContext): ArrivalOutcome => {
     return fail(nearWithBadFix ? 'signal' : 'wrong_location')
   }
 
-  if (dwellSpanMs(insideTarget) < VALIDATION.dwellMs) return fail('dwell')
+  const insideMs = dwellSpanMs(insideTarget)
+  if (insideMs < VALIDATION.dwellMs) return fail('dwell', insideMs)
 
   const reachedTsMs = Math.max(...insideTarget.map((s) => s.tsMs))
   const legMs = reachedTsMs - prevReachedTsMs
 
-  if (legMs < VALIDATION.minLegMs) return fail('too_fast')
+  if (legMs < VALIDATION.minLegMs) return fail('too_fast', insideMs)
 
   let flagged = false
   if (currentLevel > 1) {
@@ -88,5 +92,5 @@ export const evaluateArrival = (ctx: ArrivalContext): ArrivalOutcome => {
     flagged = speed > VALIDATION.maxTravelSpeedMps
   }
 
-  return {ok: true, failure: null, reachedTsMs, flagged}
+  return {ok: true, failure: null, reachedTsMs, flagged, insideMs}
 }

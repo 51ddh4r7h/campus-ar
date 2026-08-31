@@ -21,6 +21,8 @@ export interface GameLocation {
   posterUrl: string
   /** Still frame used by the "compare the shot" alignment overlay. */
   sceneRefImage: string
+  /** The film pairing, revealed only after discovery. Playful fiction for now. */
+  movie: {title: string; blurb: string}
   /** Revealed only after discovery. */
   campusFact: string
   /** Progressive clue ladder. `far` is always shown; `warm`/`close` are hints. */
@@ -167,14 +169,43 @@ export type ValidationFailure =
   | 'too_fast'
   | 'not_in_progress'
 
+/** The reward payload — only sent once the level is validated. */
+export interface RevealView {
+  level: number
+  locationName: string
+  movie: {title: string; blurb: string}
+  campusFact: string
+  clipUrl: string
+  posterUrl: string
+  splitMs: number
+  penaltyMs: number
+  /** True once every level is done. */
+  huntComplete: boolean
+}
+
 export interface ValidationResult {
   ok: boolean
   failure: ValidationFailure | null
   session: Session
   /** Present when a level was just completed. */
   split: Split | null
+  /** The reward for the level just completed. */
+  reveal: RevealView | null
   /** The next clue, or null when the hunt is complete. */
   nextClue: ClueView | null
+}
+
+/** Non-mutating "am I there yet?" probe — never names the location. */
+export interface NearbyResult {
+  /** True when standing inside the current target's radius with a good fix. */
+  atTarget: boolean
+  /** Continuous time held inside so far, ms. */
+  dwellMs: number
+  dwellNeededMs: number
+  /** False when only poor-accuracy fixes reach the target. */
+  signalOk: boolean
+  /** Present when the probe would fail for a reason worth surfacing. */
+  failure: ValidationFailure | null
 }
 
 export interface StandingRow {

@@ -1,84 +1,106 @@
 <script lang="ts">
-  import {LEVEL_COUNT, LOCATIONS} from '@cmh/shared'
+  import {onMount} from 'svelte'
+  import {api} from './lib/api'
+  import {game} from './lib/stores/game.svelte'
+  import {nav} from './lib/stores/nav.svelte'
+  import {location} from './lib/stores/location.svelte'
+  import {standings} from './lib/stores/standings.svelte'
 
-  /** In dev, Vite proxies /api → the local worker; in prod this is the API Gateway URL. */
-  const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
+  import Splash from './screens/Splash.svelte'
+  import Welcome from './screens/Welcome.svelte'
+  import Permissions from './screens/Permissions.svelte'
+  import Ready from './screens/Ready.svelte'
+  import Clue from './screens/Clue.svelte'
+  import Search from './screens/Search.svelte'
+  import Reveal from './screens/Reveal.svelte'
+  import Finish from './screens/Finish.svelte'
 
-  type Health = {ok: boolean; levels: number; locationPool: number}
-  let health = $state<Health | null>(null)
-  let error = $state<string | null>(null)
+  import HowToSheet from './screens/HowToSheet.svelte'
+  import HintSheet from './screens/HintSheet.svelte'
+  import StandingsSheet from './screens/StandingsSheet.svelte'
+  import HereSheet from './screens/HereSheet.svelte'
+  import Toaster from './lib/components/Toaster.svelte'
 
-  async function checkHealth() {
-    error = null
-    try {
-      const res = await fetch(`${API_BASE}/health`)
-      // SAFETY: scaffold-only health probe; the typed API client in Phase 2
-      // validates every response body at this boundary.
-      health = (await res.json()) as Health
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e)
+  const screens = {splash: Splash, welcome: Welcome, permissions: Permissions, ready: Ready, clue: Clue, search: Search, reveal: Reveal, finish: Finish}
+  const Screen = $derived(screens[nav.screen])
+
+  onMount(async () => {
+    // A pre-registered player's link: ?t=<token>&b=<batchId>
+    const url = new URL(window.location.href)
+    const t = url.searchParams.get('t')
+    const b = url.searchParams.get('b')
+    if (t && b) {
+      game.setCredentials(t, b, url.searchParams.get('n') ?? 'Player', {demo: false})
+      history.replaceState(null, '', url.pathname)
     }
-  }
+
+    if (game.token) {
+      await game.refresh()
+      if (game.complete) nav.go('finish')
+      else if (game.inProgress) nav.go('clue')
+      else nav.go('ready')
+    } else {
+      setTimeout(() => nav.go('welcome'), 1400)
+    }
+  })
+
+  // GPS lifecycle — run through the playing screens, stop elsewhere.
+  $effect(() => {
+    const playing = game.inProgress && ['clue', 'search', 'reveal'].includes(nav.screen)
+    if (playing && location.mode === 'off') location.start(game.demo ? 'sim' : 'real')
+    if (!playing && (nav.screen === 'finish' || nav.screen === 'welcome')) location.stop()
+  })
+
+  // "Am I there yet?" probe while searching.
+  $effect(() => {
+    if (nav.screen !== 'search' || !game.inProgress || !game.token) return
+    const token = game.token
+    const probe = async () => {
+      const r = await api.nearby(token, location.recent()).catch(() => null)
+      if (r?.atTarget && nav.sheet !== 'here') nav.open('here')
+    }
+    void probe()
+    const id = setInterval(probe, 8000)
+    return () => clearInterval(id)
+  })
+
+  // Poll standings whenever we belong to a batch.
+  $effect(() => {
+    const batchId = game.batchId
+    if (!batchId) return
+    const poll = () => void standings.refresh(batchId, game.token ?? undefined)
+    poll()
+    const id = setInterval(poll, 12_000)
+    return () => clearInterval(id)
+  })
 </script>
 
-<main>
-  <h1>Campus<br />Movie Hunt</h1>
-  <p class="tag">Scaffold — Phase 0. {LEVEL_COUNT} levels, {LOCATIONS.length} locations.</p>
+<Screen />
 
-  <button onclick={checkHealth}>Check API</button>
+{#if nav.sheet === 'howto'}<HowToSheet />{/if}
+{#if nav.sheet === 'hint'}<HintSheet />{/if}
+{#if nav.sheet === 'standings'}<StandingsSheet />{/if}
+{#if nav.sheet === 'here'}<HereSheet />{/if}
 
-  {#if health}
-    <pre>{JSON.stringify(health, null, 2)}</pre>
-  {/if}
-  {#if error}
-    <p class="err">API not reachable: {error} — run <code>npm run dev:worker</code></p>
-  {/if}
-</main>
+{#if !game.online}
+  <div class="offline" role="status">Reconnecting…</div>
+{/if}
+
+<Toaster />
 
 <style>
-  main {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: calc(var(--safe-top) + 48px) 24px calc(var(--safe-bottom) + 24px);
-    max-width: 420px;
-  }
-  h1 {
-    font-family: var(--font-display);
-    font-weight: 400;
-    font-size: clamp(2.6rem, 12vw, 3.6rem);
-    line-height: 0.98;
-    margin: 0;
-  }
-  .tag {
+  .offline {
+    position: fixed;
+    top: calc(var(--safe-top) + var(--sp-2));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 70;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: var(--step-13);
     color: var(--text-dim);
-    margin: 0;
-  }
-  button {
-    align-self: flex-start;
-    font: inherit;
-    font-weight: 600;
-    color: #1a1a17;
-    background: var(--amber);
-    border: 0;
-    border-radius: var(--radius-button);
-    padding: 12px 20px;
-    transition: background var(--dur-standard) var(--ease-spring);
-  }
-  button:active {
-    background: var(--amber-press);
-  }
-  pre {
-    font-family: var(--font-mono);
-    font-size: 13px;
     background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: 12px;
-    padding: 12px;
-    overflow-x: auto;
-  }
-  .err {
-    color: var(--alert);
-    font-size: 14px;
+    backdrop-filter: blur(var(--blur));
+    border: var(--glass-border);
   }
 </style>

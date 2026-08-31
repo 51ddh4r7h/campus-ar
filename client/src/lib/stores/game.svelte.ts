@@ -1,0 +1,144 @@
+/**
+ * Global game state. One module-scoped instance. Server-authoritative — the
+ * client mirrors what the Worker returns and never advances a level itself.
+ */
+
+import type {ClueView, GeoSample, HintRung, RevealView, Session, Split} from '@cmh/shared'
+import {api, ApiError} from '../api'
+
+const LS_TOKEN = 'cmh.token'
+const LS_BATCH = 'cmh.batch'
+const LS_DEMO = 'cmh.demo'
+const LS_DEMO_STOPS = 'cmh.demoStops'
+
+const load = (k: string): string | null => {
+  try {
+    return localStorage.getItem(k)
+  } catch {
+    return null
+  }
+}
+const save = (k: string, v: string | null): void => {
+  try {
+    if (v === null) localStorage.removeItem(k)
+    else localStorage.setItem(k, v)
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Demo route stops persisted as a JSON string array; anything else → []. */
+const readStops = (): string[] => {
+  try {
+    const raw: unknown = JSON.parse(load(LS_DEMO_STOPS) ?? '[]')
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+class Game {
+  token = $state<string | null>(load(LS_TOKEN))
+  batchId = $state<string | null>(load(LS_BATCH))
+  demo = $state<boolean>(load(LS_DEMO) === '1')
+  /** Route location ids — ONLY populated in demo mode, for the GPS simulator. */
+  demoStops = $state<string[]>(readStops())
+
+  session = $state<Session | null>(null)
+  clue = $state<ClueView | null>(null)
+  splits = $state<Split[]>([])
+  lastReveal = $state<RevealView | null>(null)
+  playerName = $state<string>('')
+
+  /** True once we have a valid token + a session snapshot. */
+  loaded = $state(false)
+  online = $state(true)
+
+  get inProgress(): boolean {
+    return this.session?.status === 'in_progress'
+  }
+  get complete(): boolean {
+    return this.session?.status === 'complete'
+  }
+  get level(): number {
+    return this.session?.currentLevel ?? 1
+  }
+
+  setCredentials(
+    token: string,
+    batchId: string,
+    name: string,
+    opts: {demo: boolean; demoStops?: string[]},
+  ): void {
+    this.token = token
+    this.batchId = batchId
+    this.playerName = name
+    this.demo = opts.demo
+    this.demoStops = opts.demoStops ?? []
+    save(LS_TOKEN, token)
+    save(LS_BATCH, batchId)
+    save(LS_DEMO, opts.demo ? '1' : null)
+    save(LS_DEMO_STOPS, opts.demoStops ? JSON.stringify(opts.demoStops) : null)
+  }
+
+  async refresh(): Promise<void> {
+    if (!this.token) return
+    try {
+      const state = await api.getState(this.token)
+      this.session = state.session
+      this.clue = state.clue
+      this.splits = state.splits
+      this.loaded = true
+      this.online = true
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'offline') this.online = false
+      else if (err instanceof ApiError && err.status === 401) this.reset()
+      else throw err
+    }
+  }
+
+  async start(): Promise<void> {
+    if (!this.token) throw new Error('no token')
+    const res = await api.startHunt(this.token)
+    this.session = res.session
+    this.clue = res.clue
+    this.online = true
+  }
+
+  async arrive(samples: GeoSample[]): Promise<import('@cmh/shared').ValidationResult> {
+    if (!this.token) throw new Error('no token')
+    const res = await api.arrive(this.token, samples)
+    this.session = res.session
+    if (res.split) this.splits = [...this.splits.filter((s) => s.level !== res.split!.level), res.split]
+    if (res.reveal) this.lastReveal = res.reveal
+    if (res.nextClue) this.clue = res.nextClue
+    this.online = true
+    return res
+  }
+
+  async hint(rung: HintRung): Promise<number> {
+    if (!this.token) throw new Error('no token')
+    const res = await api.useHint(this.token, rung)
+    this.session = res.session
+    this.clue = res.clue
+    return res.penaltyMs
+  }
+
+  reset(): void {
+    this.token = null
+    this.batchId = null
+    this.demo = false
+    this.session = null
+    this.clue = null
+    this.splits = []
+    this.playerName = ''
+    this.demoStops = []
+    this.loaded = false
+    save(LS_TOKEN, null)
+    save(LS_BATCH, null)
+    save(LS_DEMO, null)
+    save(LS_DEMO_STOPS, null)
+  }
+}
+
+export const game = new Game()

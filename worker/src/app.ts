@@ -100,6 +100,12 @@ export const createApp = (makeStore: (env: Env) => GameStore) => {
     c.json(await engineFor(c.env).getState(bearer(c.req.header('Authorization')))),
   )
 
+  app.post('/session/nearby', async (c) => {
+    const token = bearer(c.req.header('Authorization'))
+    const samples = parseSamples(await c.req.json())
+    return c.json(await engineFor(c.env).nearby(token, samples))
+  })
+
   app.post('/session/arrive', async (c) => {
     const token = bearer(c.req.header('Authorization'))
     const samples = parseSamples(await c.req.json())

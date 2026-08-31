@@ -54,6 +54,8 @@ async function playThrough(token: string): Promise<void> {
     const res = await engine.arrive(token, parkedAt(loc, deps.now()))
     expect(res.ok, `level ${level} should validate`).toBe(true)
     expect(res.split?.level).toBe(level)
+    expect(res.reveal?.locationName).toBe(loc.name)
+    expect(res.reveal?.movie.title).toBe(loc.movie.title)
     if (res.session.status === 'complete') break
     level = res.nextClue!.level
   }
@@ -99,6 +101,29 @@ describe('engine — full playthrough', () => {
     const first = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
     const again = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
     expect(again.player.id).toBe(first.player.id)
+  })
+})
+
+describe('engine — nearby probe', () => {
+  it('reports dwell progress without advancing the level', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    await engine.startHunt(player.sessionToken)
+    const route = (await store.getRoute(player.id))!
+    const loc = locationById(route.stops[0]!)!
+    deps.advance(60_000)
+
+    const brief = await engine.nearby(player.sessionToken, parkedAt(loc, deps.now()).slice(-2))
+    expect(brief.atTarget).toBe(true)
+    expect(brief.dwellMs).toBeLessThan(brief.dwellNeededMs)
+
+    const full = await engine.nearby(player.sessionToken, parkedAt(loc, deps.now()))
+    expect(full.dwellMs).toBeGreaterThanOrEqual(full.dwellNeededMs)
+
+    // Still on level 1 — nearby never mutates.
+    const {session} = await engine.getState(player.sessionToken)
+    expect(session.currentLevel).toBe(1)
+    expect(await store.listSplits(player.id)).toHaveLength(0)
   })
 })
 

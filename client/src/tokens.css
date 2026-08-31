@@ -1,44 +1,78 @@
 /**
- * Design tokens — from docs/UI-FLOW-BRIEF.md §2.
- * Dark-first: this is a camera app. A light theme is not planned.
+ * Design tokens — docs/UI-FLOW-BRIEF.md §2.
+ * Dark-first: this is a camera app, there is no light theme.
  */
 :root {
+  color-scheme: dark;
+
   --bg: #0a0b0d;
   --surface: rgba(20, 22, 26, 0.62);
   --surface-raised: rgba(28, 31, 36, 0.74);
+  --scrim: rgba(0, 0, 0, 0.55);
+
   --text: #f5f3ec;
   --text-dim: rgba(245, 243, 236, 0.6);
+  --text-faint: rgba(245, 243, 236, 0.38);
   --hairline: rgba(245, 243, 236, 0.14);
+  --hairline-bright: rgba(255, 255, 255, 0.22);
 
   --amber: #e8a54c;
   --amber-press: #c9863a;
+  --amber-ink: #1a1a17;
   --success: #7fd1a6;
   --alert: #e5654a;
   --signal-cold: #6fa8c7;
   --signal-hot: #e8a54c;
 
-  --font-ui: -apple-system, "SF Pro Text", system-ui, sans-serif;
-  --font-display: "Instrument Serif", Georgia, serif;
-  --font-mono: ui-monospace, "SF Mono", "Roboto Mono", monospace;
+  --font-ui: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", "Roboto Mono", "Courier New", monospace;
+
+  --step-13: 0.8125rem;
+  --step-15: 0.9375rem;
+  --step-17: 1.0625rem;
+  --step-20: 1.25rem;
+  --step-28: 1.75rem;
+  --step-40: 2.5rem;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
 
   --radius-card: 24px;
   --radius-button: 20px;
+  --edge: 20px;
+
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 180ms;
   --dur-standard: 280ms;
+  --dur-sheet: 360ms;
+
+  --blur: 24px;
+  --glass-border: 0.5px solid var(--hairline);
+  --glass-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --surface: #16181c;
     --surface-raised: #1c1f24;
+    --blur: 0px;
   }
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -47,14 +81,45 @@ body {
   height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
+  font-size: var(--step-17);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 #app {
   min-height: 100%;
+  min-height: 100dvh;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
