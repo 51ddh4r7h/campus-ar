@@ -30,8 +30,16 @@
   async function askCamera() {
     phase = 'waiting'
     // Same gesture: camera stream + iOS motion permission for the AR screen.
-    await Promise.all([camera.start(), ar.requestPermission()])
+    await Promise.all([camera.start(), ar.ensure()])
     // Denial of either is fine — the game still works on GPS. Move on.
+    await proceed()
+  }
+
+  async function skipCamera() {
+    // Motion permission is independent of the camera. Grab it on this gesture
+    // anyway (instant on Android; the iOS prompt on iOS) so the AR screen still
+    // works for players who skip the camera.
+    await ar.ensure()
     await proceed()
   }
 
@@ -95,7 +103,7 @@
       <Button disabled={phase === 'waiting'} onclick={askCamera}>
         {phase === 'waiting' ? 'Waiting…' : 'Enable camera'}
       </Button>
-      <Button variant="text" onclick={proceed}>Skip for now</Button>
+      <Button variant="text" onclick={skipCamera}>Skip for now</Button>
     {/if}
   </div>
 </main>

@@ -113,11 +113,14 @@ export async function createArStage(
   let headingOffset = 0
   let haveReading = false
 
-  const onOrient = (e: DeviceOrientationEvent) => {
+  const onOrient = (raw: Event) => {
+    const e = raw as DeviceOrientationEvent
+    if (e.alpha === null && e.beta === null && e.gamma === null) return
     orient = {alpha: e.alpha ?? 0, beta: e.beta ?? 0, gamma: e.gamma ?? 0}
     haveReading = true
   }
   window.addEventListener('deviceorientation', onOrient, true)
+  window.addEventListener('deviceorientationabsolute', onOrient, true)
 
   const screenAngle = (): number => {
     const so = window.screen.orientation
@@ -164,6 +167,7 @@ export async function createArStage(
       clearInterval(playPoll)
       window.removeEventListener('resize', resize)
       window.removeEventListener('deviceorientation', onOrient, true)
+      window.removeEventListener('deviceorientationabsolute', onOrient, true)
       geo.dispose()
       screenMat.dispose()
       frameMat.dispose()

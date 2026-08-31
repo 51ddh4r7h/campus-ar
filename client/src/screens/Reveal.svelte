@@ -7,6 +7,7 @@
   import {probe} from '../lib/stores/probe.svelte'
   import {haptics} from '../lib/haptics'
   import {revealVideo} from '../lib/reveal-video'
+  import {debugMode} from '../lib/mode'
   import type {ArStage} from '../lib/ar/stage'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import Button from '../lib/components/Button.svelte'
@@ -20,6 +21,8 @@
   let stage: ArStage | null = null
   let needsTap = $state(false)
   let posterBroken = $state(false)
+
+  let diag = $state('')
 
   /** Flat panel: drop the shared <video> into the screen box, filling it. */
   function panel(node: Element) {
@@ -58,13 +61,16 @@
     void video.play().catch(() => {})
 
     const decide = async () => {
-      if (ar.supported && ar.permission === 'granted') {
-        for (let i = 0; i < 15 && !ar.hasReading && !disposed; i++) {
+      // Last-chance grab in case the camera step was skipped (Android: instant).
+      await ar.ensure()
+      if (ar.worthTrying) {
+        for (let i = 0; i < 25 && !ar.hasReading && !disposed; i++) {
           await new Promise((res) => setTimeout(res, 100))
         }
       }
       if (disposed) return
       useAr = ar.ready
+      diag = `supported=${ar.supported} perm=${ar.permission} reading=${ar.hasReading} → ${useAr ? 'AR' : 'flat panel'}`
       await Promise.resolve()
 
       if (useAr && canvas) {
@@ -101,6 +107,10 @@
 <CameraFeed />
 
 <canvas bind:this={canvas} class="ar-canvas" class:hidden={!useAr}></canvas>
+
+{#if debugMode}
+  <p class="diag">{diag || 'deciding…'}</p>
+{/if}
 
 <div class="reveal" class:ar={useAr}>
   {#if !useAr}
@@ -149,6 +159,21 @@
   }
   .hidden {
     display: none;
+  }
+  .diag {
+    position: fixed;
+    top: calc(var(--safe-top) + 40px);
+    left: 8px;
+    right: 8px;
+    z-index: 40;
+    margin: 0;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #0f0;
+    background: rgba(0, 0, 0, 0.7);
+    pointer-events: none;
   }
   .probe-poster {
     position: fixed;

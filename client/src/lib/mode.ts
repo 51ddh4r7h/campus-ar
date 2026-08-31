@@ -17,5 +17,8 @@ export const playerLink =
 
 export const demoRequested = params.has('demo') || params.has('sim')
 
+/** `?debug` — show the on-screen AR diagnostic readout on the reveal. */
+export const debugMode = params.has('debug')
+
 /** Practice runs are allowed when explicitly requested, or in any dev build. */
 export const demoAllowed = demoRequested || import.meta.env.DEV
