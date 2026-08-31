@@ -1,142 +1,109 @@
 <script lang="ts">
-  import {onMount} from 'svelte'
+  /**
+   * Arrival. No modal, no button: the moment you're inside the geofence the
+   * screen starts constructing itself in front of you, and the anti-cheat dwell
+   * is what builds it. When the dwell completes the server validates, the sound
+   * comes up, and the scene plays where it was actually shot.
+   */
+  import type {ValidationFailure} from '@cmh/shared'
   import {formatMarquee} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
-  import {ar} from '../lib/stores/ar.svelte'
+  import {location} from '../lib/stores/location.svelte'
   import {probe} from '../lib/stores/probe.svelte'
+  import {toasts} from '../lib/stores/toast.svelte'
   import {haptics} from '../lib/haptics'
-  import {revealVideo} from '../lib/reveal-video'
-  import {debugMode} from '../lib/mode'
-  import type {ArStage} from '../lib/ar/stage'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
+  import ArScreen from '../lib/components/ArScreen.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import {ApiError} from '../lib/api'
 
-  const r = $derived(game.lastReveal)
-  const video = revealVideo()
+  let screen = $state<ReturnType<typeof ArScreen> | null>(null)
+  let usedAr = $state(false)
+  let played = $state(false)
+  let validating = $state(false)
+  let retrying = $state(false)
 
-  let useAr = $state(false)
-  let canvas = $state<HTMLCanvasElement | null>(null)
-  let stage: ArStage | null = null
-  let needsTap = $state(false)
-  let posterBroken = $state(false)
+  const r = $derived(played ? game.lastReveal : null)
+  const p = $derived(probe.last)
 
-  let diag = $state('')
+  // The dwell drives the assembly. Keep a floor so the frame is visible the
+  // instant you arrive, and hold at 0.97 until the server actually says yes.
+  const build = $derived(
+    played ? 1 : Math.min(0.97, 0.06 + 0.91 * Math.min(1, (p?.dwellMs ?? 0) / (p?.dwellNeededMs ?? 1))),
+  )
 
-  /** Flat panel: drop the shared <video> into the screen box, filling it. */
-  function panel(node: Element) {
-    Object.assign(video.style, {
-      position: 'absolute',
-      inset: '0',
-      width: '100%',
-      height: '100%',
-      objectFit: 'cover',
-      opacity: '1',
-      zIndex: '0',
-    })
-    node.appendChild(video)
-    return () => {
-      Object.assign(video.style, {
-        position: 'fixed',
-        inset: 'auto',
-        right: '0',
-        bottom: '0',
-        width: '2px',
-        height: '2px',
-        opacity: '0',
-        zIndex: '-1',
-      })
-      document.body.appendChild(video)
+  const holdUp = $derived(
+    p?.failure === 'signal'
+      ? 'Move to more open ground for a clearer signal'
+      : p?.failure === 'too_fast'
+        ? 'Take a moment — you got here very quickly'
+        : null,
+  )
+
+  function failureMessage(f: ValidationFailure | null): string {
+    switch (f) {
+      case 'dwell':
+        return 'Hold still a moment longer'
+      case 'signal':
+        return 'Move to more open ground for a clearer signal'
+      case 'too_fast':
+        return 'Take a moment — you got here very quickly'
+      case 'wrong_location':
+        return "This isn't your scene. Keep looking."
+      case 'level_locked':
+        return 'Finish the earlier scenes first'
+      default:
+        return 'Not yet'
     }
   }
 
-  function startVideo(): void {
-    video.muted = false
-    void video
-      .play()
-      .then(() => (needsTap = false))
-      .catch(() => {
-        // Unmuted play blocked — fall back to a silent clip so something shows.
-        video.muted = true
-        void video
-          .play()
-          .then(() => (needsTap = false))
-          .catch(() => {})
-      })
-  }
-  const playNow = startVideo
+  let cancelled = false
+  $effect(() => () => (cancelled = true))
 
-  function report(where: string): void {
-    const e = video.error ? `err${video.error.code}` : 'ok'
-    diag =
-      `${where} | ar sup=${ar.supported} perm=${ar.permission} read=${ar.hasReading} useAr=${useAr}` +
-      ` | vid paused=${video.paused} rs=${video.readyState} ${e} src=${video.currentSrc ? 'y' : 'n'}`
-  }
-
-  onMount(() => {
-    let disposed = false
-
-    // Make sure the clip has a source even if priming was skipped.
-    if (r?.clipUrl && !video.currentSrc) {
-      video.src = r.clipUrl
-      video.load()
-    }
-    startVideo()
-
-    const decide = async () => {
-      // Last-chance grab in case the camera step was skipped (Android: instant).
-      await ar.ensure()
-      if (ar.worthTrying) {
-        for (let i = 0; i < 18 && !ar.hasReading && !disposed; i++) {
-          await new Promise((res) => setTimeout(res, 100))
+  async function claim() {
+    if (!game.token || validating || played) return
+    validating = true
+    // The player is standing on the spot — keep trying through a flaky signal.
+    for (let attempt = 0; attempt < 20 && !cancelled; attempt++) {
+      try {
+        const res = await game.arrive(location.recent())
+        retrying = false
+        if (res.ok) {
+          played = true
+          haptics.revealLock()
+          screen?.replay()
+        } else {
+          validating = false
+          if (res.failure === 'wrong_location' || res.failure === 'level_locked') {
+            toasts.show(failureMessage(res.failure), 'alert')
+            nav.go('search')
+          }
         }
-      }
-      if (disposed) return
-
-      // Prefer the floating screen whenever the device can plausibly do it.
-      // The stage still renders (world-locked, no head tracking) if a sensor
-      // reading never arrives — better than dropping to the flat panel.
-      useAr = ar.worthTrying && canvas !== null
-      report('decide')
-
-      if (useAr && canvas) {
-        try {
-          const {createArStage} = await import('../lib/ar/stage')
-          if (disposed || !canvas) return
-          stage = await createArStage(canvas, video, r?.posterUrl)
-          stage.showScreen()
-        } catch {
-          useAr = false
-          report('stage-failed')
+        return
+      } catch (err) {
+        if (err instanceof ApiError && (err.code === 'offline' || err.code === 'server')) {
+          retrying = true
+          await new Promise((res) => setTimeout(res, 3500))
+          continue
         }
+        validating = false
+        retrying = false
+        toasts.show('Something went wrong — hold tight', 'alert')
+        return
       }
-      setTimeout(() => haptics.revealLock(), useAr ? 720 : 200)
-      setTimeout(() => {
-        if (!disposed && video.paused) needsTap = true
-        report('t+1200')
-      }, 1200)
     }
-    void decide()
+  }
 
-    const diagTimer = debugMode
-      ? setInterval(() => {
-          report('live')
-          if (stage) diag += ` :: ${stage.stats()}`
-        }, 1000)
-      : null
-
-    return () => {
-      if (diagTimer) clearInterval(diagTimer)
-      disposed = true
-      stage?.dispose()
-      stage = null
-      video.pause()
-    }
+  // Dwell satisfied (the server reports no outstanding failure) — claim it.
+  $effect(() => {
+    if (!played && p?.atTarget && p.failure === null) void claim()
   })
 
+  // Walked back out of the radius before it locked.
   $effect(() => {
-    stage?.setHeat(probe.last?.heat ?? 100)
+    if (!played && p && !p.atTarget && p.failure === 'wrong_location') nav.go('search')
   })
 
   function next() {
@@ -147,157 +114,94 @@
 
 <CameraFeed />
 
-<canvas bind:this={canvas} class="ar-canvas" class:hidden={!useAr}></canvas>
+<ArScreen
+  bind:this={screen}
+  clipUrl={game.clue?.clipUrl}
+  posterUrl={game.clue?.posterUrl}
+  muted={!played}
+  build={played ? null : build}
+  heat={p?.heat ?? 100}
+  onshown={(a) => (usedAr = a)}
+/>
 
-{#if debugMode}
-  <p class="diag">{diag || 'deciding…'}</p>
-{/if}
-
-<div class="reveal" class:ar={useAr}>
-  {#if !useAr}
-    <div class="screen" {@attach panel}>
-      {#if r && posterBroken}
-        <div class="ph"></div>
-      {/if}
+<div class="ui" class:done={played}>
+  {#if !played}
+    <div class="lock" role="status">
+      <p class="mono">Hold here — locking the scene</p>
+      <div class="bar"><span style="width: {Math.round(build * 100)}%"></span></div>
+      {#if holdUp}<p class="warn">{holdUp}</p>{/if}
+      {#if retrying}<p class="warn">Reconnecting…</p>{/if}
+    </div>
+  {:else}
+    <div class="info">
+      <p class="mono">
+        Level {r?.level} · split {formatMarquee(r?.splitMs ?? 0)}{r?.penaltyMs
+          ? ` · +${formatMarquee(r.penaltyMs)}`
+          : ''}
+      </p>
+      <h1>{r?.locationName}</h1>
+      <p class="film"><b>{r?.movie.title}</b> · filmed right here</p>
+      <div class="fact">{r?.campusFact}</div>
+      <div class="actions">
+        {#if usedAr}
+          <Button variant="secondary" onclick={() => screen?.recenter()}>
+            <Icon name="crosshair" size={18} /> Recentre
+          </Button>
+        {/if}
+        <Button onclick={next}>{r?.huntComplete ? 'See your result' : 'Next scene'}</Button>
+      </div>
     </div>
   {/if}
-
-  {#if needsTap}
-    <button class="tap" onclick={playNow} aria-label="Play the scene">
-      <Icon name="play" size={30} />
-      <span>Play the scene</span>
-    </button>
-  {/if}
-
-  <div class="info">
-    <p class="mono">
-      Level {r?.level} · split {formatMarquee(r?.splitMs ?? 0)}{r?.penaltyMs
-        ? ` · +${formatMarquee(r.penaltyMs)}`
-        : ''}
-    </p>
-    <h1>{r?.locationName}</h1>
-    <p class="film"><b>{r?.movie.title}</b> · filmed here</p>
-    <div class="fact">{r?.campusFact}</div>
-    <div class="actions">
-      {#if useAr}
-        <Button variant="secondary" onclick={() => stage?.recenter()}>
-          <Icon name="crosshair" size={18} /> Recentre
-        </Button>
-      {/if}
-      <Button onclick={next}>{r?.huntComplete ? 'See your result' : 'Next scene'}</Button>
-    </div>
-  </div>
 </div>
 
-<img src={r?.posterUrl} alt="" class="probe-poster" onerror={() => (posterBroken = true)} />
-
 <style>
-  .ar-canvas {
-    position: fixed;
-    inset: 0;
-    z-index: 5;
-    pointer-events: none;
-  }
-  .hidden {
-    display: none;
-  }
-  .diag {
-    position: fixed;
-    top: calc(var(--safe-top) + 40px);
-    left: 8px;
-    right: 8px;
-    z-index: 40;
-    margin: 0;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: #0f0;
-    background: rgba(0, 0, 0, 0.7);
-    pointer-events: none;
-  }
-  .probe-poster {
-    position: fixed;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .reveal {
+  .ui {
     position: fixed;
     inset: 0;
     z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: var(--sp-4);
-    padding: calc(var(--safe-top) + var(--sp-6)) var(--edge) calc(var(--safe-bottom) + var(--sp-4));
+    justify-content: flex-end;
+    padding: calc(var(--safe-top) + var(--sp-6)) var(--edge) calc(var(--safe-bottom) + var(--sp-5));
     pointer-events: none;
   }
-  .reveal.ar {
-    justify-content: flex-end;
-  }
-  .reveal :global(button) {
+  .ui :global(button) {
     pointer-events: auto;
   }
-  .reveal::before,
-  .reveal::after {
+  /* Cinemascope bars only once the scene is actually playing. */
+  .ui.done::before {
     content: '';
     position: fixed;
+    top: 0;
     left: 0;
     right: 0;
-    height: 8vh;
+    height: 7vh;
     background: #000;
     animation: bar 0.6s var(--ease-spring);
-    z-index: 11;
   }
-  .reveal::before {
-    top: 0;
-  }
-  .reveal::after {
-    bottom: 0;
-  }
-  .reveal.ar::after {
-    display: none;
-  }
-  .screen {
-    position: relative;
+  .lock {
     width: 100%;
-    max-width: 520px;
-    aspect-ratio: 2.39 / 1;
-    border-radius: 12px;
+    max-width: 420px;
+    text-align: center;
+  }
+  .bar {
+    height: 3px;
+    margin-top: var(--sp-2);
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.16);
     overflow: hidden;
-    background: #05060a;
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.12),
-      0 24px 80px rgba(232, 165, 76, 0.28),
-      0 0 120px 20px rgba(232, 165, 76, 0.12);
-    animation: rise 0.9s var(--ease-spring);
   }
-  .ph {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(160deg, #1a2230, #0a0d12);
+  .bar span {
+    display: block;
+    height: 100%;
+    background: var(--amber);
+    transition: width 0.6s linear;
   }
-  .tap {
-    position: fixed;
-    top: 44%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 12;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--sp-2);
-    padding: var(--sp-6);
-    border-radius: 999px;
-    color: var(--text);
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(8px);
+  .warn {
+    margin: var(--sp-2) 0 0;
     font-size: var(--step-13);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    color: var(--amber);
   }
   .info {
     width: 100%;
@@ -308,7 +212,7 @@
     backdrop-filter: blur(var(--blur));
     border: var(--glass-border);
     border-top-color: var(--hairline-bright);
-    animation: rise 0.9s var(--ease-spring) 0.15s both;
+    animation: rise 0.8s var(--ease-spring) 0.4s both;
   }
   .mono {
     font-family: var(--font-mono);
@@ -317,6 +221,7 @@
     text-transform: uppercase;
     color: var(--text-dim);
     margin: 0;
+    text-shadow: 0 1px 6px #000;
   }
   h1 {
     font-family: var(--font-display);
@@ -347,7 +252,7 @@
   }
   @keyframes rise {
     from {
-      transform: scale(0.92);
+      transform: translateY(16px);
       opacity: 0;
     }
   }

@@ -11,7 +11,7 @@ export type Screen =
   | 'reveal'
   | 'finish'
 
-export type Sheet = 'howto' | 'hint' | 'standings' | 'here' | null
+export type Sheet = 'howto' | 'hint' | 'standings' | null
 
 class Nav {
   screen = $state<Screen>('splash')

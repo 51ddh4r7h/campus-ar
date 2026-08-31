@@ -1,129 +1,117 @@
 <script lang="ts">
+  /**
+   * The screening. The clue *is* the clip — it plays silently on the AR screen
+   * in front of you and you work out where on campus it was shot. The same clip
+   * comes back with sound, anchored in the real place, once you get there.
+   */
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import HudBar from '../lib/components/HudBar.svelte'
-  import Letterbox from '../lib/components/Letterbox.svelte'
+  import CameraFeed from '../lib/components/CameraFeed.svelte'
+  import ArScreen from '../lib/components/ArScreen.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
 
   const clue = $derived(game.clue)
-  let muted = $state(true)
-  let videoBroken = $state(false)
-  let posterBroken = $state(false)
-  let video = $state<HTMLVideoElement | null>(null)
-
-  function replay() {
-    if (video) {
-      video.currentTime = 0
-      void video.play()
-    }
-  }
+  let screen = $state<ReturnType<typeof ArScreen> | null>(null)
+  let usedAr = $state(false)
 </script>
 
+<CameraFeed />
+
+<ArScreen
+  bind:this={screen}
+  clipUrl={clue?.clipUrl}
+  posterUrl={clue?.posterUrl}
+  muted={true}
+  onshown={(ar) => (usedAr = ar)}
+/>
+
 <HudBar />
-<main>
-  <div class="stack">
-    <p class="label">Level {game.level} — scene</p>
-    <Letterbox glow>
-      {#if clue && !videoBroken}
-        <video
-          bind:this={video}
-          src={clue.clipUrl}
-          poster={clue.posterUrl}
-          {muted}
-          loop
-          autoplay
-          playsinline
-          onerror={() => (videoBroken = true)}
-        ></video>
-      {:else if clue && !posterBroken}
-        <img src={clue.posterUrl} alt="" loading="eager" onerror={() => (posterBroken = true)} />
-      {:else}
-        <div class="shimmer"></div>
-      {/if}
-      <span class="tag">Scene 0{game.level}</span>
-    </Letterbox>
-    <div class="controls">
-      <button aria-label="Replay" onclick={replay}><Icon name="refresh" size={20} /></button>
-      <button aria-label={muted ? 'Unmute' : 'Mute'} onclick={() => (muted = !muted)}>
-        <Icon name={muted ? 'mute' : 'sound'} size={20} />
+
+<div class="ui">
+  <p class="label">Level {game.level} — where was this filmed?</p>
+
+  <div class="card">
+    <p class="far">{clue?.clueText.far ?? ''}</p>
+    <div class="row">
+      <button class="ghost" onclick={() => screen?.replay()}>
+        <Icon name="refresh" size={18} /> Replay
       </button>
-      <p class="far">{clue?.clueText.far ?? ''}</p>
+      {#if usedAr}
+        <button class="ghost" onclick={() => screen?.recenter()}>
+          <Icon name="crosshair" size={18} /> Recentre
+        </button>
+      {/if}
     </div>
-  </div>
-  <div class="actions">
     <Button onclick={() => nav.go('search')}>Start searching</Button>
-    <Button variant="text" onclick={replay}>Show the clip again later</Button>
   </div>
-</main>
+</div>
 
 <style>
-  main {
-    min-height: 100dvh;
+  .ui {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
     display: flex;
     flex-direction: column;
-    padding: calc(var(--safe-top) + 72px) var(--edge) calc(var(--safe-bottom) + var(--sp-6));
+    justify-content: flex-end;
+    gap: var(--sp-3);
+    padding: calc(var(--safe-top) + 72px) var(--edge) calc(var(--safe-bottom) + var(--sp-5));
+    pointer-events: none;
   }
-  .stack {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: var(--sp-4);
+  .ui :global(button) {
+    pointer-events: auto;
   }
   .label {
     text-align: center;
     font-family: var(--font-mono);
     font-size: var(--step-13);
-    letter-spacing: 0.14em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-dim);
-    margin: 0;
+    text-shadow: 0 1px 6px #000;
+    margin: 0 auto;
   }
-  .tag {
-    position: absolute;
-    right: 10px;
-    bottom: 8px;
-    font-family: var(--font-mono);
-    font-size: var(--step-13);
-    color: var(--text);
-    text-shadow: 0 1px 4px #000;
-  }
-  .shimmer {
+  .card {
     width: 100%;
-    height: 100%;
-    background: linear-gradient(100deg, #14161a 30%, #20242a 50%, #14161a 70%);
-    background-size: 200% 100%;
-    animation: sweep 1.4s linear infinite;
-  }
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-3);
-  }
-  .controls button {
-    color: var(--text-dim);
-    padding: var(--sp-2);
+    max-width: 520px;
+    margin: 0 auto;
+    padding: var(--sp-4);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+    backdrop-filter: blur(var(--blur));
+    border: var(--glass-border);
+    border-top-color: var(--hairline-bright);
+    animation: rise 0.7s var(--ease-spring) both;
   }
   .far {
-    margin: 0 0 0 auto;
-    text-align: right;
-    color: var(--text);
-    font-size: var(--step-15);
-    max-width: 24ch;
+    margin: 0 0 var(--sp-3);
+    font-size: var(--step-17);
+    line-height: 1.4;
   }
-  .actions {
+  .row {
     display: flex;
-    flex-direction: column;
-    align-items: center;
     gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
   }
-  .actions :global(.primary) {
+  .ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: var(--glass-border);
+    color: var(--text-dim);
+    font-size: var(--step-13);
+  }
+  .card :global(.primary) {
     width: 100%;
   }
-  @keyframes sweep {
-    to {
-      background-position: -200% 0;
+  @keyframes rise {
+    from {
+      transform: translateY(14px);
+      opacity: 0;
     }
   }
 </style>

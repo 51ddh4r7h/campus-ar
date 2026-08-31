@@ -1,7 +1,10 @@
 /**
- * One shared <video> for the reveal clip. Created and primed on the "Reveal the
- * scene" tap (a real user gesture) so mobile browsers let it play — then the
- * Reveal screen and the AR stage both consume the same element.
+ * One shared <video> for the scene clip, reused across the whole session.
+ *
+ * It plays twice per level: silently on the AR screen at the start (the clue),
+ * and again with sound at the location (the reward). Keeping a single element
+ * matters for mobile autoplay — once the player's first tap unblocks it, every
+ * later play is allowed without another gesture.
  */
 
 let el: HTMLVideoElement | null = null
@@ -21,20 +24,18 @@ export function revealVideo(): HTMLVideoElement {
   return el
 }
 
-/** Call synchronously from the reveal button's click handler. */
+/**
+ * Unblock playback from inside a user gesture. Called on the tap that starts a
+ * level, which buys autoplay for the rest of the session.
+ */
 export function primeReveal(clipUrl: string): void {
   const v = revealVideo()
   if (v.getAttribute('src') !== clipUrl) {
     v.src = clipUrl
     v.load()
   }
-  v.currentTime = 0
-  v.muted = false
-  v.play().catch(() => {
-    // Sound-on autoplay refused — try muted so at least the picture moves.
-    v.muted = true
-    v.play().catch(() => {})
-  })
+  v.muted = true
+  v.play().catch(() => {})
 }
 
 export function disposeRevealVideo(): void {

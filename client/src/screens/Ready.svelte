@@ -4,11 +4,18 @@
   import {game} from '../lib/stores/game.svelte'
   import {clock} from '../lib/stores/clock.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
+  import {revealVideo} from '../lib/reveal-video'
 
   const resuming = $derived(game.inProgress)
   let starting = $state(false)
 
   async function go() {
+    // This tap is the session's one guaranteed user gesture — spend it
+    // unblocking the shared <video> so no later scene needs a "tap to play".
+    const v = revealVideo()
+    v.muted = true
+    void v.play().catch(() => {})
+
     if (resuming) {
       nav.go('clue')
       return

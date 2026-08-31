@@ -23,7 +23,6 @@
   import HowToSheet from './screens/HowToSheet.svelte'
   import HintSheet from './screens/HintSheet.svelte'
   import StandingsSheet from './screens/StandingsSheet.svelte'
-  import HereSheet from './screens/HereSheet.svelte'
   import Toaster from './lib/components/Toaster.svelte'
   import DemoBadge from './lib/components/DemoBadge.svelte'
 
@@ -66,27 +65,29 @@
     }
   })
 
-  // "Am I there yet?" probe while searching. A grace period keeps the sheet
-  // from popping the instant the screen opens.
+  // "Am I there yet?" — runs across the search AND the arrival, because the
+  // dwell reported here is what builds the screen on the reveal. A grace period
+  // stops it firing the instant the search screen opens. Faster while locking:
+  // that poll is the progress bar.
   $effect(() => {
-    if (nav.screen !== 'search' || !game.inProgress || !game.token) return
+    const watching = nav.screen === 'search' || nav.screen === 'reveal'
+    if (!watching || !game.inProgress || !game.token) return
     const token = game.token
-    let armed = false
+    let armed = nav.screen === 'reveal'
     const arm = setTimeout(() => (armed = true), 9_000)
     const run = async () => {
       const r = await api.nearby(token, location.recent()).catch(() => null)
       if (r) probe.last = r
-      if (armed && r?.atTarget && nav.sheet !== 'here') {
+      if (armed && r?.atTarget && nav.screen === 'search') {
         haptics.arrive()
-        nav.open('here')
+        nav.go('reveal')
       }
     }
     void run()
-    const id = setInterval(run, 5_000)
+    const id = setInterval(run, nav.screen === 'reveal' ? 2_500 : 5_000)
     return () => {
       clearInterval(id)
       clearTimeout(arm)
-      probe.reset()
     }
   })
 
@@ -106,7 +107,6 @@
 {#if nav.sheet === 'howto'}<HowToSheet />{/if}
 {#if nav.sheet === 'hint'}<HintSheet />{/if}
 {#if nav.sheet === 'standings'}<StandingsSheet />{/if}
-{#if nav.sheet === 'here'}<HereSheet />{/if}
 
 {#if !game.online && ['clue', 'search', 'reveal'].includes(nav.screen)}
   <div class="offline" role="status">Reconnecting…</div>

@@ -11,15 +11,27 @@
 import type * as THREE_NS from 'three'
 
 export interface ArStage {
-  showScreen(): void
+  /**
+   * Bring the screen up. `assemble` hands the entry animation over to
+   * `setBuild()` instead of running it on a timer — used at arrival, where the
+   * anti-cheat dwell drives the screen constructing itself.
+   */
+  showScreen(opts?: {assemble?: boolean}): void
   hideScreen(): void
   recenter(): void
+  /** Assembly progress, 0-1. Only meaningful after showScreen({assemble: true}). */
+  setBuild(p: number): void
+  setMuted(muted: boolean): void
   /** Brighten the warm spill as the player closes in (heat 0-100). */
   setHeat(heat: number): void
   /** Debug: frames rendered / current screen opacity. */
   stats(): string
   dispose(): void
 }
+
+const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n)
+/** Progress of `p` through the window [a, b], clamped. */
+const phase = (p: number, a: number, b: number): number => clamp01((p - a) / (b - a))
 
 /**
  * The screen is 2.39:1 cinemascope, `width` metres across, sitting slightly
@@ -54,7 +66,11 @@ export async function createArStage(
     const w = window.innerWidth
     const h = window.innerHeight
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
-    renderer.setSize(w, h, false)
+    // updateStyle must stay on. A <canvas> is a replaced element: with only
+    // `inset: 0` and no CSS width/height it lays out at its *intrinsic* size —
+    // the backing-store size, which is viewport x devicePixelRatio. That
+    // rendered the whole scene at 2-3x, pushed off the bottom-right corner.
+    renderer.setSize(w, h)
     camera.aspect = w / h
 
     // three's `fov` is vertical; we want to match the phone camera's *horizontal*
@@ -94,6 +110,7 @@ export async function createArStage(
   // screen from poster → live video once it's actually running.
   let onVideo = !posterTex
   const keepPlaying = () => {
+    if (video.error) return
     if (video.paused) void video.play().catch(() => {})
     if (!onVideo && !video.paused && video.currentTime > 0 && video.readyState >= 2) {
       screenMat.map = videoTex
@@ -103,8 +120,21 @@ export async function createArStage(
   }
   const playPoll = setInterval(keepPlaying, 500)
   const screen = new THREE.Mesh(geo, screenMat)
-  screen.renderOrder = 2
+  screen.renderOrder = 3
   anchor.add(screen)
+
+  // Dark panel behind the picture. During assembly this fills in after the
+  // frame and before the image, so the screen reads as being built.
+  const backMat = new THREE.MeshBasicMaterial({
+    color: 0x05060a,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+  })
+  const back = new THREE.Mesh(geo, backMat)
+  back.renderOrder = 2
+  anchor.add(back)
 
   // thin bright frame
   const frameMat = new THREE.MeshBasicMaterial({
@@ -141,6 +171,7 @@ export async function createArStage(
   /** Re-place everything for the current `distance`. */
   function fit(): void {
     screen.position.set(0, SCREEN.y, -distance)
+    back.position.set(0, SCREEN.y, -distance - 0.02)
     frame.position.set(0, SCREEN.y, -distance - 0.04)
     spill.position.set(0, SCREEN.y - 1.15, -distance + 0.6)
     light.position.set(0, SCREEN.y, -distance + 1.5)
@@ -207,12 +238,17 @@ export async function createArStage(
    * and only a manual Recentre brings it into view.
    */
   let needsAnchor = false
+  /** When true, entry progress comes from setBuild() rather than the clock. */
+  let assembling = false
+  let buildP = 0
+  let heatK = 1
 
   const stage: ArStage = {
-    showScreen() {
+    showScreen(opts) {
       visible = true
       shownAt = performance.now()
       needsAnchor = true
+      assembling = opts?.assemble ?? false
       faceForward()
       void video.play().catch(() => {})
     },
@@ -224,10 +260,14 @@ export async function createArStage(
       shownAt = Math.min(shownAt, performance.now() - 700)
       faceForward()
     },
+    setBuild(p) {
+      buildP = clamp01(p)
+    },
+    setMuted(m) {
+      video.muted = m
+    },
     setHeat(heat: number) {
-      const k = Math.max(0, Math.min(1, heat / 100))
-      light.intensity = 0.4 + k * 2.2
-      spillMat.opacity = visible ? 0.14 + k * 0.22 : 0
+      heatK = clamp01(heat / 100)
     },
     stats() {
       return `f=${frames} op=${screenMat.opacity.toFixed(2)} vis=${visible} read=${haveReading} yaw=${((headingOffset * 180) / Math.PI).toFixed(0)} gl=${renderer.getContext().isContextLost() ? 'LOST' : 'ok'}`
@@ -240,6 +280,7 @@ export async function createArStage(
       window.removeEventListener('deviceorientationabsolute', onOrient, true)
       geo.dispose()
       screenMat.dispose()
+      backMat.dispose()
       frameMat.dispose()
       spillMat.dispose()
       videoTex.dispose()
@@ -264,12 +305,28 @@ export async function createArStage(
     }
     if (haveReading) applyPose()
 
-    // ease the screen in
-    const t = visible ? Math.min(1, (performance.now() - shownAt) / 700) : 0
-    const eased = t * t * (3 - 2 * t)
-    screenMat.opacity = eased
-    frameMat.opacity = eased * 0.9
-    screen.scale.setScalar(0.96 + eased * 0.04)
+    // Entry progress: either the 700ms ease, or the externally-driven assembly.
+    let p = 0
+    if (visible) {
+      if (assembling) p = buildP
+      else {
+        const t = Math.min(1, (performance.now() - shownAt) / 700)
+        p = t * t * (3 - 2 * t)
+      }
+    }
+
+    // The screen builds outward-in: frame edges, then the dark panel, then the
+    // picture. Off the assembly path all three windows overlap into one fade.
+    frameMat.opacity = (assembling ? phase(p, 0, 0.3) : p) * 0.9
+    backMat.opacity = (assembling ? phase(p, 0.18, 0.58) : p) * 0.88
+    screenMat.opacity = assembling ? phase(p, 0.5, 1) : p
+
+    light.intensity = (0.4 + heatK * 2.2) * p
+    spillMat.opacity = (0.14 + heatK * 0.22) * p
+
+    const s = 0.96 + p * 0.04
+    screen.scale.setScalar(s)
+    back.scale.copy(screen.scale)
     frame.scale.copy(screen.scale)
 
     renderer.render(scene, camera)
