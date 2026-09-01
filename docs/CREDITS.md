@@ -15,6 +15,20 @@ almost all of it texture weight.
 The Draco decoder in `client/public/draco/` is copied verbatim from the
 `three` package so nothing is fetched from a CDN at runtime.
 
+## Map data — OpenStreetMap
+
+The campus plan on the finish screen is built from OpenStreetMap, baked into
+`client/src/lib/campus-map.ts` at build time by `npm run map`. Geometry is
+committed rather than fetched at runtime: a player on a hilltop with two bars
+should not need a third-party map server, and OSM's tile policy is not written
+for an app hammering it on induction day.
+
+> Map data © OpenStreetMap contributors, available under the Open Database
+> Licence (ODbL).
+
+That line is a licence condition, and it is rendered under the map itself in
+`CampusMap.svelte`. Do not remove it.
+
 ## Attribution — INCOMPLETE, do not ship a public build until filled in
 
 Every model below came from a source offering **CC Attribution (CC-BY)**, which

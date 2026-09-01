@@ -1,6 +1,6 @@
 <script lang="ts">
   import {onMount} from 'svelte'
-  import {LOCATIONS, formatMarquee, formatScore, locationById, perksEarned} from '@cmh/shared'
+  import {formatMarquee, formatScore, locationById, perksEarned} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {standings} from '../lib/stores/standings.svelte'
@@ -11,6 +11,7 @@
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
   import {rungIcon} from '../lib/rung-icons'
+  import CampusMap from '../lib/components/CampusMap.svelte'
 
   onMount(() => haptics.fanfare())
 
@@ -88,15 +89,7 @@
          is what buys you the sight of the whole campus. -->
     <section class="wrap">
       <h2>The wrap — every location on campus</h2>
-      <ul>
-        {#each LOCATIONS as l (l.id)}
-          <li class:found={visited.has(l.id)}>
-            <span class="dot" aria-hidden="true"></span>
-            <b>{l.name}</b>
-            <em>{visited.has(l.id) ? 'You found this one' : l.movie.title}</em>
-          </li>
-        {/each}
-      </ul>
+      <CampusMap found={visited} />
     </section>
   {/if}
 
@@ -124,8 +117,7 @@
     font-weight: 600;
     letter-spacing: 0.02em;
   }
-  .ladder ul,
-  .wrap ul {
+  .ladder ul {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -150,35 +142,13 @@
     background: color-mix(in srgb, var(--amber) 12%, transparent);
     border-radius: 999px;
   }
-  .ladder em,
-  .wrap em {
+  .ladder em {
     grid-column: 2;
     font-style: normal;
     font-size: var(--step-15);
     color: var(--text-dim);
   }
-  .wrap li {
-    display: grid;
-    grid-template-columns: 12px 1fr;
-    gap: 2px var(--sp-2);
-    align-items: baseline;
-    opacity: 0.55;
-  }
-  .wrap li.found {
-    opacity: 1;
-  }
-  .wrap .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    border: 1px solid var(--text-dim);
-    grid-row: span 2;
-    align-self: center;
-  }
-  .wrap li.found .dot {
-    background: var(--amber);
-    border-color: var(--amber);
-  }
+
   main {
     min-height: 100dvh;
     display: flex;
