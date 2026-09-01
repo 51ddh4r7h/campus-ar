@@ -11,7 +11,7 @@
    * it works on a bad signal and can be painted in the app's own palette
    * instead of pasting a bright standard tile into a dark interface.
    */
-  import {MAP_FEATURES, MAP_SIZE, MAP_STOPS, MAP_WIDTH_M} from '../campus-map'
+  import {MAP_FEATURES, MAP_LANDMARKS, MAP_SIZE, MAP_STOPS, MAP_WIDTH_M} from '../campus-map'
 
   const {found}: {found: ReadonlySet<string>} = $props()
 
@@ -35,6 +35,16 @@
     {/each}
     {#each featuresOf('road') as s (s.d)}
       <path d={s.d} fill="none" stroke="var(--map-road)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+    {/each}
+
+    <!-- Institutes OSM holds only as points. Drawn faintly and behind the
+         stops: they say what the buildings are without competing with the
+         thing the player came here to read. -->
+    {#each MAP_LANDMARKS as l (l.name)}
+      <g class="landmark">
+        <rect x={l.x - 4} y={l.y - 4} width="8" height="8" rx="1.5" />
+        <text x={l.x} y={l.y - 9} text-anchor="middle">{l.name}</text>
+      </g>
     {/each}
 
     {#each MAP_STOPS as s, i (s.id)}
@@ -100,6 +110,18 @@
   /* Sizes are viewBox units, not screen pixels: the plan is ~640 units wide
      and lands around 340px on a phone, so anything set at a screen-plausible
      13 would render at seven. */
+  .landmark rect {
+    fill: none;
+    stroke: var(--text-dim);
+    stroke-width: 1.5;
+    opacity: 0.45;
+  }
+  .landmark text {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    fill: var(--text-dim);
+    opacity: 0.55;
+  }
   .num {
     font-family: var(--font-mono);
     font-size: 17px;

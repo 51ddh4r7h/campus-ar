@@ -37,6 +37,9 @@ const LAYERS = [
   {key: 'building', value: null, kind: 'building'},
   {key: 'highway', value: null, kind: 'road'},
   {key: 'amenity', value: 'university', kind: 'campus'},
+  // SIMC and SIBM are mapped as college areas with no building tag, so without
+  // this the institutes simply are not on the plan.
+  {key: 'amenity', value: 'college', kind: 'building'},
 ] as const
 
 type Kind = (typeof LAYERS)[number]['kind']
@@ -65,13 +68,27 @@ async function campusBounds(): Promise<{s: number; w: number; n: number; e: numb
   return {s: Math.min(...la), n: Math.max(...la), w: Math.min(...lo), e: Math.max(...lo)}
 }
 
-async function overpass(q: string): Promise<{elements: unknown[]}> {
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Overpass is a free, shared service. Three queries back to back earn a 429,
+ * and rightly so — space them out and retry rather than hammering.
+ */
+async function overpass(q: string, attempt = 0): Promise<{elements: unknown[]}> {
   // Overpass refuses anonymous clients, and OSM's usage policy asks callers to
   // identify themselves. This runs once at build time, never from a player.
   const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, {
     headers: {'User-Agent': 'campus-movie-hunt/1.0 (build-time map bake)'},
   })
+  if (res.status === 429 || res.status === 504) {
+    if (attempt >= 4) throw new Error(`overpass ${res.status} after ${attempt} retries`)
+    const backoff = 4000 * (attempt + 1)
+    console.log(`  overpass ${res.status} — waiting ${backoff / 1000}s`)
+    await wait(backoff)
+    return overpass(q, attempt + 1)
+  }
   if (!res.ok) throw new Error(`overpass ${res.status}`)
+  await wait(1500)
   return (await res.json()) as {elements: unknown[]}
 }
 
@@ -98,7 +115,7 @@ async function main(): Promise<void> {
     Math.round((1 - (lat - south) / (north - south)) * outH * 10) / 10,
   ]
 
-  const q = `[out:json][timeout:90];(way["amenity"="university"](${south},${west},${north},${east});way["building"](${south},${west},${north},${east});way["highway"](${south},${west},${north},${east});way["natural"](${south},${west},${north},${east});way["landuse"](${south},${west},${north},${east});way["leisure"](${south},${west},${north},${east});way["waterway"](${south},${west},${north},${east}););out geom;`
+  const q = `[out:json][timeout:90];(way["amenity"="college"](${south},${west},${north},${east});way["amenity"="university"](${south},${west},${north},${east});way["building"](${south},${west},${north},${east});way["highway"](${south},${west},${north},${east});way["natural"](${south},${west},${north},${east});way["landuse"](${south},${west},${north},${east});way["leisure"](${south},${west},${north},${east});way["waterway"](${south},${west},${north},${east}););out geom;`
 
   const body = (await overpass(q)) as {elements: Way[]}
 
@@ -116,6 +133,20 @@ async function main(): Promise<void> {
       closed,
     })
   }
+
+  // Institutes OSM knows only as a point — SIDTM among them — have no shape to
+  // draw. Carry them as labelled marks so a campus plan shows the institutes
+  // on it, rather than roads and hostels with a hole where the teaching is.
+  const nq = `[out:json][timeout:60];node["amenity"~"^(college|university)$"](${south},${west},${north},${east});out;`
+  const nodes = (await overpass(nq)) as {
+    elements: Array<{lat: number; lon: number; tags?: Record<string, string>}>
+  }
+  const landmarks = nodes.elements
+    .filter((n) => n.tags?.name)
+    .map((n) => {
+      const [x, y] = project(n.lat, n.lon)
+      return {name: n.tags!.name!, x, y}
+    })
 
   const stops = LOCATIONS.map((l) => {
     const [x, y] = project(l.lat, l.lng)
@@ -135,6 +166,13 @@ export interface MapFeature {
   closed: boolean
 }
 
+/** A place worth naming that OSM holds only as a point. */
+export interface MapLandmark {
+  name: string
+  x: number
+  y: number
+}
+
 export interface MapStop {
   id: string
   name: string
@@ -146,6 +184,7 @@ export const MAP_SIZE = {w: ${OUT_W}, h: ${outH}} as const
 /** Metres across the plan, for a scale bar. */
 export const MAP_WIDTH_M = ${Math.round(widthM)}
 export const MAP_FEATURES: readonly MapFeature[] = ${JSON.stringify(features)}
+export const MAP_LANDMARKS: readonly MapLandmark[] = ${JSON.stringify(landmarks)}
 export const MAP_STOPS: readonly MapStop[] = ${JSON.stringify(stops, null, 2)}
 `
   writeFileSync('client/src/lib/campus-map.ts', out)
@@ -155,7 +194,7 @@ export const MAP_STOPS: readonly MapStop[] = ${JSON.stringify(stops, null, 2)}
   }, {})
   console.log(`plan ${OUT_W}x${outH} — ${Math.round(widthM)}x${Math.round(heightM)} m`)
   console.log('features:', counts)
-  console.log('stops:', stops.length)
+  console.log('stops:', stops.length, ' landmarks:', landmarks.map((l) => l.name).join(', '))
 }
 
 await main()
