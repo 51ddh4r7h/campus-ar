@@ -99,6 +99,10 @@ export async function createArStage(
   const geo = curvedGeometry(THREE, SCREEN.width, SCREEN.height)
   const videoTex = new THREE.VideoTexture(video)
   videoTex.colorSpace = THREE.SRGBColorSpace
+  // A VideoTexture re-uploads every frame; building a mip chain each time is
+  // wasted work on a phone and shows up as hitching.
+  videoTex.generateMipmaps = false
+  videoTex.minFilter = THREE.LinearFilter
   const posterTex = posterUrl ? new THREE.TextureLoader().load(posterUrl) : null
   if (posterTex) posterTex.colorSpace = THREE.SRGBColorSpace
   // depthTest off throughout: the scene is a single flat composition drawn over
@@ -191,13 +195,27 @@ export async function createArStage(
   const euler = new THREE.Euler()
   const q0 = new THREE.Quaternion()
   const qMinusHalfPiX = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2)
+  /** Where the sensor says we are looking. The camera chases this, it never snaps to it. */
+  const targetQ = new THREE.Quaternion()
   let orient = {alpha: 0, beta: 0, gamma: 0}
   let headingOffset = 0
   let haveReading = false
 
+  /**
+   * Two orientation events exist and they do NOT share a reference frame:
+   * `deviceorientation` is relative to wherever the device happened to start,
+   * `deviceorientationabsolute` is referenced to magnetic north. Listening to
+   * both feeds alternating frames from two different worlds into one pose,
+   * which reads on screen as the picture shaking. Lock onto whichever stream
+   * speaks first and ignore the other for the life of the stage.
+   */
+  let source: string | null = null
+
   const onOrient = (raw: Event) => {
     const e = raw as DeviceOrientationEvent
     if (e.alpha === null && e.beta === null && e.gamma === null) return
+    source ??= raw.type
+    if (raw.type !== source) return
     orient = {alpha: e.alpha ?? 0, beta: e.beta ?? 0, gamma: e.gamma ?? 0}
     haveReading = true
   }
@@ -209,14 +227,39 @@ export async function createArStage(
     return so ? so.angle : (window.orientation as number | undefined) ?? 0
   }
 
-  const applyPose = () => {
-    const alpha = orient.alpha * deg2rad
-    const beta = orient.beta * deg2rad
-    const gamma = orient.gamma * deg2rad
-    euler.set(beta, alpha, -gamma, 'YXZ')
-    camera.quaternion.setFromEuler(euler)
-    camera.quaternion.multiply(qMinusHalfPiX)
-    camera.quaternion.multiply(q0.setFromAxisAngle(zee, -screenAngle() * deg2rad))
+  /** The raw sensor pose, before any smoothing. */
+  const readPose = (out: THREE_NS.Quaternion): THREE_NS.Quaternion => {
+    euler.set(orient.beta * deg2rad, orient.alpha * deg2rad, -orient.gamma * deg2rad, 'YXZ')
+    out.setFromEuler(euler)
+    out.multiply(qMinusHalfPiX)
+    out.multiply(q0.setFromAxisAngle(zee, -screenAngle() * deg2rad))
+    return out
+  }
+
+  /**
+   * Chase the sensor rather than following it exactly.
+   *
+   * Raw device orientation is noisy, and a phone held up to look at the screen
+   * sits near beta 90 degrees — the degenerate angle for a YXZ euler, where
+   * yaw and roll trade places and small sensor wobble becomes large rotation.
+   * Applying that straight to the camera is what made the picture jitter.
+   *
+   * So the camera slerps toward the reading with a time constant that adapts:
+   * loose and heavily damped while you hold still, tightening as you turn so a
+   * deliberate look-around never feels laggy. A jump too large to be a real
+   * movement is a reference-frame glitch, and gets taken in one step rather
+   * than smeared across half a second.
+   */
+  const applyPose = (dtMs: number) => {
+    readPose(targetQ)
+    const delta = camera.quaternion.angleTo(targetQ)
+
+    if (delta > 1.4) {
+      camera.quaternion.copy(targetQ)
+    } else {
+      const tauMs = delta > 0.3 ? 45 : 130
+      camera.quaternion.slerp(targetQ, 1 - Math.exp(-dtMs / tauMs))
+    }
     anchor.rotation.y = headingOffset
   }
 
@@ -226,7 +269,9 @@ export async function createArStage(
   // appears, whatever the orientation-event conventions of this device.
   const fwd = new THREE.Vector3()
   const faceForward = () => {
-    if (haveReading) applyPose()
+    // Anchor to the true reading, not the chasing camera, or the screen lands
+    // wherever the smoothing happened to be mid-flight.
+    if (haveReading) camera.quaternion.copy(readPose(targetQ))
     camera.getWorldDirection(fwd)
     fwd.y = 0
     if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1)
@@ -324,10 +369,16 @@ export async function createArStage(
   // ---- render loop ----------------------------------------------------
   let running = true
   let frames = 0
+  let lastMs = performance.now()
   const tick = () => {
     if (!running) return
     requestAnimationFrame(tick)
     frames++
+    const nowMs = performance.now()
+    // Clamp: a backgrounded tab resumes with a huge gap, which would snap the
+    // smoothing wide open on the first frame back.
+    const dtMs = Math.min(64, nowMs - lastMs)
+    lastMs = nowMs
 
     // The first real reading is also the first chance to anchor correctly.
     if (needsAnchor && haveReading) {
@@ -335,7 +386,7 @@ export async function createArStage(
       shownAt = performance.now()
       faceForward()
     }
-    if (haveReading) applyPose()
+    if (haveReading) applyPose(dtMs)
     applyEntry(entryProgress())
     renderer.render(scene, camera)
   }
