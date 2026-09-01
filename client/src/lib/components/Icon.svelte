@@ -1,6 +1,6 @@
 <script lang="ts">
   /** Line icons — 24px grid, 1.5 stroke, rounded. */
-  type Name =
+  export type IconName =
     | 'play'
     | 'eye'
     | 'pin'
@@ -20,8 +20,11 @@
     | 'steps'
     | 'film'
     | 'path'
+    | 'callsheet'
+    | 'clapper'
+    | 'reel'
 
-  const {name, size = 24}: {name: Name; size?: number} = $props()
+  const {name, size = 24}: {name: IconName; size?: number} = $props()
 
   const paths = ({
     play: 'M8 5.5v13l11-6.5z',
@@ -43,7 +46,11 @@
     steps: 'M4 20h4v-4h4v-4h4V8h4',
     film: 'M4 4h16v16H4z M8 4v16M16 4v16M4 8h4M4 16h4M16 8h4M16 16h4',
     path: 'M6 20a3 3 0 100-6 3 3 0 000 6z M6 14V8a3 3 0 013-3h6a3 3 0 013 3v0M18 5l2 2-2 2',
-  }) satisfies Record<Name, string>
+    // The ladder speaks in film-production terms, so its glyphs do too.
+    callsheet: 'M6 5h12v15H6z M9 5V3h6v2 M9 11h6 M9 15h4',
+    clapper: 'M3 10h18v10H3z M3 10l2-5h14l-2 5 M8.5 5l-2 5 M13.5 5l-2 5',
+    reel: 'M12 21a9 9 0 100-18 9 9 0 000 18z M13.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M13.5 7.2a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M9.6 15.4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M17.4 15.4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z',
+  }) satisfies Record<IconName, string>
 </script>
 
 <svg

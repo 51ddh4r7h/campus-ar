@@ -18,6 +18,7 @@
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
   import {ApiError} from '../lib/api'
+  import {rungIcon} from '../lib/rung-icons'
   import {camera} from '../lib/stores/camera.svelte'
   import {composeShot, offerShot, type Shot} from '../lib/ar/photo'
 
@@ -199,9 +200,12 @@
       <div class="fact">{r?.campusFact}</div>
       {#if r?.perk}
         <div class="perk">
-          <span class="rung">Unlocked · rung {r.perk.rung} of 5</span>
-          <b>{r.perk.name}</b>
-          <p>{r.perk.blurb}</p>
+          <span class="badge"><Icon name={rungIcon(r.perk.rung)} size={22} /></span>
+          <div>
+            <span class="rung">Unlocked · rung {r.perk.rung} of 5</span>
+            <b>{r.perk.name}</b>
+            <p>{r.perk.blurb}</p>
+          </div>
         </div>
       {/if}
       <div class="actions">
@@ -343,12 +347,26 @@
     color: var(--text);
   }
   .perk {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: flex-start;
     padding: var(--sp-3);
     margin-bottom: var(--sp-4);
     border-radius: 12px;
     border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent);
     background: color-mix(in srgb, var(--amber) 10%, transparent);
     animation: rise 0.6s var(--ease-spring) 0.9s both;
+  }
+  .perk .badge {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    color: var(--amber);
+    border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
   }
   .perk .rung {
     display: block;

@@ -10,6 +10,7 @@
   import {toasts} from '../lib/stores/toast.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import {rungIcon} from '../lib/rung-icons'
 
   onMount(() => haptics.fanfare())
 
@@ -72,7 +73,11 @@
       <h2>Unlocked</h2>
       <ul>
         {#each earned as p (p.rung)}
-          <li><span class="r">{p.rung}</span><b>{p.name}</b><em>{p.blurb}</em></li>
+          <li>
+            <span class="r"><Icon name={rungIcon(p.rung)} size={18} /></span>
+            <b>{p.name}</b>
+            <em>{p.blurb}</em>
+          </li>
         {/each}
       </ul>
     </section>
@@ -130,19 +135,20 @@
   }
   .ladder li {
     display: grid;
-    grid-template-columns: 26px 1fr;
+    grid-template-columns: 30px 1fr;
     gap: 4px var(--sp-2);
     align-items: baseline;
   }
   .ladder .r {
     grid-row: span 2;
-    font-family: var(--font-mono);
-    font-size: var(--step-13);
-    color: var(--amber-ink);
-    background: var(--amber);
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    color: var(--amber);
+    border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
     border-radius: 999px;
-    text-align: center;
-    line-height: 26px;
   }
   .ladder em,
   .wrap em {
