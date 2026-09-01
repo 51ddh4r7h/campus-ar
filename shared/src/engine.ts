@@ -91,6 +91,7 @@ const advanceSession = (session: Session, route: Route, reachedTsMs: number): Se
     ...session,
     currentLevel: nextLevel,
     currentLevelHints: 0,
+    currentLevelViews: 0,
     status: complete ? 'complete' : 'in_progress',
     endTsMs: complete ? reachedTsMs : null,
     scoreMs: complete ? sessionScoreMs(elapsedMs, session.penaltyMs, route.parTotalMs) : null,
@@ -281,6 +282,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         endTsMs: null,
         currentLevel: 1,
         currentLevelHints: 0,
+        currentLevelViews: 0,
         penaltyMs: 0,
         scoreMs: null,
       }
@@ -303,6 +305,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         startTsMs: deps.now(),
         currentLevel: 1,
         currentLevelHints: 0,
+        currentLevelViews: 0,
       }
       await store.putSession(started)
       await event(started.playerId, 'hunt_started')
@@ -413,6 +416,32 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         reveal: revealView(target, split, complete),
         nextClue: complete ? null : clueView(route, next),
       }
+    },
+
+    /**
+     * The player watched the scene again.
+     *
+     * Two viewings a level are free; past that each one costs, the same way a
+     * hint does. The clip is the clue, so unlimited rewatching would make
+     * recognising a place optional — you could simply stare until the answer
+     * arrived. Counted on the server because it moves the score.
+     */
+    async viewScene(token: string): Promise<{penaltyMs: number; session: Session}> {
+      const {session, batch} = await authed(token)
+      if (session.status !== 'in_progress') throw new EngineError('not_in_progress')
+
+      const used = session.currentLevelViews
+      const penaltyMs = used < batch.parConstants.freeViews ? 0 : batch.parConstants.viewPenaltyMs
+      const next: Session = {
+        ...session,
+        currentLevelViews: used + 1,
+        penaltyMs: session.penaltyMs + penaltyMs,
+      }
+      await store.putSession(next)
+      if (penaltyMs > 0) {
+        await event(session.playerId, 'view_charged', {level: next.currentLevel, penaltyMs})
+      }
+      return {penaltyMs, session: next}
     },
 
     async useHint(

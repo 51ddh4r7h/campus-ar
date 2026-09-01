@@ -79,6 +79,8 @@ export interface Session {
   currentLevel: number
   /** Hint rungs taken on the current level (0-3). Resets each level. */
   currentLevelHints: number
+  /** Times the scene has been watched on this level. Resets each level. */
+  currentLevelViews: number
   /** Accumulated hint penalty across the whole hunt, in ms. */
   penaltyMs: number
   /** elapsed + penalties − par, in ms. Null until complete. Lower is better. */
@@ -102,6 +104,7 @@ export type GameEventType =
   | 'clue_served'
   | 'location_reached'
   | 'hint_used'
+  | 'view_charged'
   | 'hunt_completed'
   | 'skip_attempt'
   | 'speed_flag'
@@ -141,6 +144,10 @@ export interface ParConstants {
   walkSpeedMps: number
   /** Time added to a player's elapsed for each hint rung, in ladder order. */
   hintPenaltyMs: Record<HintRung, number>
+  /** Viewings of the scene allowed per level before they start costing. */
+  freeViews: number
+  /** Time added for each viewing past the free allowance. */
+  viewPenaltyMs: number
 }
 
 // ---------------------------------------------------------------- API contracts

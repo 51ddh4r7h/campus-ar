@@ -49,6 +49,7 @@ interface SessionRow {
   end_ts_ms: number | null
   current_level: number
   current_level_hints: number
+  current_level_views: number
   penalty_ms: number
   score_ms: number | null
 }
@@ -99,6 +100,7 @@ const toSession = (r: SessionRow): Session => ({
   endTsMs: r.end_ts_ms,
   currentLevel: r.current_level,
   currentLevelHints: r.current_level_hints,
+  currentLevelViews: r.current_level_views ?? 0,
   penaltyMs: r.penalty_ms,
   scoreMs: r.score_ms,
 })
@@ -224,11 +226,12 @@ export class D1Store implements GameStore {
     await this.db
       .prepare(
         `INSERT INTO session
-           (player_id, status, start_ts_ms, end_ts_ms, current_level, current_level_hints, penalty_ms, score_ms)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+           (player_id, status, start_ts_ms, end_ts_ms, current_level, current_level_hints,
+            current_level_views, penalty_ms, score_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          ON CONFLICT(player_id) DO UPDATE SET
            status = ?2, start_ts_ms = ?3, end_ts_ms = ?4, current_level = ?5,
-           current_level_hints = ?6, penalty_ms = ?7, score_ms = ?8`,
+           current_level_hints = ?6, current_level_views = ?7, penalty_ms = ?8, score_ms = ?9`,
       )
       .bind(
         s.playerId,
@@ -237,6 +240,7 @@ export class D1Store implements GameStore {
         s.endTsMs,
         s.currentLevel,
         s.currentLevelHints,
+        s.currentLevelViews,
         s.penaltyMs,
         s.scoreMs,
       )

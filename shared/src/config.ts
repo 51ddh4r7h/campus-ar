@@ -34,6 +34,10 @@ export const DEFAULT_PAR_CONSTANTS: ParConstants = {
   dwellParMs: 25_000,
   walkSpeedMps: 1.3,
   hintPenaltyMs: {warm: 90_000, close: 90_000, showLocation: 300_000},
+  // Two viewings is enough to recognise a place you know; a third is a search
+  // aid, and search aids cost time here the same way hints do.
+  freeViews: 2,
+  viewPenaltyMs: 45_000,
 }
 
 /** How long a player must be stuck on a level before each hint rung unlocks. */

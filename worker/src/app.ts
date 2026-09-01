@@ -200,6 +200,11 @@ export const createApp = (
     return c.json(await engineFor(c.env).arrive(token, samples))
   })
 
+  /** The player watched the scene. Past the free allowance this costs time. */
+  app.post('/session/view', async (c) =>
+    c.json(await engineFor(c.env).viewScene(bearer(c.req.header('Authorization')))),
+  )
+
   app.post('/session/hint', async (c) => {
     const token = bearer(c.req.header('Authorization'))
     const rung = parseHintRung(await c.req.json())

@@ -6,6 +6,8 @@
    */
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
+  import {toasts} from '../lib/stores/toast.svelte'
+  import {formatMarquee} from '@cmh/shared'
   import HudBar from '../lib/components/HudBar.svelte'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import ArScreen from '../lib/components/ArScreen.svelte'
@@ -13,8 +15,27 @@
   import Icon from '../lib/components/Icon.svelte'
 
   const clue = $derived(game.clue)
+  const free = $derived(game.freeViewsLeft)
   let screen = $state<ReturnType<typeof ArScreen> | null>(null)
   let usedAr = $state(false)
+
+  // The screening that opens a level is the first of the two free viewings —
+  // registered here so the counter the player sees matches the server's.
+  let counted = -1
+  $effect(() => {
+    const level = game.level
+    if (counted === level) return
+    counted = level
+    void game.view()
+  })
+
+  /** Watching again is metered: two a level are free, the rest cost time. */
+  function replay(): void {
+    screen?.replay()
+    void game.view().then((penaltyMs) => {
+      if (penaltyMs > 0) toasts.show(`Watched again — +${formatMarquee(penaltyMs)}`, 'alert')
+    })
+  }
 </script>
 
 <CameraFeed />
@@ -35,8 +56,9 @@
   <div class="card">
     <p class="far">{clue?.clueText.far ?? ''}</p>
     <div class="row">
-      <button class="ghost" onclick={() => screen?.replay()}>
-        <Icon name="refresh" size={18} /> Replay
+      <button class="ghost" onclick={replay}>
+        <Icon name="refresh" size={18} />
+        {free > 0 ? `Replay · ${free} free` : 'Replay · costs time'}
       </button>
       {#if usedAr}
         <button class="ghost" onclick={() => screen?.recenter()}>

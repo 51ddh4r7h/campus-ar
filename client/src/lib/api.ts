@@ -135,6 +135,13 @@ export const api = {
       body: JSON.stringify({crumbs}),
     }),
 
+  /** Record a viewing of the scene. Beyond the free allowance it costs time. */
+  viewScene: (token: string) =>
+    request<{penaltyMs: number; session: Session}>('/session/view', {
+      method: 'POST',
+      headers: auth(token),
+    }),
+
   standings: (batchId: string, token?: string) =>
     request<{rows: StandingRow[]}>(`/standings/${batchId}`, {
       headers: token ? auth(token) : undefined,

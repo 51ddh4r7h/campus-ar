@@ -4,6 +4,9 @@
  */
 
 import type {ClueView, GeoSample, HintRung, RevealView, Session, Split} from '@cmh/shared'
+import {DEFAULT_PAR_CONSTANTS} from '@cmh/shared'
+
+const FREE_VIEWS = DEFAULT_PAR_CONSTANTS.freeViews
 import {api, ApiError} from '../api'
 import {net} from './net.svelte'
 
@@ -121,6 +124,27 @@ class Game {
     if (res.reveal) this.lastReveal = res.reveal
     if (res.nextClue) this.clue = res.nextClue
     return res
+  }
+
+  /**
+   * Tell the server the scene was watched. Deliberately fire-and-forget: the
+   * clip must start the instant it is asked for, and a player on a bad signal
+   * should never be charged for a viewing the server never heard about.
+   */
+  async view(): Promise<number> {
+    if (!this.token) return 0
+    try {
+      const res = await api.viewScene(this.token)
+      this.session = res.session
+      return res.penaltyMs
+    } catch {
+      return 0
+    }
+  }
+
+  /** Free viewings left on this level, for warning before one costs. */
+  get freeViewsLeft(): number {
+    return Math.max(0, FREE_VIEWS - (this.session?.currentLevelViews ?? 0))
   }
 
   async hint(rung: HintRung): Promise<number> {

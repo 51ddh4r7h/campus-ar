@@ -8,6 +8,9 @@
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {location} from '../lib/stores/location.svelte'
+  import {toasts} from '../lib/stores/toast.svelte'
+  import {revealVideo} from '../lib/reveal-video'
+  import {formatMarquee} from '@cmh/shared'
   import HudBar from '../lib/components/HudBar.svelte'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import HeatMeter from '../lib/components/HeatMeter.svelte'
@@ -28,9 +31,55 @@
   let blend = $state(0)
   let holding = $state(false)
 
+  const video = revealVideo()
+  const free = $derived(game.freeViewsLeft)
+
+  /**
+   * Park the shared clip inside the ghost frame while this screen is up. It is
+   * the same element the AR screen uses, so it is borrowed rather than copied —
+   * one <video> means one decode, and no second download.
+   */
+  function stage(node: Element) {
+    video.loop = true
+    video.muted = true
+    Object.assign(video.style, {
+      position: 'static',
+      width: '100%',
+      height: 'auto',
+      opacity: '1',
+      zIndex: '0',
+      display: 'block',
+    })
+    node.appendChild(video)
+    return () => {
+      video.pause()
+      Object.assign(video.style, {
+        position: 'fixed',
+        right: '0',
+        bottom: '0',
+        width: '2px',
+        height: '2px',
+        opacity: '0',
+        zIndex: '-1',
+      })
+      document.body.appendChild(video)
+    }
+  }
+
   function hold(on: boolean): void {
     holding = on
     blend = on ? 1 : 0
+    if (!on) {
+      video.pause()
+      return
+    }
+    // Every hold is a viewing. Two a level are free; the rest cost time, so
+    // say what it cost rather than quietly moving the score.
+    video.currentTime = 0
+    void video.play().catch(() => {})
+    void game.view().then((penaltyMs) => {
+      if (penaltyMs > 0) toasts.show(`Another look — +${formatMarquee(penaltyMs)}`, 'alert')
+    })
   }
 </script>
 
@@ -42,8 +91,8 @@
 {#if clue}
   <!-- The frame you are hunting, laid over the world at whatever strength
        you are holding. -->
-  <div class="ghost" class:lifted={holding} style="opacity: {blend * 0.78}" aria-hidden="true">
-    <img src={clue.sceneRefImage} alt="" />
+  <div class="ghost" class:lifted={holding} style="opacity: {blend * 0.82}" aria-hidden="true">
+    <div class="frame" {@attach stage}></div>
   </div>
 {/if}
 
@@ -65,7 +114,8 @@
     onpointerleave={() => hold(false)}
     oncontextmenu={(e) => e.preventDefault()}
   >
-    <Icon name="eye" size={22} /><span>{holding ? 'Release' : 'Hold to compare'}</span>
+    <Icon name="eye" size={22} />
+    <span>{holding ? 'Release' : free > 0 ? `Compare · ${free} free` : 'Compare · costs time'}</span>
   </button>
 
   <button onclick={() => nav.open('standings')}>
@@ -85,13 +135,13 @@
     transition: opacity 0.22s ease;
   }
   /* Natural aspect: the frame you are matching, at the shape it was shot. */
-  .ghost img {
+  .ghost .frame {
     display: block;
     width: 100%;
-    height: auto;
+    line-height: 0;
   }
   /* A hairline while it's up, so you can see where the frame ends. */
-  .ghost.lifted img {
+  .ghost.lifted .frame {
     outline: 2px solid color-mix(in srgb, var(--amber) 60%, transparent);
     outline-offset: -2px;
   }

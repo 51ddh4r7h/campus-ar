@@ -210,3 +210,46 @@ describe('admin console reads', () => {
     expect(s.stops).toHaveLength(5)
   })
 })
+
+describe('scene viewings', () => {
+  const view = (token: string) =>
+    app.request('/session/view', {method: 'POST', headers: {Authorization: `Bearer ${token}`}}, env)
+
+  it('is free for the first two and charges after', async () => {
+    const p = await bootPlayer()
+    await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
+
+    const first = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
+    const second = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
+    const third = (await (await view(p.sessionToken)).json()) as {
+      penaltyMs: number
+      session: {penaltyMs: number; currentLevelViews: number}
+    }
+
+    expect(first.penaltyMs).toBe(0)
+    expect(second.penaltyMs).toBe(0)
+    expect(third.penaltyMs).toBeGreaterThan(0)
+    // The charge lands on the score, not just the response.
+    expect(third.session.penaltyMs).toBe(third.penaltyMs)
+    expect(third.session.currentLevelViews).toBe(3)
+  })
+
+  it('gives the allowance back at the next level', async () => {
+    const p = await bootPlayer()
+    await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
+    for (let i = 0; i < 3; i++) await view(p.sessionToken)
+
+    clock.advance(LAYOUT.minLegMs + 60_000)
+    const res = await json(
+      '/session/arrive',
+      {samples: parkedAt(p.stops[0]!, clock.now())},
+      {Authorization: `Bearer ${p.sessionToken}`},
+    )
+    const body = (await res.json()) as {ok: boolean; session: {currentLevelViews: number}}
+    expect(body.ok).toBe(true)
+    expect(body.session.currentLevelViews).toBe(0)
+
+    const afterAdvance = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
+    expect(afterAdvance.penaltyMs).toBe(0)
+  })
+})
