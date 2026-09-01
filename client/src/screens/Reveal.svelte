@@ -197,7 +197,8 @@
       </p>
       <h1>{r?.locationName}</h1>
       <p class="film"><b>{r?.movie.title}</b> · filmed right here</p>
-      <div class="fact">{r?.campusFact}</div>
+      <!-- Empty until the real facts arrive; better a gap than invented trivia. -->
+      {#if r?.campusFact}<div class="fact">{r.campusFact}</div>{/if}
       {#if r?.perk}
         <div class="perk">
           <span class="badge"><Icon name={rungIcon(r.perk.rung)} size={22} /></span>

@@ -37,12 +37,12 @@
       <path d={s.d} fill="none" stroke="var(--map-road)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
     {/each}
 
-    {#each MAP_STOPS as s (s.id)}
+    {#each MAP_STOPS as s, i (s.id)}
       {@const hit = found.has(s.id)}
       <g class:hit>
-        {#if hit}<circle cx={s.x} cy={s.y} r="26" class="halo" />{/if}
-        <circle cx={s.x} cy={s.y} r="10" class="pin" />
-        <text x={s.x} y={s.y - 20} text-anchor="middle" class="tag">{s.name}</text>
+        {#if hit}<circle cx={s.x} cy={s.y} r="24" class="halo" />{/if}
+        <circle cx={s.x} cy={s.y} r="14" class="pin" />
+        <text x={s.x} y={s.y + 6} text-anchor="middle" class="num">{i + 1}</text>
       </g>
     {/each}
 
@@ -52,6 +52,18 @@
       <text x={scaleW / 2} y="-9" text-anchor="middle">100 m</text>
     </g>
   </svg>
+  <!-- Names sit in a key rather than on the plan. Across the whole hilltop the
+       stops cluster tightly enough that labels collide into each other, and an
+       unreadable map is worse than a numbered one. -->
+  <ol class="key">
+    {#each MAP_STOPS as s, i (s.id)}
+      <li class:hit={found.has(s.id)}>
+        <span class="n">{i + 1}</span>
+        {s.name}
+      </li>
+    {/each}
+  </ol>
+
   <figcaption>
     {found.size} of {MAP_STOPS.length} found · map data © OpenStreetMap contributors
   </figcaption>
@@ -74,9 +86,9 @@
     border: var(--glass-border);
   }
   .pin {
-    fill: none;
+    fill: var(--map-ground);
     stroke: var(--text-dim);
-    stroke-width: 3;
+    stroke-width: 2.5;
   }
   .hit .pin {
     fill: var(--amber);
@@ -88,13 +100,48 @@
   /* Sizes are viewBox units, not screen pixels: the plan is ~640 units wide
      and lands around 340px on a phone, so anything set at a screen-plausible
      13 would render at seven. */
-  .tag {
+  .num {
     font-family: var(--font-mono);
-    font-size: 22px;
+    font-size: 17px;
+    font-weight: 600;
     fill: var(--text-dim);
   }
-  .hit .tag {
-    fill: var(--text);
+  .hit .num {
+    fill: var(--amber-ink);
+  }
+  .key {
+    list-style: none;
+    margin: var(--sp-3) 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    gap: 6px var(--sp-3);
+    font-size: var(--step-13);
+    color: var(--text-dim);
+  }
+  .key li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .key li.hit {
+    color: var(--text);
+  }
+  .key .n {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    border: 1px solid var(--hairline);
+  }
+  .key li.hit .n {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: var(--amber-ink);
   }
   .scale path {
     stroke: var(--text-dim);

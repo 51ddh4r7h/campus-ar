@@ -86,7 +86,7 @@ describe('app', () => {
   })
 
   it('registers a pinned demo route and starts', async () => {
-    const stops = ['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium']
+    const stops = ['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground']
     const p = await bootPlayer(stops)
     expect(p.stops).toEqual(stops)
 
@@ -98,12 +98,12 @@ describe('app', () => {
   })
 
   it('nearby reports warmth without leaking a coordinate', async () => {
-    const p = await bootPlayer(['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium'])
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground'])
     await json('/session/start', {}, {authorization: `Bearer ${p.sessionToken}`})
 
     const res = await json(
       '/session/nearby',
-      {samples: parkedAt('mind-studio', clock.now())},
+      {samples: parkedAt('amphitheatre', clock.now())},
       {authorization: `Bearer ${p.sessionToken}`},
     )
     const body = (await res.json()) as {atTarget: boolean; heat: number; band: number}
@@ -113,25 +113,25 @@ describe('app', () => {
   })
 
   it('validates an arrival and serves the reveal', async () => {
-    const p = await bootPlayer(['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium'])
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground'])
     const auth = {authorization: `Bearer ${p.sessionToken}`}
     await json('/session/start', {}, auth)
 
     clock.advance(LAYOUT.minLegMs + 60_000)
-    const res = await json('/session/arrive', {samples: parkedAt('mind-studio', clock.now())}, auth)
+    const res = await json('/session/arrive', {samples: parkedAt('amphitheatre', clock.now())}, auth)
     const body = (await res.json()) as {ok: boolean; reveal: {locationName: string} | null; nextClue: {level: number}}
     expect(body.ok).toBe(true)
-    expect(body.reveal?.locationName).toBe('Mind Studio')
+    expect(body.reveal?.locationName).toBe('Amphitheatre')
     expect(body.nextClue.level).toBe(2)
   })
 
   it('rejects an arrival at the wrong place', async () => {
-    const p = await bootPlayer(['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium'])
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground'])
     const auth = {authorization: `Bearer ${p.sessionToken}`}
     await json('/session/start', {}, auth)
     clock.advance(LAYOUT.minLegMs + 60_000)
     // Standing at a later stop → level_locked, level does not advance.
-    const res = await json('/session/arrive', {samples: parkedAt('the-fountain', clock.now())}, auth)
+    const res = await json('/session/arrive', {samples: parkedAt('simc', clock.now())}, auth)
     const body = (await res.json()) as {ok: boolean; failure: string}
     expect(body.ok).toBe(false)
     expect(body.failure).toBe('level_locked')

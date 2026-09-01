@@ -1,21 +1,20 @@
 /**
- * The ten campus locations.
+ * Campus content.
  *
- * The first five (mind-studio, aqua-point, the-fountain, central-library,
- * auditorium) carry REAL coordinates read from geotagged campus photos in
- * content/location-photos/. `auditorium` is nudged ~40 m SW to its forecourt so
- * its radius clears the library's. The other five are spread placeholders
- * pending survey. Film pairings, clue ladders and campus facts are drafts for
- * wiring, not final copy — finalised in Phase 5 (docs/BUILD-PLAN.md).
+ * PLACE NAMES AND COORDINATES ARE REAL — every one is a named feature in
+ * OpenStreetMap on the Lavale hilltop, pulled by `npm run map`. They are here
+ * so the geofencing, spacing and the campus plan are computed against the
+ * actual site rather than invented geography.
  *
- * mind-studio uses the real clip in the AWS S3 bucket (public, CORS *, range
- * requests) — it's the verified Level-1 demo scene.
+ * EVERYTHING ELSE IS PROVISIONAL. Which production was shot where, what
+ * happens in each scene, and the campus facts are unknown until the scene list
+ * arrives; `movie.title` says so, `campusFact` is deliberately empty rather
+ * than filled with plausible-sounding fiction, and the clue ladders describe
+ * only what the map can vouch for (a theatre has tiered seating, a mess hall
+ * has tables). Rewrite all of it against the real scenes.
  *
- * Invariants the content must satisfy before an event:
- *  - exactly LOCATION_POOL_SIZE entries
- *  - no two geofences overlap (with a small buffer)
- *  - difficulty mix of roughly 3 / 4 / 3 across tiers 1 / 2 / 3
- *  - no clue rung names the building, the film, or a compass direction
+ * The ten below are a spread across the hilltop, not a claim about where
+ * anything was filmed.
  */
 
 import type {LatLng} from './geo'
@@ -43,163 +42,163 @@ const media = (id: string): Pick<GameLocation, 'clipUrl' | 'posterUrl' | 'sceneR
 /** As surveyed. `radiusM` here is a *request* — see LOCATIONS below. */
 const SURVEYED: readonly GameLocation[] = [
   {
-    id: 'mind-studio',
-    name: 'Mind Studio',
-    lat: 18.5342614,
-    lng: 73.7332691,
+    id: 'amphitheatre',
+    name: 'Amphitheatre',
+    lat: 18.53751,
+    lng: 73.73132,
     radiusM: 18,
     difficulty: 1,
-    ...media('mind-studio'),
-    movie: {title: 'The Quiet Quarter', blurb: 'Every hero gets the scene where they finally exhale.'},
-    campusFact: 'The studio wing was the first building on campus wired for natural-light filming.',
+    ...media('amphitheatre'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
     clue: {
-      far: 'A quiet room where someone finally lets a long breath go.',
-      warm: 'Glass on one whole wall, and a lawn that catches the last of the sun.',
-      close: 'Look for the low building whose windows run floor to ceiling on the quad side.',
+      far: 'Tiered steps curve around an open stage, with nothing above but sky.',
+      warm: 'Built so a crowd can sit and watch something in the open air.',
+      close: 'The curved seating up beside the institute blocks.',
     },
   },
   {
-    id: 'aqua-point',
-    name: 'Aqua Point',
-    lat: 18.5357918,
-    lng: 73.7333646,
+    id: 'symbieat',
+    name: 'Symbieat',
+    lat: 18.53739,
+    lng: 73.73234,
     radiusM: 18,
     difficulty: 2,
-    ...media('aqua-point'),
-    movie: {title: 'Blue Hour', blurb: 'Three friends, one hilltop, zero plans for the afternoon.'},
-    campusFact: 'The reservoir here holds the campus through the dry months before the monsoon.',
+    ...media('symbieat'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
     clue: {
-      far: 'Three friends, a wide-open view, and no plan for the afternoon.',
-      warm: 'Water below, the valley beyond, a place people stop to just look.',
-      close: 'Head for the open edge where the ground drops away toward the reservoir.',
+      far: 'Where people queue for something hot between classes.',
+      warm: 'A counter, some tables, and the smell of frying.',
+      close: 'The eatery next to the media block.',
     },
   },
   {
-    id: 'the-fountain',
-    name: 'The Fountain',
-    lat: 18.5361451,
-    lng: 73.7331103,
-    radiusM: 14,
-    difficulty: 1,
-    ...media('the-fountain'),
-    movie: {title: 'After the Bell', blurb: 'All is well — especially here, between lectures.'},
-    campusFact: 'Every graduating class has thrown a coin in on their last day since the first batch.',
-    clue: {
-      far: 'Wherever this is, the characters keep insisting that all is well.',
-      warm: 'A circle of stone, moving water, benches worn smooth by years of waiting.',
-      close: 'The paved circle at the centre of the main walk, with water in the middle.',
-    },
-  },
-  {
-    id: 'central-library',
-    name: 'Central Library',
-    lat: 18.5368027,
-    lng: 73.7326191,
-    radiusM: 15,
-    difficulty: 2,
-    ...media('central-library'),
-    movie: {title: 'The Rosette Run', blurb: 'The sprint past these steps has ended more chases than any other.'},
-    campusFact: 'The reading room stays open through exam week for the only all-night hours on campus.',
-    clue: {
-      far: 'A frantic run up a long flight of steps, late for something that matters.',
-      warm: 'Broad steps, tall doors, and more windows than you can count in a row.',
-      close: 'The building with the widest staircase on campus, facing the central lawn.',
-    },
-  },
-  {
-    id: 'auditorium',
-    name: 'Auditorium',
-    lat: 18.53642,
-    lng: 73.73215,
-    radiusM: 16,
-    difficulty: 3,
-    ...media('auditorium'),
-    movie: {title: 'First Take', blurb: 'Every great performance starts with a tempo check.'},
-    campusFact: 'The stage curtain is still raised by hand on opening night, a rule since 1968.',
-    clue: {
-      far: 'A performer pushed past breaking point to hit an impossible tempo.',
-      warm: 'Doors that only open for an audience, and a foyer that is dark by day.',
-      close: 'The tall windowless hall next to the library, set back behind its own forecourt.',
-    },
-  },
-  {
-    id: 'the-amphitheatre',
-    name: 'The Amphitheatre',
-    lat: 18.53525,
-    lng: 73.7338,
+    id: 'simc',
+    name: 'SIMC',
+    lat: 18.53675,
+    lng: 73.7316,
     radiusM: 18,
     difficulty: 2,
-    ...media('the-amphitheatre'),
-    movie: {title: 'Open Air', blurb: 'A crowd on stone tiers, holding its breath together.'},
-    campusFact: 'Orientation week ends with the whole incoming cohort seated on these steps.',
+    ...media('simc'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
     clue: {
-      far: 'A crowd on stone tiers, watching something happen down in the middle.',
-      warm: 'Curved steps cut into a slope, an open floor at the bottom, no roof.',
-      close: 'The tiered stone bowl on the hillside below the academic block.',
+      far: 'A teaching block everyone refers to by four letters.',
+      warm: 'Where the media students spend their days.',
+      close: 'The institute building on the upper road.',
     },
   },
   {
-    id: 'sports-pavilion',
-    name: 'Sports Pavilion',
-    lat: 18.5344,
-    lng: 73.734,
-    radiusM: 22,
+    id: 'rangoli',
+    name: 'Rangoli',
+    lat: 18.5343,
+    lng: 73.73337,
+    radiusM: 18,
     difficulty: 2,
-    ...media('sports-pavilion'),
-    movie: {title: 'The Long Season', blurb: 'The match everyone remembers started on an empty field.'},
-    campusFact: 'The ground floods to a shallow sheet in heavy rain and drains clear within the hour.',
+    ...media('rangoli'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
     clue: {
-      far: 'The long shot before the big match: an empty field at first light.',
-      warm: 'A covered stand looking out over the largest flat green space on campus.',
-      close: 'The roofed viewing stand along the edge of the main playing field.',
+      far: 'A building sharing its name with a pattern drawn on the floor.',
+      warm: 'One of the residential blocks on the middle level.',
+      close: 'The block just above the dining hall.',
     },
   },
   {
-    id: 'founders-steps',
-    name: "Founders' Steps",
-    lat: 18.53655,
-    lng: 73.73355,
-    radiusM: 16,
-    difficulty: 3,
-    ...media('founders-steps'),
-    movie: {title: 'Seven Names', blurb: 'Two people, a staircase, and a whole town behind them.'},
-    campusFact: 'The plaque at the top lists the seven people who signed for the land in 1971.',
-    clue: {
-      far: 'Two people talk on a staircase while the whole town lies behind them.',
-      warm: 'A climb that turns back on itself, with a named plaque somewhere near the top.',
-      close: 'The switchback stone stairway connecting the lower road to the main gate.',
-    },
-  },
-  {
-    id: 'the-boulevard',
-    name: 'The Boulevard',
-    lat: 18.535,
-    lng: 73.7326,
+    id: 'mess',
+    name: 'Mess',
+    lat: 18.53371,
+    lng: 73.73318,
     radiusM: 18,
     difficulty: 1,
-    ...media('the-boulevard'),
-    movie: {title: 'Last Reel', blurb: 'A slow walk down the avenue while the credits could roll any second.'},
-    campusFact: 'The trees along it were planted by the first five batches, one row per year.',
+    ...media('mess'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
     clue: {
-      far: 'A slow walk down a tree-lined avenue while the credits could roll any second.',
-      warm: 'A straight paved avenue, tall trees both sides, benches at every gap.',
-      close: 'The long tree-lined path that runs the length of the central campus.',
+      far: 'Long tables, steel trays, and the loudest room at eight in the morning.',
+      warm: 'Where the whole campus eats.',
+      close: 'The dining hall on the middle level.',
     },
   },
   {
-    id: 'observatory-deck',
-    name: 'Observatory Deck',
-    lat: 18.53725,
-    lng: 73.7331,
-    radiusM: 20,
-    difficulty: 3,
-    ...media('observatory-deck'),
-    movie: {title: 'Nightwatch', blurb: 'A rooftop conversation under an enormous sky.'},
-    campusFact: 'On a clear night you can pick out four hill forts from the railing.',
+    id: 'multi-purpose-ground',
+    name: 'Multi Purpose Ground',
+    lat: 18.5328,
+    lng: 73.73221,
+    radiusM: 18,
+    difficulty: 1,
+    ...media('multi-purpose-ground'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
     clue: {
-      far: 'A rooftop conversation under an enormous sky, city lights far below.',
-      warm: 'The highest point you can stand on here, with a railing and nothing above it.',
-      close: 'The flat viewing platform on the roof of the northern-most building.',
+      far: 'Flat, open, and marked out for more than one game.',
+      warm: 'The largest open ground here.',
+      close: 'The playing field below the hostels.',
+    },
+  },
+  {
+    id: 'swimming-pool',
+    name: 'Swimming Pool',
+    lat: 18.53184,
+    lng: 73.73329,
+    radiusM: 18,
+    difficulty: 2,
+    ...media('swimming-pool'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
+    clue: {
+      far: 'Blue water, lane markings, and a very particular smell.',
+      warm: 'Somewhere you come to train rather than to study.',
+      close: 'Beside the sports facilities on the lower level.',
+    },
+  },
+  {
+    id: 'calendula',
+    name: 'Calendula',
+    lat: 18.53208,
+    lng: 73.73377,
+    radiusM: 18,
+    difficulty: 3,
+    ...media('calendula'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
+    clue: {
+      far: 'Named after a flower, like the blocks around it.',
+      warm: 'A residential block on the lower level.',
+      close: 'One of the flower-named hostels.',
+    },
+  },
+  {
+    id: 'lotus',
+    name: 'Lotus',
+    lat: 18.53172,
+    lng: 73.73187,
+    radiusM: 18,
+    difficulty: 3,
+    ...media('lotus'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
+    clue: {
+      far: 'Another flower, another block, another flight of stairs.',
+      warm: 'A hostel among several with botanical names.',
+      close: 'The block nearest the open ground.',
+    },
+  },
+  {
+    id: 'petunia',
+    name: 'Petunia',
+    lat: 18.53189,
+    lng: 73.73076,
+    radiusM: 18,
+    difficulty: 3,
+    ...media('petunia'),
+    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    campusFact: '',
+    clue: {
+      far: 'The furthest of the flower-named blocks.',
+      warm: 'A hostel at the far edge of the residential cluster.',
+      close: 'The last block before the road bends away.',
     },
   },
 ]

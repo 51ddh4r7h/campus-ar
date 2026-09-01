@@ -47,10 +47,20 @@ describe('location content invariants', () => {
     expect(counts[1] + counts[2] + counts[3]).toBe(10)
   })
 
-  it('never names the building or a direction in the far clue', () => {
-    const banned = /\b(north|south|east|west|library|auditorium|fountain|studio|pavilion|observatory|boulevard|amphitheatre)\b/i
+  // Self-maintaining: derived from the location list rather than a hand-kept
+  // word list, so it keeps working when the real scenes replace these.
+  it('never gives the answer away in the far clue', () => {
+    const directions = /\b(north|south|east|west)\b/i
     for (const l of LOCATIONS) {
-      expect(banned.test(l.clue.far), `${l.id} far clue leaks`).toBe(false)
+      expect(directions.test(l.clue.far), `${l.id} far clue points a compass`).toBe(false)
+      for (const other of LOCATIONS) {
+        const word = other.name.toLowerCase()
+        expect(
+          l.clue.far.toLowerCase().includes(word),
+          `${l.id} far clue names "${other.name}"`,
+        ).toBe(false)
+      }
     }
   })
+
 })

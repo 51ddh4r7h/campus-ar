@@ -18,7 +18,7 @@ const SRC_DIR = 'movie clips'
 if (process.env.TRANSCODE === '1' && existsSync(SRC_DIR)) {
   const FFMPEG = execSync(`node -e "console.log(require('ffmpeg-static'))"`, {encoding: 'utf8'}).trim()
   for (const f of readdirSync(SRC_DIR).filter(x => x.endsWith('.mov'))) {
-    const id = f.toLowerCase().includes('zindagi') ? 'mind-studio' : f.replace(/\.[^.]+$/, '').replace(/\s+/g, '-').toLowerCase()
+    const id = f.toLowerCase().includes('zindagi') ? 'amphitheatre' : f.replace(/\.[^.]+$/, '').replace(/\s+/g, '-').toLowerCase()
     const src = join(SRC_DIR, f)
     const dst = join(DIR, `${id}.mp4`)
     const poster = join(DIR, `${id}-poster.jpg`)
@@ -42,7 +42,7 @@ for (const file of files) {
   console.log(`\n→ ${file} (${size}MB) → s3://${BUCKET}/${key}`)
   execSync(`aws s3 cp "${path}" s3://${BUCKET}/${key} --region ${REGION} --content-type "${ct}" --cache-control "public, max-age=31536000, immutable"`, {stdio: 'inherit'})
 }
-console.log(`\nDone. Test: curl -I https://${BUCKET}.s3.${REGION}.amazonaws.com/clips/mind-studio.mp4`)
+console.log(`\nDone. Test: curl -I https://${BUCKET}.s3.${REGION}.amazonaws.com/clips/amphitheatre.mp4`)
 console.log(`Wire: spots.ts S3_CLIPS already points there.`)
 // Optional CloudFront note:
 // For true CDN (edge cache Mumbai/Delhi/Chennai) create CloudFront distro with origin s3://BUCKET, TTL 31536000, compress.

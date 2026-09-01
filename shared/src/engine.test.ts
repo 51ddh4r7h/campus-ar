@@ -98,7 +98,7 @@ describe('engine — full playthrough', () => {
 
   it('honours a pinned route (demo)', async () => {
     const batch = await engine.createBatch({name: 'Batch P'})
-    const pinned = ['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium']
+    const pinned = ['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground']
     const {player} = await engine.registerPlayer({
       batchId: batch.id,
       name: 'Demo',
@@ -111,7 +111,7 @@ describe('engine — full playthrough', () => {
   it('rejects a malformed pinned route', async () => {
     const batch = await engine.createBatch({name: 'Batch Q'})
     await expect(
-      engine.registerPlayer({batchId: batch.id, name: 'x', rosterId: 'q1', pinnedRoute: ['mind-studio', 'nope', 'a', 'b', 'c']}),
+      engine.registerPlayer({batchId: batch.id, name: 'x', rosterId: 'q1', pinnedRoute: ['amphitheatre', 'nope', 'a', 'b', 'c']}),
     ).rejects.toThrow()
   })
 

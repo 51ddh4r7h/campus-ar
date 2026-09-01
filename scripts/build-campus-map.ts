@@ -17,8 +17,15 @@
 import {writeFileSync} from 'node:fs'
 import {LOCATIONS} from '../shared/src/index'
 
-const PAD_M = 70
+const PAD_M = 60
 const OUT_W = 640
+
+/**
+ * The campus itself sets the extent, not the stops. Fitting the plan to
+ * wherever the scenes happen to be would crop the hilltop to whatever corner
+ * this year's locations sit in; the wrap is supposed to show the whole place.
+ */
+const CAMPUS = 'Symbiosis International University'
 
 /** Tags worth drawing, in the order they should be painted. */
 const LAYERS = [
@@ -29,6 +36,7 @@ const LAYERS = [
   {key: 'leisure', value: null, kind: 'pitch'},
   {key: 'building', value: null, kind: 'building'},
   {key: 'highway', value: null, kind: 'road'},
+  {key: 'amenity', value: 'university', kind: 'campus'},
 ] as const
 
 type Kind = (typeof LAYERS)[number]['kind']
@@ -46,9 +54,31 @@ const classify = (tags: Record<string, string>): Kind | null => {
   return null
 }
 
+/** Ask OSM where the campus actually is, rather than guessing a box. */
+async function campusBounds(): Promise<{s: number; w: number; n: number; e: number}> {
+  const q = `[out:json][timeout:60];way["amenity"="university"]["name"="${CAMPUS}"](18.52,73.71,18.55,73.75);out geom;`
+  const r = await overpass(q)
+  const way = (r.elements as Way[]).find((w) => (w.geometry?.length ?? 0) > 3)
+  if (!way?.geometry) throw new Error(`no boundary found for "${CAMPUS}"`)
+  const la = way.geometry.map((g) => g.lat)
+  const lo = way.geometry.map((g) => g.lon)
+  return {s: Math.min(...la), n: Math.max(...la), w: Math.min(...lo), e: Math.max(...lo)}
+}
+
+async function overpass(q: string): Promise<{elements: unknown[]}> {
+  // Overpass refuses anonymous clients, and OSM's usage policy asks callers to
+  // identify themselves. This runs once at build time, never from a player.
+  const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, {
+    headers: {'User-Agent': 'campus-movie-hunt/1.0 (build-time map bake)'},
+  })
+  if (!res.ok) throw new Error(`overpass ${res.status}`)
+  return (await res.json()) as {elements: unknown[]}
+}
+
 async function main(): Promise<void> {
-  const lats = LOCATIONS.map((l) => l.lat)
-  const lngs = LOCATIONS.map((l) => l.lng)
+  const bounds = await campusBounds()
+  const lats = [bounds.s, bounds.n, ...LOCATIONS.map((l) => l.lat)]
+  const lngs = [bounds.w, bounds.e, ...LOCATIONS.map((l) => l.lng)]
   const midLat = (Math.min(...lats) + Math.max(...lats)) / 2
   const mPerDegLat = 111_320
   const mPerDegLng = 111_320 * Math.cos((midLat * Math.PI) / 180)
@@ -68,16 +98,9 @@ async function main(): Promise<void> {
     Math.round((1 - (lat - south) / (north - south)) * outH * 10) / 10,
   ]
 
-  const q = `[out:json][timeout:90];(way["building"](${south},${west},${north},${east});way["highway"](${south},${west},${north},${east});way["natural"](${south},${west},${north},${east});way["landuse"](${south},${west},${north},${east});way["leisure"](${south},${west},${north},${east});way["waterway"](${south},${west},${north},${east}););out geom;`
+  const q = `[out:json][timeout:90];(way["amenity"="university"](${south},${west},${north},${east});way["building"](${south},${west},${north},${east});way["highway"](${south},${west},${north},${east});way["natural"](${south},${west},${north},${east});way["landuse"](${south},${west},${north},${east});way["leisure"](${south},${west},${north},${east});way["waterway"](${south},${west},${north},${east}););out geom;`
 
-  // Overpass refuses anonymous clients, and OSM's usage policy asks callers to
-  // identify themselves. This runs once at build time, never from a player.
-  const res = await fetch(
-    `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`,
-    {headers: {'User-Agent': 'campus-movie-hunt/1.0 (build-time map bake)'}},
-  )
-  if (!res.ok) throw new Error(`overpass ${res.status}`)
-  const body = (await res.json()) as {elements: Way[]}
+  const body = (await overpass(q)) as {elements: Way[]}
 
   const features: Array<{kind: Kind; d: string; closed: boolean}> = []
   for (const w of body.elements) {
@@ -107,7 +130,7 @@ async function main(): Promise<void> {
  */
 
 export interface MapFeature {
-  kind: 'wood' | 'land' | 'water' | 'pitch' | 'building' | 'road'
+  kind: 'wood' | 'land' | 'water' | 'pitch' | 'building' | 'road' | 'campus'
   d: string
   closed: boolean
 }
