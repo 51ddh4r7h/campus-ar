@@ -5,7 +5,7 @@
  */
 
 import {beforeEach, describe, expect, it} from 'vitest'
-import {InMemoryStore, VALIDATION, locationById, type GeoSample} from '@cmh/shared'
+import {InMemoryStore, LAYOUT, VALIDATION, locationById, type GeoSample} from '@cmh/shared'
 import {createApp} from './app'
 import type {Env} from './env'
 
@@ -117,7 +117,7 @@ describe('app', () => {
     const auth = {authorization: `Bearer ${p.sessionToken}`}
     await json('/session/start', {}, auth)
 
-    clock.advance(VALIDATION.minLegMs + 60_000)
+    clock.advance(LAYOUT.minLegMs + 60_000)
     const res = await json('/session/arrive', {samples: parkedAt('mind-studio', clock.now())}, auth)
     const body = (await res.json()) as {ok: boolean; reveal: {locationName: string} | null; nextClue: {level: number}}
     expect(body.ok).toBe(true)
@@ -129,7 +129,7 @@ describe('app', () => {
     const p = await bootPlayer(['mind-studio', 'aqua-point', 'the-fountain', 'central-library', 'auditorium'])
     const auth = {authorization: `Bearer ${p.sessionToken}`}
     await json('/session/start', {}, auth)
-    clock.advance(VALIDATION.minLegMs + 60_000)
+    clock.advance(LAYOUT.minLegMs + 60_000)
     // Standing at a later stop → level_locked, level does not advance.
     const res = await json('/session/arrive', {samples: parkedAt('the-fountain', clock.now())}, auth)
     const body = (await res.json()) as {ok: boolean; failure: string}

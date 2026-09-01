@@ -10,9 +10,12 @@ export const LEVEL_COUNT = 5
 export const LOCATION_POOL_SIZE = 10
 
 /** Validation thresholds applied server-side on every arrival check. */
+/**
+ * Thresholds that do NOT depend on how far apart the stops are. The ones that
+ * do — accuracy gate, minimum leg, heat range, geofence radius — are derived
+ * from the surveyed coordinates in ./layout, so a compact campus retunes itself.
+ */
 export const VALIDATION = {
-  /** A real fix worse than this is rejected outright. Simulated fixes bypass. */
-  maxAccuracyM: 35,
   /** Continuous time inside the radius (with good fixes) before a level validates. */
   dwellMs: 20_000,
   /** Fixes older than this are ignored as stale — must exceed dwellMs. */
@@ -22,8 +25,6 @@ export const VALIDATION = {
    * ~2.8 m/s ≈ a brisk jog; anything faster between two completions is flagged.
    */
   maxTravelSpeedMps: 2.8,
-  /** Floor on how quickly any leg can be completed, regardless of distance. */
-  minLegMs: 25_000,
 } as const
 
 export const DEFAULT_PAR_CONSTANTS: ParConstants = {
@@ -34,12 +35,6 @@ export const DEFAULT_PAR_CONSTANTS: ParConstants = {
   walkSpeedMps: 1.3,
   hintPenaltyMs: {warm: 90_000, close: 90_000, showLocation: 300_000},
 }
-
-/**
- * The warm/cold heat signal only carries information within this range of the
- * current target. Beyond it, heat reads a flat cold — no cross-campus homing.
- */
-export const HEAT_ACTIVE_RANGE_M = 160
 
 /** How long a player must be stuck on a level before each hint rung unlocks. */
 export const HINT_GATES = {

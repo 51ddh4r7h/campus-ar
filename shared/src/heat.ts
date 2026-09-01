@@ -1,11 +1,13 @@
 /**
  * "Signal heat" — a continuous 0-100 warmth value from distance to the current
- * target. Piecewise-linear in log(distance) so it moves fast up close and
- * crawls when far. Beyond HEAT_ACTIVE_RANGE_M it reads a flat cold — the clue
- * still has to do the work of getting you to the right area.
+ * target. Logarithmic in distance so it moves fast up close and crawls when
+ * far. Beyond the layout's heat range it reads a flat cold, so the clip still
+ * has to do the work of telling you *which* place you are looking for; the
+ * meter only helps you close the last stretch. On a compact campus that range
+ * shrinks automatically, which is what stops it becoming a homing beacon.
  */
 
-import {HEAT_ACTIVE_RANGE_M} from './config'
+import {LAYOUT} from './content'
 
 export type HeatBand = 0 | 1 | 2 | 3 | 4
 
@@ -22,14 +24,17 @@ const logLerp = (d: number, dNear: number, hNear: number, dFar: number, hFar: nu
   return hNear + t * (hFar - hNear)
 }
 
-/** Distance (m) → heat (0-100). Inside the radius pins to 100. */
+/**
+ * Distance (m) → heat (0-100). Inside the fence pins to 100; at the edge of the
+ * informative range it reads 0. Expressed against those two ends rather than
+ * fixed distances, so it behaves the same on a tight campus as a sprawling one.
+ */
 export const heatFromDistance = (distanceM: number, radiusM: number): number => {
-  if (distanceM <= radiusM) return 100
-  if (distanceM >= HEAT_ACTIVE_RANGE_M) return 0
-  if (distanceM > 100) return Math.max(0, logLerp(distanceM, 100, 20, HEAT_ACTIVE_RANGE_M, 0))
-  if (distanceM > 55) return logLerp(distanceM, 55, 42, 100, 20)
-  if (distanceM > 25) return logLerp(distanceM, 25, 64, 55, 42)
-  return Math.min(96, logLerp(distanceM, Math.max(radiusM, 8), 96, 25, 64))
+  const near = Math.max(radiusM, 5)
+  const far = Math.max(LAYOUT.heatRangeM, near * 2)
+  if (distanceM <= near) return 100
+  if (distanceM >= far) return 0
+  return Math.max(0, Math.min(96, logLerp(distanceM, near, 96, far, 0)))
 }
 
 export const bandFromHeat = (heat: number): HeatBand => {

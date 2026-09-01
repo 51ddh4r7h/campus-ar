@@ -20,6 +20,7 @@
 
 import type {LatLng} from './geo'
 import type {GameLocation} from './types'
+import {deriveLimits, safeRadiusM} from './layout'
 
 /**
  * Shared assembly point. Every player's clock and Level-1 walk par start here,
@@ -39,7 +40,8 @@ const media = (id: string): Pick<GameLocation, 'clipUrl' | 'posterUrl' | 'sceneR
   sceneRefImage: `/clips/${id}-poster.jpg`,
 })
 
-export const LOCATIONS: readonly GameLocation[] = [
+/** As surveyed. `radiusM` here is a *request* — see LOCATIONS below. */
+const SURVEYED: readonly GameLocation[] = [
   {
     id: 'mind-studio',
     name: 'Mind Studio',
@@ -202,9 +204,25 @@ export const LOCATIONS: readonly GameLocation[] = [
   },
 ]
 
-if (LOCATIONS.length !== 10) {
-  throw new Error(`content: expected 10 locations, found ${LOCATIONS.length}`)
+if (SURVEYED.length !== 10) {
+  throw new Error(`content: expected 10 locations, found ${SURVEYED.length}`)
 }
+
+/**
+ * Every distance-sensitive threshold, derived from the surveyed coordinates.
+ * Pack the stops tighter and these tighten with them — see ./layout.
+ */
+export const LAYOUT = deriveLimits(SURVEYED)
+
+/**
+ * The playable locations: as surveyed, but with each geofence shrunk to what
+ * its neighbours actually leave room for. A stop out on its own keeps the
+ * radius it asked for; one with company gets a tighter, honest fence.
+ */
+export const LOCATIONS: readonly GameLocation[] = SURVEYED.map((l) => ({
+  ...l,
+  radiusM: safeRadiusM(l, SURVEYED, l.radiusM),
+}))
 
 const LOCATION_BY_ID = new Map(LOCATIONS.map((l) => [l.id, l]))
 

@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {haversineM} from './geo'
-import {LOCATIONS} from './content'
+import {LAYOUT, LOCATIONS} from './content'
 import {LOCATION_POOL_SIZE} from './config'
 
 describe('location content invariants', () => {
@@ -13,15 +13,29 @@ describe('location content invariants', () => {
     expect(ids.size).toBe(LOCATIONS.length)
   })
 
-  it('no two geofences overlap (with a 10 m buffer)', () => {
+  // The stops may sit close together — the derived radii are what keep them
+  // separable, so assert the outcome rather than a fixed minimum spacing.
+  it('no two geofences touch, however tightly packed', () => {
     for (let i = 0; i < LOCATIONS.length; i++) {
       for (let j = i + 1; j < LOCATIONS.length; j++) {
         const a = LOCATIONS[i]!
         const b = LOCATIONS[j]!
-        expect(haversineM(a, b), `${a.id} ↔ ${b.id}`).toBeGreaterThan(
-          a.radiusM + b.radiusM + 10,
-        )
+        expect(haversineM(a, b), `${a.id} ↔ ${b.id}`).toBeGreaterThan(a.radiusM + b.radiusM)
       }
+    }
+  })
+
+  it('is a layout the engine calls playable', () => {
+    expect(LAYOUT.warnings).toEqual([])
+  })
+
+  it('trusts only fixes fine enough to tell neighbouring stops apart', () => {
+    expect(LAYOUT.maxAccuracyM).toBeLessThanOrEqual(LAYOUT.minSpacingM / 2)
+  })
+
+  it('keeps every geofence satisfiable', () => {
+    for (const l of LOCATIONS) {
+      expect(l.radiusM, `${l.id} fence`).toBeGreaterThanOrEqual(6)
     }
   })
 

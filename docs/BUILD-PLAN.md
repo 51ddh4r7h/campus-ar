@@ -140,8 +140,10 @@ Deliverable: run a full mock batch of simulated players from the dashboard.
 - Performance: bundle budget, lazy AR, clip encoding + range-friendly hosting,
   video only at reveal.
 - Accessibility pass against the brief's checklist.
-- Content finalisation: real clips, clue ladders, campus facts, final coords and
-  radii, locations 60 m+ apart.
+- Content finalisation: real clips, clue ladders, campus facts, final coords.
+  Spacing is no longer a fixed rule — `npm run layout` derives the safe geofence
+  and thresholds from whatever coordinates are surveyed, and fails the build
+  below ~18 m, which is where consumer GPS stops telling stops apart.
 - **Real orientation pilot** — observe where players get stuck, tune par and
   clue difficulty.
 - If prizes warrant it: add the optional 4-digit on-site code to You're Here.

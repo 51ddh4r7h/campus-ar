@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest'
 import type {GameLocation, GeoSample} from './types'
 import {VALIDATION} from './config'
-import {LOCATIONS} from './content'
+import {LAYOUT, LOCATIONS} from './content'
 import {evaluateArrival} from './validation'
 
 const [L1, L2, L3] = LOCATIONS as unknown as [GameLocation, GameLocation, GameLocation]
@@ -75,7 +75,7 @@ describe('evaluateArrival', () => {
       routeStops: [L1, L2, L3],
       currentLevel: 1,
       prevReachedTsMs: NOW - 120_000,
-      samples: parkedAt(L1, NOW, DWELL_OK, VALIDATION.maxAccuracyM + 40),
+      samples: parkedAt(L1, NOW, DWELL_OK, LAYOUT.maxAccuracyM + 40),
       nowMs: NOW,
     })
     expect(r).toMatchObject({ok: false, failure: 'signal'})
@@ -85,7 +85,7 @@ describe('evaluateArrival', () => {
     const r = evaluateArrival({
       routeStops: [L1, L2, L3],
       currentLevel: 2,
-      prevReachedTsMs: NOW - (VALIDATION.minLegMs - 5_000),
+      prevReachedTsMs: NOW - (LAYOUT.minLegMs - 5_000),
       samples: parkedAt(L2, NOW, DWELL_OK),
       nowMs: NOW,
     })
@@ -97,7 +97,7 @@ describe('evaluateArrival', () => {
     const r = evaluateArrival({
       routeStops: [L1, L2, L3],
       currentLevel: 2,
-      prevReachedTsMs: NOW - (VALIDATION.minLegMs + 2_000),
+      prevReachedTsMs: NOW - (LAYOUT.minLegMs + 2_000),
       samples: parkedAt(L2, NOW, VALIDATION.dwellMs + 2_000),
       nowMs: NOW,
     })

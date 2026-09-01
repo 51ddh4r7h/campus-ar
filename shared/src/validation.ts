@@ -6,6 +6,7 @@
 
 import {haversineM, impliedSpeedMps, type LatLng} from './geo'
 import {VALIDATION} from './config'
+import {LAYOUT} from './content'
 import type {GameLocation, GeoSample, ValidationFailure} from './types'
 
 export interface ArrivalContext {
@@ -42,8 +43,12 @@ const fail = (failure: ValidationFailure, insideMs = 0): ArrivalOutcome => ({
 const fresh = (s: GeoSample, nowMs: number): boolean =>
   nowMs - s.tsMs <= VALIDATION.maxFixAgeMs && s.tsMs <= nowMs
 
-const reliable = (s: GeoSample): boolean =>
-  s.simulated || s.accuracyM <= VALIDATION.maxAccuracyM
+/**
+ * A fix is only trustworthy if it is finer than the gap between neighbouring
+ * stops — otherwise it cannot say *which* stop you are standing at. That bar
+ * is derived from the layout, so a tighter campus demands a better fix.
+ */
+const reliable = (s: GeoSample): boolean => s.simulated || s.accuracyM <= LAYOUT.maxAccuracyM
 
 const insideOf = (s: GeoSample, loc: GameLocation): boolean =>
   haversineM(s, loc) <= loc.radiusM
@@ -66,9 +71,13 @@ export const evaluateArrival = (ctx: ArrivalContext): ArrivalOutcome => {
 
   if (insideTarget.length === 0) {
     // Distinguish "you're standing at a later stop" from "nowhere near it".
+    // On a compact campus a single drifting fix can land inside a neighbour, so
+    // require most of the recent fixes to agree before accusing anyone of
+    // skipping ahead — being wrongly told to finish an earlier scene while
+    // standing at the right one is the worst failure we can hand a player.
     const atFutureStop = routeStops
       .slice(currentLevel)
-      .some((loc) => usable.some((s) => insideOf(s, loc)))
+      .some((loc) => usable.filter((s) => insideOf(s, loc)).length * 2 > usable.length)
     if (atFutureStop) return fail('level_locked')
     // Are they physically at the target but with only poor-accuracy fixes?
     const nearWithBadFix = samples.some(
@@ -83,7 +92,9 @@ export const evaluateArrival = (ctx: ArrivalContext): ArrivalOutcome => {
   const reachedTsMs = Math.max(...insideTarget.map((s) => s.tsMs))
   const legMs = reachedTsMs - prevReachedTsMs
 
-  if (legMs < VALIDATION.minLegMs) return fail('too_fast', insideMs)
+  // Derived, not fixed: a 30 m hop between neighbouring stops is a legitimate
+  // 25-second walk, and must not be refused as teleporting.
+  if (legMs < LAYOUT.minLegMs) return fail('too_fast', insideMs)
 
   let flagged = false
   if (currentLevel > 1) {

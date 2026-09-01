@@ -10,7 +10,7 @@ import {
   HINT_GATES,
   LEVEL_COUNT,
 } from './config'
-import {LOCATIONS, START_POINT, locationById} from './content'
+import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool} from './routes'
 import {assignRoute} from './routes'
 import {routePar, sessionScoreMs} from './scoring'
@@ -353,7 +353,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       // Warmth from the closest fresh, trustworthy fix. Never a coordinate.
       const now = deps.now()
       const dists = samples
-        .filter((s) => now - s.tsMs <= VALIDATION.maxFixAgeMs && (s.simulated || s.accuracyM <= VALIDATION.maxAccuracyM))
+        .filter((s) => now - s.tsMs <= VALIDATION.maxFixAgeMs && (s.simulated || s.accuracyM <= LAYOUT.maxAccuracyM))
         .map((s) => haversineM(s, target))
       const heat = dists.length > 0 ? heatFromDistance(Math.min(...dists), target.radiusM) : 0
 
