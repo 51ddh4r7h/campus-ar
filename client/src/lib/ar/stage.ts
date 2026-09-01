@@ -12,6 +12,7 @@ import type * as THREE_NS from 'three'
 import {createProjector} from './projector'
 import {createTitleCard, type TitleCard} from './title-card'
 import {createArSound} from './sound'
+import {disposeProp, loadProp} from './models'
 
 export interface ArStage {
   /**
@@ -54,6 +55,13 @@ const SCREEN = {width: 3.0, height: 1.26, y: -0.12}
  * about a 16-degree wrap, which reads as curved without distorting the image.
  */
 const CURVE_RADIUS = 1.8
+
+/**
+ * How far the downloaded projector model must be turned to face its lens the
+ * same way the hand-built one does. Set by looking at it; a model carries no
+ * convention about which way is forward.
+ */
+const MODEL_FACE_OFFSET_Y = -Math.PI / 2
 
 /** Typical phone rear-camera horizontal field of view. */
 const CAMERA_HFOV_DEG = 66
@@ -211,11 +219,30 @@ export async function createArStage(
   // see machine, beam and screen in one look — which a projector behind your
   // head, however accurate, could never give you.
   const projector = createProjector(THREE, {
-    at: [-1.05, SCREEN.y - 0.42, -distance * 0.62],
+    at: [-0.86, SCREEN.y - 0.46, -distance * 0.62],
     aim: [0, SCREEN.y, -distance],
     mouthRadius: SCREEN.height * 0.62,
   })
   anchor.add(projector.group)
+
+  // Everything hand-built here is unlit — flat colour composited over the
+  // camera feed. A downloaded model is PBR and needs real light, so these
+  // exist purely for it: a cool sky fill so it does not read as cut out, and a
+  // warm key from the screen's side so it looks lit by its own projection.
+  const sky = new THREE.HemisphereLight(0xbcd2ff, 0x2b2118, 1.15)
+  anchor.add(sky)
+  const key = new THREE.DirectionalLight(0xffe6c4, 1.5)
+  key.position.set(1.2, 1.6, -0.4)
+  anchor.add(key)
+
+  // Swap in the real projector once it decodes. It never blocks the reveal —
+  // a failure just leaves the primitives showing.
+  let propRoot: THREE_NS.Object3D | null = null
+  void loadProp(THREE, 'film_projector', 0.62).then((model) => {
+    if (!model || disposed) return
+    propRoot = model
+    projector.attachModel(model, {faceOffsetY: MODEL_FACE_OFFSET_Y, lampY: 0.17})
+  })
 
   // The clip's own audio, placed at the screen, plus the projector's noise.
   const sound = createArSound(video, {x: 0, z: -distance})
@@ -374,6 +401,7 @@ export async function createArStage(
     },
     dispose() {
       running = false
+      disposed = true
       clearInterval(playPoll)
       window.removeEventListener('resize', resize)
       window.removeEventListener('deviceorientation', onOrient, true)
@@ -385,6 +413,7 @@ export async function createArStage(
       glowMat.dispose()
       glowTex.dispose()
       projector.dispose()
+      if (propRoot) disposeProp(propRoot)
       card?.dispose()
       sound.dispose()
       videoTex.dispose()
@@ -421,6 +450,7 @@ export async function createArStage(
 
   // ---- render loop ----------------------------------------------------
   let running = true
+  let disposed = false
   let frames = 0
   let lastMs = performance.now()
   const tick = () => {

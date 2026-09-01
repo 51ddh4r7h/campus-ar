@@ -15,6 +15,12 @@ import type * as THREE_NS from 'three'
 
 export interface Projector {
   group: THREE_NS.Group
+  /**
+   * Swap the hand-built machine for a real model. Called only once a GLB has
+   * actually decoded, so a failed download leaves the primitives in place and
+   * the player still gets a projector.
+   */
+  attachModel(model: THREE_NS.Object3D, opts?: {faceOffsetY?: number; lampY?: number}): void
   /** Advance reels, hover and motes. `lit` fades the beam in and out. */
   update(dtMs: number, lit: number, playing: boolean): void
   dispose(): void
@@ -83,9 +89,14 @@ export function createProjector(
   const rig = new THREE.Group()
   group.add(rig)
 
+  // The hand-built projector. Kept as the fallback: if the model 404s or the
+  // decoder will not start, this is what the player sees instead of nothing.
+  const builtIn = new THREE.Group()
+  rig.add(builtIn)
+
   const body = new THREE.Mesh(keep(new THREE.BoxGeometry(0.3, 0.2, 0.44)), bodyMat)
   body.renderOrder = 4
-  rig.add(body)
+  builtIn.add(body)
 
   // Two reels above the body, side by side, as on a real projector head.
   const reelGeo = keep(new THREE.TorusGeometry(0.105, 0.02, 8, 26))
@@ -99,7 +110,7 @@ export function createProjector(
     reel.add(ring, hub)
     reel.position.set(0, 0.2, z)
     reel.renderOrder = 4
-    rig.add(reel)
+    builtIn.add(reel)
     reels.push(reel)
   }
 
@@ -111,18 +122,21 @@ export function createProjector(
   barrel.rotation.x = Math.PI / 2
   barrel.position.set(0, 0.01, -0.28)
   barrel.renderOrder = 4
-  rig.add(barrel)
+  builtIn.add(barrel)
 
+  // The lamp. Deliberately NOT part of `builtIn`: a downloaded model has no
+  // light of its own, so this stays when the primitives are swapped out — it
+  // is what makes the beam look like it comes from somewhere.
   const lens = new THREE.Mesh(keep(new THREE.CircleGeometry(0.052, 16)), lensMat)
   lens.position.set(0, 0.01, -0.36)
-  lens.renderOrder = 5
+  lens.renderOrder = 7
   rig.add(lens)
 
   // A short stand, so it reads as standing on the ground rather than floating.
   const post = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.022, 0.022, 0.44, 8)), bodyMat)
   post.position.set(0, -0.32, 0)
   post.renderOrder = 4
-  rig.add(post)
+  builtIn.add(post)
 
   // ---- the beam ---------------------------------------------------------
   const LENS_Z = -0.36
@@ -204,8 +218,45 @@ export function createProjector(
 
   let t = 0
 
+  /** Materials of the loaded model, so it can fade in with everything else. */
+  const modelMats: THREE_NS.Material[] = []
+
   return {
     group,
+
+    attachModel(model, opts) {
+      builtIn.visible = false
+
+      // A real mesh must depth-test against itself or it renders inside out.
+      // Everything else in this scene is a flat composite over the camera feed
+      // with depth testing off, so the model is drawn last: it stands nearer
+      // than the screen, and should cover it where the two overlap.
+      model.traverse((o) => {
+        const mesh = o as THREE_NS.Mesh
+        if (!mesh.isMesh) return
+        mesh.renderOrder = 6
+        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          m.transparent = true
+          m.depthTest = true
+          m.depthWrite = true
+          m.opacity = 0
+          modelMats.push(m)
+        }
+      })
+
+      // Models arrive facing whichever way the artist left them.
+      model.rotation.y += opts?.faceOffsetY ?? 0
+      // Sit it on the stand rather than at the rig's origin.
+      model.position.y -= 0.1
+
+      // Put the lamp at the model's own lens, and open the beam from there.
+      const lampY = opts?.lampY ?? 0.16
+      lens.position.set(0, lampY, LENS_Z)
+      beam.position.set(0, lampY, LENS_Z - throwM / 2)
+      for (let i = 0; i < MOTE_COUNT; i++) motePos[i * 3 + 1] = (motePos[i * 3 + 1] ?? 0) + lampY - 0.01
+      moteGeo.getAttribute('position').needsUpdate = true
+      rig.add(model)
+    },
 
     update(dtMs, lit, playing) {
       t += dtMs
@@ -214,7 +265,8 @@ export function createProjector(
       bodyMat.opacity = ease * 0.95
       trimMat.opacity = ease * 0.95
       lensMat.opacity = ease
-      beamMat.opacity = ease * 0.3
+      for (const m of modelMats) m.opacity = ease
+      beamMat.opacity = ease * 0.42
       moteMat.opacity = ease * 0.7
 
       // Reels turn only while the film is running.
@@ -238,6 +290,7 @@ export function createProjector(
 
     dispose() {
       for (const d of dispose) d.dispose()
+      modelMats.length = 0
     },
   }
 }

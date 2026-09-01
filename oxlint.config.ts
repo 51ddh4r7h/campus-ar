@@ -8,6 +8,8 @@ const config: OxlintConfig = {
     'public/xr8/**',
     'client/public/xr8/**',
     'tools/oxlint/anti-slop/**',
+    // Vendored decoder, shipped verbatim from the three.js distribution.
+    'client/public/draco/**',
     '.agent/**',
     '.agents/**',
     '.claude/**',
