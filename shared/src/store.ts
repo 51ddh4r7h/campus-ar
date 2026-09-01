@@ -19,6 +19,8 @@ export type StoredBatch = Batch & {pool: RoutePool}
 export interface GameStore {
   putBatch(batch: StoredBatch): Promise<void>
   getBatch(id: string): Promise<StoredBatch | null>
+  /** Newest first. Organiser console only. */
+  listBatches(): Promise<StoredBatch[]>
 
   putPlayer(player: Player): Promise<void>
   getPlayer(id: string): Promise<Player | null>
@@ -58,6 +60,9 @@ export class InMemoryStore implements GameStore {
   }
   async getBatch(id: string): Promise<StoredBatch | null> {
     return this.batches.get(id) ?? null
+  }
+  async listBatches(): Promise<StoredBatch[]> {
+    return [...this.batches.values()].sort((a, b) => b.createdAtMs - a.createdAtMs)
   }
 
   async putPlayer(player: Player): Promise<void> {

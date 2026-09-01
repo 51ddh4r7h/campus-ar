@@ -18,6 +18,11 @@ const Finite = v.pipe(v.number(), v.finite())
 
 const CreateBatchSchema = v.object({name: NonEmpty, demo: v.optional(v.boolean(), false)})
 
+/** A practice run may pin its route; everything else is server-chosen. */
+const DemoSessionSchema = v.object({
+  route: v.optional(v.pipe(v.array(NonEmpty), v.length(5))),
+})
+
 const RegisterPlayersSchema = v.object({
   players: v.pipe(
     v.array(
@@ -65,6 +70,9 @@ const parse = <TSchema extends v.GenericSchema>(
 }
 
 export const parseCreateBatch = (raw: unknown): {name: string; demo: boolean} => parse(CreateBatchSchema, raw)
+
+export const parseDemoSession = (raw: unknown): {route?: string[] | undefined} =>
+  parse(DemoSessionSchema, raw)
 
 export const parseRegisterPlayers = (
   raw: unknown,

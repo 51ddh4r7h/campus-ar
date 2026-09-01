@@ -13,6 +13,7 @@ import type {Env} from './env'
 import {
   BadInput,
   parseCreateBatch,
+  parseDemoSession,
   parseCrumbs,
   parseHintRung,
   parseRegisterPlayers,
@@ -45,8 +46,17 @@ export const createApp = (
 
   const engineFor = (env: Env) => createEngine(makeStore(env), deps)
 
+  /**
+   * Admin routes fail closed. These endpoints hand out every player's session
+   * token, so an unconfigured ADMIN_KEY must lock the door rather than leave it
+   * open — set it with `wrangler secret put ADMIN_KEY`, or in worker/.dev.vars
+   * for local development.
+   */
   const requireAdmin = (env: Env | undefined, key: string | undefined): void => {
-    if (env?.ADMIN_KEY && key !== env.ADMIN_KEY) {
+    if (!env?.ADMIN_KEY) {
+      throw new HTTPException(503, {message: 'admin routes are not configured'})
+    }
+    if (key !== env.ADMIN_KEY) {
       throw new HTTPException(403, {message: 'bad admin key'})
     }
   }
@@ -75,6 +85,45 @@ export const createApp = (
     })
   })
 
+  app.get('/admin/batches', async (c) => {
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    const store = makeStore(c.env)
+    const batches = await store.listBatches()
+    const rows = []
+    for (const b of batches) {
+      const players = await store.listPlayers(b.id)
+      rows.push({
+        id: b.id,
+        name: b.name,
+        status: b.status,
+        isDemo: b.isDemo,
+        createdAtMs: b.createdAtMs,
+        playerCount: players.length,
+      })
+    }
+    return c.json({batches: rows})
+  })
+
+  /** The roster with its personal links — how an organiser hands the game out. */
+  app.get('/admin/batches/:id/players', async (c) => {
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    const store = makeStore(c.env)
+    const batchId = c.req.param('id')
+    const players = await store.listPlayers(batchId)
+    const rows = []
+    for (const p of players) {
+      const route = await store.getRoute(p.id)
+      rows.push({
+        playerId: p.id,
+        name: p.name,
+        rosterId: p.rosterId,
+        sessionToken: p.sessionToken,
+        stops: route?.stops ?? [],
+      })
+    }
+    return c.json({players: rows})
+  })
+
   app.post('/admin/batches/:id/players', async (c) => {
     requireAdmin(c.env, c.req.header('X-Admin-Key'))
     const store = makeStore(c.env)
@@ -100,6 +149,35 @@ export const createApp = (
       })
     }
     return c.json({players})
+  })
+
+  /**
+   * Practice run — no admin key. Creates a throwaway demo batch and one player
+   * in a single call. `isDemo` keeps it out of every real batch's standings, so
+   * this cannot be used to pollute a live event.
+   */
+  app.post('/demo/session', async (c) => {
+    const engine = engineFor(c.env)
+    const store = makeStore(c.env)
+    const body = parseDemoSession(await c.req.json().catch(() => ({})))
+    const batch = await engine.createBatch({
+      name: `Practice ${new Date().toISOString().slice(0, 16)}`,
+      isDemo: true,
+    })
+    const reg: Parameters<typeof engine.registerPlayer>[0] = {
+      batchId: batch.id,
+      name: 'Practice player',
+      rosterId: `demo-${crypto.randomUUID().slice(0, 8)}`,
+    }
+    if (body.route) reg.pinnedRoute = body.route
+    const {player} = await engine.registerPlayer(reg)
+    const route = await store.getRoute(player.id)
+    return c.json({
+      batchId: batch.id,
+      sessionToken: player.sessionToken,
+      name: player.name,
+      stops: route?.stops ?? [],
+    })
   })
 
   app.post('/session/start', async (c) =>

@@ -20,5 +20,11 @@ export const demoRequested = params.has('demo') || params.has('sim')
 /** `?debug` — show the on-screen AR diagnostic readout on the reveal. */
 export const debugMode = params.has('debug')
 
+/**
+ * `?admin` — the organiser console. Gated at runtime by the admin key, which
+ * the organiser types in; it is never part of the bundle.
+ */
+export const adminRequested = params.has('admin')
+
 /** Practice runs are allowed when explicitly requested, or in any dev build. */
 export const demoAllowed = demoRequested || import.meta.env.DEV

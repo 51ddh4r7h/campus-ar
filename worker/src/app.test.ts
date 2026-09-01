@@ -36,12 +36,17 @@ beforeEach(() => {
   app = createApp(() => store, clock)
 })
 
+const ADMIN = 'test-admin-key'
+const env = {ADMIN_KEY: ADMIN} as Env
+
+/** Admin routes fail closed, so every request here carries the key. */
 const json = (path: string, body?: unknown, headers: Record<string, string> = {}) => {
+  const all = {'X-Admin-Key': ADMIN, ...headers}
   const init: RequestInit =
     body === undefined
-      ? {method: 'GET', headers}
-      : {method: 'POST', headers: {'content-type': 'application/json', ...headers}, body: JSON.stringify(body)}
-  return app.request(path, init, {} as Env)
+      ? {method: 'GET', headers: all}
+      : {method: 'POST', headers: {'content-type': 'application/json', ...all}, body: JSON.stringify(body)}
+  return app.request(path, init, env)
 }
 
 async function bootPlayer(route?: string[]) {
@@ -139,5 +144,69 @@ describe('app', () => {
     expect(res.status).toBe(200)
     const {rows} = (await res.json()) as {rows: unknown[]}
     expect(Array.isArray(rows)).toBe(true)
+  })
+})
+
+describe('admin console reads', () => {
+  it('lists batches newest first, with roster counts', async () => {
+    await json('/admin/batches', {name: 'First'})
+    const b = await bootPlayer()
+    const res = await json('/admin/batches')
+    expect(res.status).toBe(200)
+    const {batches} = (await res.json()) as {
+      batches: Array<{id: string; name: string; playerCount: number; isDemo: boolean}>
+    }
+    expect(batches).toHaveLength(2)
+    expect(batches.find((x) => x.id === b.batchId)?.playerCount).toBe(1)
+    expect(batches.every((x) => x.isDemo === false)).toBe(true)
+  })
+
+  it('returns the roster with personal tokens and assigned stops', async () => {
+    const b = await bootPlayer()
+    const res = await json(`/admin/batches/${b.batchId}/players`)
+    const {players} = (await res.json()) as {
+      players: Array<{name: string; sessionToken: string; stops: string[]}>
+    }
+    expect(players).toHaveLength(1)
+    expect(players[0]!.name).toBe('A')
+    expect(players[0]!.sessionToken).toBe(b.sessionToken)
+    expect(players[0]!.stops).toHaveLength(5)
+  })
+
+  it('refuses the reads without a matching admin key', async () => {
+    const bad = await app.request('/admin/batches', {method: 'GET'}, env)
+    expect(bad.status).toBe(403)
+
+    const good = await app.request(
+      '/admin/batches',
+      {method: 'GET', headers: {'X-Admin-Key': ADMIN}},
+      env,
+    )
+    expect(good.status).toBe(200)
+  })
+
+  it('fails closed when no admin key is configured at all', async () => {
+    const res = await app.request(
+      '/admin/batches',
+      {method: 'GET', headers: {'X-Admin-Key': 'anything'}},
+      {} as Env,
+    )
+    expect(res.status).toBe(503)
+  })
+
+  it('starts a practice session without an admin key', async () => {
+    const res = await app.request(
+      '/demo/session',
+      {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({}),
+      },
+      {} as Env,
+    )
+    expect(res.status).toBe(200)
+    const s = (await res.json()) as {sessionToken: string; batchId: string; stops: string[]}
+    expect(s.sessionToken).toBeTruthy()
+    expect(s.stops).toHaveLength(5)
   })
 })

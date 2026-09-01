@@ -9,7 +9,7 @@
   import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
   import {haptics} from './lib/haptics'
-  import {playerLink, demoAllowed} from './lib/mode'
+  import {playerLink, demoAllowed, adminRequested} from './lib/mode'
 
   import Splash from './screens/Splash.svelte'
   import Join from './screens/Join.svelte'
@@ -20,6 +20,7 @@
   import Search from './screens/Search.svelte'
   import Reveal from './screens/Reveal.svelte'
   import Finish from './screens/Finish.svelte'
+  import Admin from './screens/Admin.svelte'
 
   import HowToSheet from './screens/HowToSheet.svelte'
   import HintSheet from './screens/HintSheet.svelte'
@@ -51,6 +52,9 @@
   }
 
   onMount(async () => {
+    // The organiser console is a separate surface — no session, no sensors.
+    if (adminRequested) return
+
     // A pre-registered player's personal link.
     if (playerLink && !game.token) {
       game.setCredentials(playerLink.token, playerLink.batchId, playerLink.name, {demo: false})
@@ -121,7 +125,11 @@
   })
 </script>
 
-<Screen />
+{#if adminRequested}
+  <Admin />
+{:else}
+  <Screen />
+{/if}
 
 {#if nav.sheet === 'howto'}<HowToSheet />{/if}
 {#if nav.sheet === 'hint'}<HintSheet />{/if}

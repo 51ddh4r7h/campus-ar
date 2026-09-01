@@ -142,6 +142,13 @@ export class D1Store implements GameStore {
     return row ? toBatch(row) : null
   }
 
+  async listBatches(): Promise<StoredBatch[]> {
+    const {results} = await this.db
+      .prepare('SELECT * FROM batch ORDER BY created_at_ms DESC LIMIT 100')
+      .all<BatchRow>()
+    return results.map(toBatch)
+  }
+
   async putPlayer(p: Player): Promise<void> {
     await this.db
       .prepare(

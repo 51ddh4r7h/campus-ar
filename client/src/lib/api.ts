@@ -65,7 +65,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T
 }
 
+export interface BatchRow {
+  id: string
+  name: string
+  status: string
+  isDemo: boolean
+  createdAtMs: number
+  playerCount: number
+}
+
+export interface RosterEntry {
+  playerId: string
+  name: string
+  rosterId: string
+  sessionToken: string
+  stops: string[]
+}
+
 const auth = (token: string): HeadersInit => ({Authorization: `Bearer ${token}`})
+const adminHeaders = (key?: string): HeadersInit => (key ? {'X-Admin-Key': key} : {})
+const adminJson = (key?: string): HeadersInit => ({
+  'content-type': 'application/json',
+  ...adminHeaders(key),
+})
 const jsonAuth = (token: string): HeadersInit => ({...auth(token), 'content-type': 'application/json'})
 
 export interface StateResponse {
@@ -118,23 +140,41 @@ export const api = {
       headers: token ? auth(token) : undefined,
     }),
 
-  // Dev/registration helpers — real events pre-register players out of band.
-  createBatch: (name: string, demo = false) =>
+  /** Practice run. Needs no admin key — the server marks the batch as demo. */
+  demoSession: (route?: string[]) =>
+    request<{batchId: string; sessionToken: string; name: string; stops: string[]}>(
+      '/demo/session',
+      {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(route ? {route} : {}),
+      },
+    ),
+
+  // Organiser console — every one of these needs the admin key.
+  createBatch: (name: string, demo = false, adminKey?: string) =>
     request<{id: string; name: string; isDemo: boolean; poolSize: number}>('/admin/batches', {
       method: 'POST',
-      headers: {'content-type': 'application/json'},
+      headers: adminJson(adminKey),
       body: JSON.stringify({name, demo}),
     }),
 
   registerPlayers: (
     batchId: string,
     players: Array<{name: string; rosterId: string; route?: string[]}>,
+    adminKey?: string,
   ) =>
-    request<{
-      players: Array<{playerId: string; name: string; rosterId: string; sessionToken: string; stops: string[]}>
-    }>(`/admin/batches/${batchId}/players`, {
+    request<{players: RosterEntry[]}>(`/admin/batches/${batchId}/players`, {
       method: 'POST',
-      headers: {'content-type': 'application/json'},
+      headers: adminJson(adminKey),
       body: JSON.stringify({players}),
+    }),
+
+  listBatches: (adminKey: string) =>
+    request<{batches: BatchRow[]}>('/admin/batches', {headers: adminHeaders(adminKey)}),
+
+  roster: (batchId: string, adminKey: string) =>
+    request<{players: RosterEntry[]}>(`/admin/batches/${batchId}/players`, {
+      headers: adminHeaders(adminKey),
     }),
 }
