@@ -20,6 +20,10 @@
    * it fades in; released it fades out, so a flick back and forth is how you
    * check an alignment — the comparison has to happen against the real view,
    * which is exactly what the old full-screen still made impossible.
+   *
+   * The still keeps its own shape rather than filling the phone. Stretching a
+   * 2.39:1 frame over a tall screen crops away most of the composition, which
+   * is the very thing being matched.
    */
   let blend = $state(0)
   let holding = $state(false)
@@ -38,14 +42,9 @@
 {#if clue}
   <!-- The frame you are hunting, laid over the world at whatever strength
        you are holding. -->
-  <img
-    class="ghost"
-    class:lifted={holding}
-    style="opacity: {blend * 0.72}"
-    src={clue.sceneRefImage}
-    alt=""
-    aria-hidden="true"
-  />
+  <div class="ghost" class:lifted={holding} style="opacity: {blend * 0.78}" aria-hidden="true">
+    <img src={clue.sceneRefImage} alt="" />
+  </div>
 {/if}
 
 {#if !location.hasSignal}
@@ -78,18 +77,23 @@
   .ghost {
     position: fixed;
     top: 50%;
-    left: 50%;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transform: translate(-50%, -50%);
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
     z-index: 6;
     pointer-events: none;
     transition: opacity 0.22s ease;
   }
+  /* Natural aspect: the frame you are matching, at the shape it was shot. */
+  .ghost img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
   /* A hairline while it's up, so you can see where the frame ends. */
-  .ghost.lifted {
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--amber) 55%, transparent);
+  .ghost.lifted img {
+    outline: 2px solid color-mix(in srgb, var(--amber) 60%, transparent);
+    outline-offset: -2px;
   }
   .signal {
     position: fixed;

@@ -566,7 +566,10 @@ export async function createArStage(
     back.scale.copy(screen.scale)
     frame.scale.copy(screen.scale)
 
-    stillMat.opacity = (assembling ? phase(p, 0.5, 1) : p) * (1 - dissolved)
+    // The held frame belongs to the arrival beat only. On the clue screen
+    // there is nothing to pay off, so the clip plays straight away — leaving
+    // the still up there froze the picture behind it.
+    stillMat.opacity = assembling ? phase(p, 0.5, 1) * (1 - dissolved) : 0
 
     // The lamp comes up with the picture; the caption arrives last.
     card?.setOpacity(assembling ? phase(p, 0.72, 1) : p)
