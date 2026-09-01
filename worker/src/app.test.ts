@@ -253,3 +253,60 @@ describe('scene viewings', () => {
     expect(afterAdvance.penaltyMs).toBe(0)
   })
 })
+
+describe('the reward ladder', () => {
+  const view = (token: string) =>
+    app.request('/session/view', {method: 'POST', headers: {Authorization: `Bearer ${token}`}}, env)
+
+  /** Walk a player to the start of `level`, clearing everything before it. */
+  async function climbTo(level: number) {
+    const p = await bootPlayer()
+    await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
+    for (let i = 0; i < level - 1; i++) {
+      clock.advance(LAYOUT.minLegMs + 60_000)
+      await json(
+        '/session/arrive',
+        {samples: parkedAt(p.stops[i]!, clock.now())},
+        {Authorization: `Bearer ${p.sessionToken}`},
+      )
+    }
+    return p
+  }
+
+  it('names the rung earned by each level', async () => {
+    const p = await bootPlayer()
+    await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
+    clock.advance(LAYOUT.minLegMs + 60_000)
+    const res = await json(
+      '/session/arrive',
+      {samples: parkedAt(p.stops[0]!, clock.now())},
+      {Authorization: `Bearer ${p.sessionToken}`},
+    )
+    const body = (await res.json()) as {reveal: {perk: {rung: number; name: string} | null}}
+    expect(body.reveal.perk?.rung).toBe(1)
+    expect(body.reveal.perk?.name).toBeTruthy()
+  })
+
+  it('rung 2 buys an extra free viewing on later levels', async () => {
+    const p = await climbTo(3)
+    // Two from the base allowance, a third from the rung — all free.
+    for (let i = 0; i < 3; i++) {
+      const r = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
+      expect(r.penaltyMs, `view ${i + 1}`).toBe(0)
+    }
+    const fourth = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
+    expect(fourth.penaltyMs).toBeGreaterThan(0)
+  })
+
+  it('rung 3 gives exactly one free hint, then charges again', async () => {
+    const p = await climbTo(4)
+    clock.advance(20 * 60_000)
+    const hint = (h: string) =>
+      json('/session/hint', {rung: h}, {Authorization: `Bearer ${p.sessionToken}`})
+
+    const first = (await (await hint('warm')).json()) as {penaltyMs: number}
+    const second = (await (await hint('close')).json()) as {penaltyMs: number}
+    expect(first.penaltyMs).toBe(0)
+    expect(second.penaltyMs).toBeGreaterThan(0)
+  })
+})

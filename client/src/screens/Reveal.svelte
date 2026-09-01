@@ -6,7 +6,7 @@
    * comes up, and the scene plays where it was actually shot.
    */
   import type {ValidationFailure, ValidationResult} from '@cmh/shared'
-  import {formatMarquee} from '@cmh/shared'
+  import {canPhotograph, formatMarquee} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {location} from '../lib/stores/location.svelte'
@@ -30,6 +30,8 @@
   let shotUrl = $state<string | null>(null)
 
   const r = $derived(played ? game.lastReveal : null)
+  // Photo mode is rung 4 — earned, not given, so finishing is worth something.
+  const mayPhotograph = $derived(canPhotograph(game.level))
   const p = $derived(probe.last)
 
   // The dwell drives the assembly. Keep a floor so the frame is visible the
@@ -195,14 +197,23 @@
       <h1>{r?.locationName}</h1>
       <p class="film"><b>{r?.movie.title}</b> · filmed right here</p>
       <div class="fact">{r?.campusFact}</div>
+      {#if r?.perk}
+        <div class="perk">
+          <span class="rung">Unlocked · rung {r.perk.rung} of 5</span>
+          <b>{r.perk.name}</b>
+          <p>{r.perk.blurb}</p>
+        </div>
+      {/if}
       <div class="actions">
         {#if usedAr}
           <Button variant="secondary" onclick={() => screen?.recenter()}>
             <Icon name="crosshair" size={18} /> Recentre
           </Button>
-          <Button variant="secondary" disabled={shooting} onclick={() => void takePhoto()}>
-            <Icon name="camera" size={18} /> {shooting ? '…' : 'Photo'}
-          </Button>
+          {#if mayPhotograph}
+            <Button variant="secondary" disabled={shooting} onclick={() => void takePhoto()}>
+              <Icon name="camera" size={18} /> {shooting ? '…' : 'Photo'}
+            </Button>
+          {/if}
         {/if}
         <Button onclick={next}>{r?.huntComplete ? 'See your result' : 'Next scene'}</Button>
       </div>
@@ -330,6 +341,31 @@
   }
   .film b {
     color: var(--text);
+  }
+  .perk {
+    padding: var(--sp-3);
+    margin-bottom: var(--sp-4);
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent);
+    background: color-mix(in srgb, var(--amber) 10%, transparent);
+    animation: rise 0.6s var(--ease-spring) 0.9s both;
+  }
+  .perk .rung {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--step-13);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 4px;
+  }
+  .perk b {
+    font-size: var(--step-17);
+  }
+  .perk p {
+    margin: 4px 0 0;
+    font-size: var(--step-15);
+    color: var(--text-dim);
   }
   .fact {
     padding: var(--sp-3);

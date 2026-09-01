@@ -81,6 +81,8 @@ export interface Session {
   currentLevelHints: number
   /** Times the scene has been watched on this level. Resets each level. */
   currentLevelViews: number
+  /** The rung-3 free hint has been spent. Once per hunt, not per level. */
+  hintCreditUsed: boolean
   /** Accumulated hint penalty across the whole hunt, in ms. */
   penaltyMs: number
   /** elapsed + penalties − par, in ms. Null until complete. Lower is better. */
@@ -190,6 +192,8 @@ export interface RevealView {
   penaltyMs: number
   /** True once every level is done. */
   huntComplete: boolean
+  /** The ladder rung this level just earned, if any. */
+  perk: {rung: number; name: string; blurb: string} | null
 }
 
 export interface ValidationResult {

@@ -17,6 +17,7 @@ import {routePar, sessionScoreMs} from './scoring'
 import {VALIDATION} from './config'
 import {haversineM} from './geo'
 import {bandFromHeat, heatFromDistance} from './heat'
+import {bonusViews, hasHintCredit, perkForLevel} from './perks'
 import {evaluateArrival} from './validation'
 import type {ArrivalOutcome} from './validation'
 import type {GameStore, StoredBatch} from './store'
@@ -109,6 +110,7 @@ const revealView = (target: GameLocation, split: Split, huntComplete: boolean) =
   splitMs: split.splitMs,
   penaltyMs: split.penaltyMs,
   huntComplete,
+  perk: perkForLevel(split.level),
 })
 
 export interface CreateBatchInput {
@@ -283,6 +285,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         currentLevel: 1,
         currentLevelHints: 0,
         currentLevelViews: 0,
+        hintCreditUsed: false,
         penaltyMs: 0,
         scoreMs: null,
       }
@@ -431,7 +434,9 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       if (session.status !== 'in_progress') throw new EngineError('not_in_progress')
 
       const used = session.currentLevelViews
-      const penaltyMs = used < batch.parConstants.freeViews ? 0 : batch.parConstants.viewPenaltyMs
+      // Rung 2 buys an extra free viewing on every level from then on.
+      const allowance = batch.parConstants.freeViews + bonusViews(session.currentLevel)
+      const penaltyMs = used < allowance ? 0 : batch.parConstants.viewPenaltyMs
       const next: Session = {
         ...session,
         currentLevelViews: used + 1,
@@ -464,10 +469,14 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
             : HINT_GATES.showLocationAfterMs
       if (onLevelForMs < gate) throw new EngineError('hint_locked')
 
-      const penaltyMs = batch.parConstants.hintPenaltyMs[rung]
+      // Rung 3 is one free hint for the whole hunt — spent on whichever the
+      // player decides is worth it, rather than a discount on all of them.
+      const onTheHouse = hasHintCredit(session.currentLevel) && !session.hintCreditUsed
+      const penaltyMs = onTheHouse ? 0 : batch.parConstants.hintPenaltyMs[rung]
       const next: Session = {
         ...session,
         currentLevelHints: session.currentLevelHints + 1,
+        hintCreditUsed: session.hintCreditUsed || onTheHouse,
         penaltyMs: session.penaltyMs + penaltyMs,
       }
       await store.putSession(next)

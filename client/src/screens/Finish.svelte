@@ -1,6 +1,6 @@
 <script lang="ts">
   import {onMount} from 'svelte'
-  import {formatMarquee, formatScore, locationById} from '@cmh/shared'
+  import {LOCATIONS, formatMarquee, formatScore, locationById, perksEarned} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {standings} from '../lib/stores/standings.svelte'
@@ -33,6 +33,11 @@
 
   // Splits carry a locationId — safe to name now.
   const name = (id: string) => locationById(id)?.name ?? id
+
+  const earned = $derived(perksEarned(game.level))
+  const visited = $derived(new Set(splits.map((s) => s.locationId)))
+  /** Rung 5: the half of campus a randomised route never sent you to. */
+  const wrapped = $derived(game.complete)
 </script>
 
 <main>
@@ -62,6 +67,34 @@
     {/each}
   </ol>
 
+  {#if earned.length > 0}
+    <section class="ladder">
+      <h2>Unlocked</h2>
+      <ul>
+        {#each earned as p (p.rung)}
+          <li><span class="r">{p.rung}</span><b>{p.name}</b><em>{p.blurb}</em></li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if wrapped}
+    <!-- The wrap. A route only ever sends you to five of the ten, so finishing
+         is what buys you the sight of the whole campus. -->
+    <section class="wrap">
+      <h2>The wrap — every location on campus</h2>
+      <ul>
+        {#each LOCATIONS as l (l.id)}
+          <li class:found={visited.has(l.id)}>
+            <span class="dot" aria-hidden="true"></span>
+            <b>{l.name}</b>
+            <em>{visited.has(l.id) ? 'You found this one' : l.movie.title}</em>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
   <div class="actions">
     <Button variant="secondary" onclick={() => nav.open('standings')}>View standings</Button>
     <Button disabled={starting} onclick={playAgain}>{starting ? 'Starting…' : 'Play again'}</Button>
@@ -72,6 +105,74 @@
 </main>
 
 <style>
+  .ladder,
+  .wrap {
+    padding: var(--sp-4);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    border: var(--glass-border);
+  }
+  .ladder h2,
+  .wrap h2 {
+    margin: 0 0 var(--sp-3);
+    font-size: var(--step-15);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .ladder ul,
+  .wrap ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .ladder li {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 4px var(--sp-2);
+    align-items: baseline;
+  }
+  .ladder .r {
+    grid-row: span 2;
+    font-family: var(--font-mono);
+    font-size: var(--step-13);
+    color: var(--amber-ink);
+    background: var(--amber);
+    border-radius: 999px;
+    text-align: center;
+    line-height: 26px;
+  }
+  .ladder em,
+  .wrap em {
+    grid-column: 2;
+    font-style: normal;
+    font-size: var(--step-15);
+    color: var(--text-dim);
+  }
+  .wrap li {
+    display: grid;
+    grid-template-columns: 12px 1fr;
+    gap: 2px var(--sp-2);
+    align-items: baseline;
+    opacity: 0.55;
+  }
+  .wrap li.found {
+    opacity: 1;
+  }
+  .wrap .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    border: 1px solid var(--text-dim);
+    grid-row: span 2;
+    align-self: center;
+  }
+  .wrap li.found .dot {
+    background: var(--amber);
+    border-color: var(--amber);
+  }
   main {
     min-height: 100dvh;
     display: flex;
