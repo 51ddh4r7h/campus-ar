@@ -23,6 +23,11 @@ export interface Projector {
    * the player still gets a projector.
    */
   attachModel(model: THREE_NS.Object3D, opts?: {faceOffsetY?: number; lampY?: number}): void
+  /**
+   * Fire the lamp and spin the reels up. The picture is meant to arrive after
+   * this, not with it — a projector takes a moment to get going.
+   */
+  startUp(): void
   /** Advance reels, hover and motes. `lit` fades the beam in and out. */
   update(dtMs: number, lit: number, playing: boolean): void
   dispose(): void
@@ -224,6 +229,10 @@ export function createProjector(
   rig.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), aim)
 
   let t = 0
+  /** 0-1 spin-up. Ramps when startUp() fires; the reels follow it. */
+  let spin = 0
+  /** Milliseconds into the lamp strike, or -1 when not striking. */
+  let flareMs = -1
 
   /** Materials of the loaded model, so it can fade in with everything else. */
   const modelMats: THREE_NS.Material[] = []
@@ -231,6 +240,10 @@ export function createProjector(
 
   return {
     group,
+
+    startUp() {
+      flareMs = 0
+    },
 
     useFallback() {
       if (!hasModel) builtIn.visible = true
@@ -279,18 +292,31 @@ export function createProjector(
       trimMat.opacity = ease * 0.95
       lensMat.opacity = ease
       for (const m of modelMats) m.opacity = ease
-      beamMat.opacity = ease * 0.42
       moteMat.opacity = ease * 0.7
 
-      // Reels turn only while the film is running.
-      if (playing) {
-        const spin = (dtMs / 1000) * 2.4
-        for (const r of reels) r.rotation.z -= spin
+      // Reels take a moment to get up to speed, and drag to a stop rather
+      // than halting on the frame the film ends.
+      const wants = playing || flareMs >= 0 ? 1 : 0
+      spin += (wants - spin) * Math.min(1, dtMs / 700)
+      if (spin > 0.01) {
+        const step = (dtMs / 1000) * 2.4 * spin
+        for (const r of reels) r.rotation.z -= step
       }
 
       // A slow hover, and a flicker on the lamp — a projector is never quite still.
       rig.position.y = ay + Math.sin(t / 1200) * 0.012
-      lensMat.opacity = ease * (0.82 + Math.sin(t / 90) * 0.06 + Math.sin(t / 37) * 0.04)
+      const flicker = 0.82 + Math.sin(t / 90) * 0.06 + Math.sin(t / 37) * 0.04
+
+      // The strike: the lamp surges as it lights, then settles.
+      let surge = 1
+      if (flareMs >= 0) {
+        flareMs += dtMs
+        const f = Math.min(1, flareMs / 900)
+        surge = 1 + 2.6 * Math.sin(f * Math.PI) ** 2
+        if (f >= 1) flareMs = -1
+      }
+      lensMat.opacity = ease * flicker * surge
+      beamMat.opacity = ease * 0.42 * (0.6 + 0.4 * surge)
 
       // Motes drift toward the screen and recycle at the lens.
       for (let i = 0; i < MOTE_COUNT; i++) {

@@ -8,6 +8,11 @@
       video.srcObject = camera.stream
       void video.play().catch(() => {})
     }
+    // Photo mode composites from this element, not from the stream.
+    camera.videoEl = video
+    return () => {
+      if (camera.videoEl === video) camera.videoEl = null
+    }
   })
 </script>
 

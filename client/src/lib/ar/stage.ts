@@ -27,6 +27,17 @@ export interface ArStage {
   /** Assembly progress, 0-1. Only meaningful after showScreen({assemble: true}). */
   setBuild(p: number): void
   setMuted(muted: boolean): void
+  /**
+   * The reveal beat. The frame the player was hunting is held on the screen,
+   * the projector strikes its lamp and gets its reels turning, and only then
+   * does the still dissolve into the moving scene.
+   */
+  playScene(): void
+  /**
+   * A single composited frame — the camera's view with the scene drawn over
+   * it — as a data URL, or null if the buffer could not be read.
+   */
+  capture(): string | null
   /** Brighten the bloom as the player closes in (heat 0-100). */
   setHeat(heat: number): void
   /** Debug: frames rendered / current screen opacity. */
@@ -76,6 +87,8 @@ export interface StageContent {
   note?: string | undefined
   /** Slate mark, e.g. "Scene 03". */
   scene?: string | undefined
+  /** The frame the player was hunting — held, then dissolved into the clip. */
+  stillUrl?: string | undefined
 }
 
 export async function createArStage(
@@ -129,13 +142,14 @@ export async function createArStage(
   // wasted work on a phone and shows up as hitching.
   videoTex.generateMipmaps = false
   videoTex.minFilter = THREE.LinearFilter
-  const posterTex = posterUrl ? new THREE.TextureLoader().load(posterUrl) : null
-  if (posterTex) posterTex.colorSpace = THREE.SRGBColorSpace
+  const stillSrc = content.stillUrl ?? posterUrl
+  const stillTex = stillSrc ? new THREE.TextureLoader().load(stillSrc) : null
+  if (stillTex) stillTex.colorSpace = THREE.SRGBColorSpace
   // depthTest off throughout: the scene is a single flat composition drawn over
   // the camera feed, and the frame sits only 4cm behind the screen — close
   // enough that depth testing z-fights and makes the picture strobe.
   const screenMat = new THREE.MeshBasicMaterial({
-    map: posterTex ?? videoTex,
+    map: videoTex,
     transparent: true,
     opacity: 0,
     toneMapped: false,
@@ -143,22 +157,31 @@ export async function createArStage(
     depthWrite: false,
   })
 
-  // Keep the clip playing (browsers pause an off-screen <video>) and switch the
-  // screen from poster → live video once it's actually running.
-  let onVideo = !posterTex
+  // Browsers pause an off-screen <video>; keep nudging it back.
   const keepPlaying = () => {
     if (video.error) return
     if (video.paused) void video.play().catch(() => {})
-    if (!onVideo && !video.paused && video.currentTime > 0 && video.readyState >= 2) {
-      screenMat.map = videoTex
-      screenMat.needsUpdate = true
-      onVideo = true
-    }
   }
   const playPoll = setInterval(keepPlaying, 500)
   const screen = new THREE.Mesh(geo, screenMat)
   screen.renderOrder = 3
   anchor.add(screen)
+
+  // The frame the player was hunting, sitting over the picture until the
+  // scene starts. Holding it here is the whole point of the reveal: you spent
+  // the walk matching a frozen image, so the reward is that image coming alive
+  // in the place it was shot rather than a clip simply beginning.
+  const stillMat = new THREE.MeshBasicMaterial({
+    map: stillTex,
+    transparent: true,
+    opacity: 0,
+    toneMapped: false,
+    depthTest: false,
+    depthWrite: false,
+  })
+  const still = new THREE.Mesh(geo, stillMat)
+  still.renderOrder = 4
+  anchor.add(still)
 
   // Dark panel behind the picture. During assembly this fills in after the
   // frame and before the image, so the screen reads as being built.
@@ -210,6 +233,7 @@ export async function createArStage(
   /** Re-place everything for the current `distance`. */
   function fit(): void {
     screen.position.set(0, SCREEN.y, -distance)
+    still.position.set(0, SCREEN.y, -distance + 0.005)
     back.position.set(0, SCREEN.y, -distance - 0.02)
     frame.position.set(0, SCREEN.y, -distance - 0.04)
     glow.position.set(0, SCREEN.y, -distance - 0.12)
@@ -429,6 +453,13 @@ export async function createArStage(
    * and only a manual Recentre brings it into view.
    */
   let needsAnchor = false
+  /**
+   * Milliseconds since the scene was called for, or -1 before it is. The still
+   * is held for HOLD_MS while the projector gets going, then dissolves.
+   */
+  let sceneMs = -1
+  const HOLD_MS = 1400
+  const DISSOLVE_MS = 1100
   /** When true, entry progress comes from setBuild() rather than the clock. */
   let assembling = false
   let buildP = 0
@@ -459,6 +490,27 @@ export async function createArStage(
     setMuted(m) {
       video.muted = m
     },
+
+    playScene() {
+      if (sceneMs >= 0) return
+      sceneMs = 0
+      projector.startUp()
+      sound.lock()
+      video.currentTime = 0
+      void video.play().catch(() => {})
+    },
+
+    capture() {
+      // The drawing buffer is cleared once the frame is composited, so the
+      // read has to happen in the same tick as a render — hence rendering
+      // here rather than relying on whatever the loop last drew.
+      try {
+        renderer.render(scene, camera)
+        return renderer.domElement.toDataURL('image/png')
+      } catch {
+        return null
+      }
+    },
     setHeat(heat: number) {
       heatK = clamp01(heat / 100)
     },
@@ -475,6 +527,8 @@ export async function createArStage(
       window.removeEventListener('deviceorientationabsolute', onOrient, true)
       geo.dispose()
       screenMat.dispose()
+      stillMat.dispose()
+      stillTex?.dispose()
       backMat.dispose()
       frameMat.dispose()
       glowMat.dispose()
@@ -486,7 +540,6 @@ export async function createArStage(
       card?.dispose()
       sound.dispose()
       videoTex.dispose()
-      posterTex?.dispose()
       renderer.dispose()
     },
   }
@@ -503,7 +556,7 @@ export async function createArStage(
    * The screen builds outward-in: frame edges, then the dark panel, then the
    * picture. Off the assembly path all three windows collapse into one fade.
    */
-  const applyEntry = (p: number): void => {
+  const applyEntry = (p: number, dissolved: number): void => {
     frameMat.opacity = (assembling ? phase(p, 0, 0.3) : p) * 0.9
     backMat.opacity = (assembling ? phase(p, 0.18, 0.58) : p) * 0.88
     screenMat.opacity = assembling ? phase(p, 0.5, 1) : p
@@ -512,6 +565,8 @@ export async function createArStage(
     screen.scale.setScalar(0.96 + p * 0.04)
     back.scale.copy(screen.scale)
     frame.scale.copy(screen.scale)
+
+    stillMat.opacity = (assembling ? phase(p, 0.5, 1) : p) * (1 - dissolved)
 
     // The lamp comes up with the picture; the caption arrives last.
     card?.setOpacity(assembling ? phase(p, 0.72, 1) : p)
@@ -542,8 +597,12 @@ export async function createArStage(
     }
     if (haveReading) applyPose(dtMs)
 
+    // Hold the hunted frame, then dissolve it into the moving scene.
+    if (sceneMs >= 0) sceneMs += dtMs
+    const dissolved = sceneMs < 0 ? 0 : clamp01((sceneMs - HOLD_MS) / DISSOLVE_MS)
+
     const p = entryProgress()
-    applyEntry(p)
+    applyEntry(p, dissolved)
     const lamp = assembling ? phase(p, 0.12, 0.7) : p
     projector.update(dtMs, lamp, !video.paused)
     // The screen's own light rises with the screen.

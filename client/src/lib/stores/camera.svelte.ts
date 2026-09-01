@@ -11,6 +11,11 @@ class Camera {
   state = $state<CameraState>('unknown')
   /** The stream ended on its own (OS revoked it, another app grabbed it). */
   lost = $state(false)
+  /**
+   * The element actually painting the feed, registered by CameraFeed. Photo
+   * mode needs the live pixels: the stream alone cannot be drawn to a canvas.
+   */
+  videoEl: HTMLVideoElement | null = null
 
   get active(): boolean {
     return this.stream !== null

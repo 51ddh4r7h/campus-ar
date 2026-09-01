@@ -18,12 +18,16 @@
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
   import {ApiError} from '../lib/api'
+  import {camera} from '../lib/stores/camera.svelte'
+  import {composeShot, offerShot, type Shot} from '../lib/ar/photo'
 
   let screen = $state<ReturnType<typeof ArScreen> | null>(null)
   let usedAr = $state(false)
   let played = $state(false)
   let validating = $state(false)
   let retrying = $state(false)
+  let shooting = $state(false)
+  let shotUrl = $state<string | null>(null)
 
   const r = $derived(played ? game.lastReveal : null)
   const p = $derived(probe.last)
@@ -73,7 +77,7 @@
     if (res.ok) {
       played = true
       haptics.revealLock()
-      screen?.replay()
+      screen?.playScene()
       return
     }
     validating = false
@@ -124,6 +128,33 @@
     if (!played && p && !p.atTarget && p.failure === 'wrong_location') nav.go('search')
   })
 
+  /** What the saved frame is captioned with. */
+  const shotCaption = () => ({
+    title: r?.movie.title ?? 'Campus Movie Hunt',
+    place: r?.locationName ?? '',
+  })
+
+  /** Hand the frame over by whichever route this device allows. */
+  async function deliver(shot: Shot): Promise<void> {
+    const how = await offerShot(shot, `campus-movie-hunt-${r?.level ?? 0}.jpg`)
+    if (how === 'shown') shotUrl = shot.dataUrl
+    else if (how === 'saved') toasts.show('Saved to your downloads', 'success')
+  }
+
+  /** Capture the player standing in the place, with the scene behind them. */
+  async function takePhoto(): Promise<void> {
+    if (shooting) return
+    shooting = true
+    haptics.tick()
+    try {
+      const shot = await composeShot(camera.videoEl, screen?.capture() ?? null, shotCaption())
+      if (shot) await deliver(shot)
+      else toasts.show("Couldn't capture that one", 'alert')
+    } finally {
+      shooting = false
+    }
+  }
+
   function next() {
     haptics.levelDone()
     nav.go(r?.huntComplete ? 'finish' : 'clue')
@@ -136,6 +167,7 @@
   bind:this={screen}
   clipUrl={game.clue?.clipUrl}
   posterUrl={game.clue?.posterUrl}
+  stillUrl={game.clue?.sceneRefImage}
   title={played ? r?.movie.title : undefined}
   note={played ? `Filmed at ${r?.locationName ?? 'this spot'}` : undefined}
   scene={played && r ? `Scene ${String(r.level).padStart(2, '0')}` : undefined}
@@ -168,6 +200,9 @@
           <Button variant="secondary" onclick={() => screen?.recenter()}>
             <Icon name="crosshair" size={18} /> Recentre
           </Button>
+          <Button variant="secondary" disabled={shooting} onclick={() => void takePhoto()}>
+            <Icon name="camera" size={18} /> {shooting ? '…' : 'Photo'}
+          </Button>
         {/if}
         <Button onclick={next}>{r?.huntComplete ? 'See your result' : 'Next scene'}</Button>
       </div>
@@ -175,7 +210,46 @@
   {/if}
 </div>
 
+{#if shotUrl}
+  <!-- Sharing and downloading were both refused, so show it for a long-press save. -->
+  <div class="shot" role="dialog" aria-label="Your photo">
+    <img src={shotUrl} alt="You at {r?.locationName ?? 'this scene'}" />
+    <p>Press and hold the picture to save it.</p>
+    <button onclick={() => (shotUrl = null)}>Done</button>
+  </div>
+{/if}
+
 <style>
+  .shot {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+    padding: var(--edge);
+    background: rgba(6, 8, 10, 0.94);
+  }
+  .shot img {
+    max-width: 100%;
+    max-height: 68vh;
+    border-radius: 10px;
+    border: var(--glass-border);
+  }
+  .shot p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: var(--step-15);
+  }
+  .shot button {
+    padding: 12px 28px;
+    border-radius: var(--radius-button);
+    font-weight: 600;
+    color: var(--amber-ink);
+    background: var(--amber);
+  }
   .ui {
     position: fixed;
     inset: 0;

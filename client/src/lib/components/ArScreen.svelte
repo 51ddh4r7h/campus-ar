@@ -18,6 +18,7 @@
     title?: string | undefined
     note?: string | undefined
     scene?: string | undefined
+    stillUrl?: string | undefined
     /** 0-1 assembly progress, or null to fade in on a timer. */
     build?: number | null
     heat?: number
@@ -25,8 +26,18 @@
     onshown?: (usedAr: boolean) => void
   }
 
-  const {clipUrl, posterUrl, muted, title, note, scene, build = null, heat = 100, onshown}: Props =
-    $props()
+  const {
+    clipUrl,
+    posterUrl,
+    muted,
+    title,
+    note,
+    scene,
+    stillUrl,
+    build = null,
+    heat = 100,
+    onshown,
+  }: Props = $props()
 
   const video = revealVideo()
   let canvas = $state<HTMLCanvasElement | null>(null)
@@ -42,6 +53,15 @@
   export function replay(): void {
     video.currentTime = 0
     void video.play().catch(() => {})
+  }
+  /** Run the reveal beat: hold the still, strike the lamp, then dissolve. */
+  export function playScene(): void {
+    if (stage) stage.playScene()
+    else replay()
+  }
+  /** One composited frame of camera + scene, or null when AR is not running. */
+  export function capture(): string | null {
+    return stage?.capture() ?? null
   }
 
   /** Flat fallback: park the shared <video> inside the panel box. */
@@ -115,7 +135,7 @@
       try {
         const {createArStage} = await import('../ar/stage')
         if (disposed || !canvas) return false
-        stage = await createArStage(canvas, video, {posterUrl, title, note, scene})
+        stage = await createArStage(canvas, video, {posterUrl, title, note, scene, stillUrl})
         stage.setHeat(heat)
         if (build !== null) stage.setBuild(build)
         stage.showScreen({assemble: build !== null})
