@@ -14,6 +14,9 @@
     clipUrl: string | undefined
     posterUrl: string | undefined
     muted: boolean
+    /** Film title for the card beside the screen. Omitted while it's still a clue. */
+    title?: string | undefined
+    note?: string | undefined
     /** 0-1 assembly progress, or null to fade in on a timer. */
     build?: number | null
     heat?: number
@@ -21,7 +24,7 @@
     onshown?: (usedAr: boolean) => void
   }
 
-  const {clipUrl, posterUrl, muted, build = null, heat = 100, onshown}: Props = $props()
+  const {clipUrl, posterUrl, muted, title, note, build = null, heat = 100, onshown}: Props = $props()
 
   const video = revealVideo()
   let canvas = $state<HTMLCanvasElement | null>(null)
@@ -110,7 +113,7 @@
       try {
         const {createArStage} = await import('../ar/stage')
         if (disposed || !canvas) return false
-        stage = await createArStage(canvas, video, posterUrl)
+        stage = await createArStage(canvas, video, {posterUrl, title, note})
         stage.setHeat(heat)
         if (build !== null) stage.setBuild(build)
         stage.showScreen({assemble: build !== null})

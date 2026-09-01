@@ -9,6 +9,8 @@
  */
 
 import type * as THREE_NS from 'three'
+import {createProjector} from './projector'
+import {createTitleCard, type TitleCard} from './title-card'
 
 export interface ArStage {
   /**
@@ -53,11 +55,19 @@ const CAMERA_HFOV_DEG = 66
 /** Fraction of the frame's width the screen should occupy. */
 const FILL = 0.62
 
+export interface StageContent {
+  posterUrl?: string | undefined
+  /** Shown on the title card beside the screen. Omit to hide the card. */
+  title?: string | undefined
+  note?: string | undefined
+}
+
 export async function createArStage(
   canvas: HTMLCanvasElement,
   video: HTMLVideoElement,
-  posterUrl?: string,
+  content: StageContent = {},
 ): Promise<ArStage> {
+  const {posterUrl} = content
   const THREE = await import('three')
 
   const renderer = new THREE.WebGLRenderer({canvas, alpha: true, antialias: true})
@@ -189,6 +199,33 @@ export async function createArStage(
     glow.position.set(0, SCREEN.y, -distance - 0.12)
   }
   resize()
+
+  // ---- the projector, and the caption beside the screen -----------------
+  // Stood between the viewer and the screen, off to the left and near enough
+  // to stay inside a portrait frame, aimed at the middle of the picture. You
+  // see machine, beam and screen in one look — which a projector behind your
+  // head, however accurate, could never give you.
+  const projector = createProjector(THREE, {
+    at: [-1.05, SCREEN.y - 0.42, -distance * 0.62],
+    aim: [0, SCREEN.y, -distance],
+    mouthRadius: SCREEN.height * 0.62,
+  })
+  anchor.add(projector.group)
+
+  const card: TitleCard | null = content.title
+    ? createTitleCard(THREE, {title: content.title, note: content.note ?? ''})
+    : null
+  if (card) {
+    // Above the picture's left corner, square to the viewer — a caption is
+    // meant to be read, not angled for effect. Above, because the projector
+    // stands to the lower left and the two would otherwise overlap.
+    card.mesh.position.set(
+      -SCREEN.width * 0.5 + 0.82,
+      SCREEN.y + SCREEN.height * 0.5 + 0.26,
+      -distance + 0.1,
+    )
+    anchor.add(card.mesh)
+  }
 
   // ---- device orientation → camera quaternion ---------------------------
   const zee = new THREE.Vector3(0, 0, 1)
@@ -337,6 +374,8 @@ export async function createArStage(
       frameMat.dispose()
       glowMat.dispose()
       glowTex.dispose()
+      projector.dispose()
+      card?.dispose()
       videoTex.dispose()
       posterTex?.dispose()
       renderer.dispose()
@@ -364,6 +403,9 @@ export async function createArStage(
     screen.scale.setScalar(0.96 + p * 0.04)
     back.scale.copy(screen.scale)
     frame.scale.copy(screen.scale)
+
+    // The lamp comes up with the picture; the caption arrives last.
+    card?.setOpacity(assembling ? phase(p, 0.72, 1) : p)
   }
 
   // ---- render loop ----------------------------------------------------
@@ -387,7 +429,10 @@ export async function createArStage(
       faceForward()
     }
     if (haveReading) applyPose(dtMs)
-    applyEntry(entryProgress())
+
+    const p = entryProgress()
+    applyEntry(p)
+    projector.update(dtMs, assembling ? phase(p, 0.12, 0.7) : p, !video.paused)
     renderer.render(scene, camera)
   }
   tick()
