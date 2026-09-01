@@ -12,7 +12,8 @@ import type * as THREE_NS from 'three'
 import {createProjector} from './projector'
 import {createTitleCard, type TitleCard} from './title-card'
 import {createArSound} from './sound'
-import {disposeProp, loadProp} from './models'
+import {disposeProp, loadProp, type PropName} from './models'
+import {createLighting, type Lighting} from './lighting'
 
 export interface ArStage {
   /**
@@ -73,6 +74,8 @@ export interface StageContent {
   /** Shown on the title card beside the screen. Omit to hide the card. */
   title?: string | undefined
   note?: string | undefined
+  /** Slate mark, e.g. "Scene 03". */
+  scene?: string | undefined
 }
 
 export async function createArStage(
@@ -225,15 +228,21 @@ export async function createArStage(
   })
   anchor.add(projector.group)
 
-  // Everything hand-built here is unlit — flat colour composited over the
-  // camera feed. A downloaded model is PBR and needs real light, so these
-  // exist purely for it: a cool sky fill so it does not read as cut out, and a
-  // warm key from the screen's side so it looks lit by its own projection.
-  const sky = new THREE.HemisphereLight(0xbcd2ff, 0x2b2118, 1.15)
-  anchor.add(sky)
-  const key = new THREE.DirectionalLight(0xffe6c4, 1.5)
-  key.position.set(1.2, 1.6, -0.4)
-  anchor.add(key)
+  // The projector is lit by the picture itself — see ./lighting.
+  let lighting: Lighting | null = null
+  void createLighting(THREE, {
+    width: SCREEN.width,
+    height: SCREEN.height,
+    y: SCREEN.y,
+    distance,
+  }).then((l) => {
+    if (disposed) {
+      l.dispose()
+      return
+    }
+    lighting = l
+    anchor.add(l.group)
+  })
 
   // Swap in the real projector once it decodes. It never blocks the reveal —
   // a failure just leaves the primitives showing.
@@ -247,8 +256,57 @@ export async function createArStage(
   // The clip's own audio, placed at the screen, plus the projector's noise.
   const sound = createArSound(video, {x: 0, z: -distance})
 
+  // ---- set dressing ----------------------------------------------------
+  // Props that only have to be there. They fade with the rest of the scene and
+  // each one is allowed to never arrive.
+  const dressingMats: THREE_NS.Material[] = []
+  const dressingRoots: THREE_NS.Object3D[] = []
+
+  const dressWith = async (
+    name: PropName,
+    sizeM: number,
+    place: (o: THREE_NS.Object3D) => void,
+  ): Promise<void> => {
+    const model = await loadProp(THREE, name, sizeM)
+    if (!model || disposed) return
+    model.traverse((o) => {
+      const mesh = o as THREE_NS.Mesh
+      if (!mesh.isMesh) return
+      mesh.renderOrder = 6
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        m.transparent = true
+        m.depthTest = true
+        m.depthWrite = true
+        m.opacity = 0
+        dressingMats.push(m)
+      }
+    })
+    place(model)
+    anchor.add(model)
+    dressingRoots.push(model)
+  }
+
+  // A spare reel stood on the ground beside the projector.
+  void dressWith('film_reel', 0.24, (o) => {
+    o.position.set(-0.46, SCREEN.y - 0.68, -distance * 0.58)
+    o.rotation.y = 0.55
+  })
+
+  // The clapperboard belongs to the reward, not the clue — it turns up only
+  // once the scene has been won, propped at the foot of the picture.
+  if (content.title) {
+    void dressWith('clapperboard', 0.46, (o) => {
+      o.position.set(SCREEN.width * 0.5 - 0.32, SCREEN.y - SCREEN.height * 0.5 - 0.4, -distance + 0.55)
+      o.rotation.set(-0.1, -0.42, 0.04)
+    })
+  }
+
   const card: TitleCard | null = content.title
-    ? createTitleCard(THREE, {title: content.title, note: content.note ?? ''})
+    ? createTitleCard(THREE, {
+        title: content.title,
+        note: content.note ?? '',
+        scene: content.scene,
+      })
     : null
   if (card) {
     // Above the picture's left corner, square to the viewer — a caption is
@@ -414,6 +472,8 @@ export async function createArStage(
       glowTex.dispose()
       projector.dispose()
       if (propRoot) disposeProp(propRoot)
+      for (const root of dressingRoots) disposeProp(root)
+      lighting?.dispose()
       card?.dispose()
       sound.dispose()
       videoTex.dispose()
@@ -446,6 +506,8 @@ export async function createArStage(
 
     // The lamp comes up with the picture; the caption arrives last.
     card?.setOpacity(assembling ? phase(p, 0.72, 1) : p)
+    const dress = assembling ? phase(p, 0.55, 1) : p
+    for (const m of dressingMats) m.opacity = dress
   }
 
   // ---- render loop ----------------------------------------------------
@@ -475,6 +537,8 @@ export async function createArStage(
     applyEntry(p)
     const lamp = assembling ? phase(p, 0.12, 0.7) : p
     projector.update(dtMs, lamp, !video.paused)
+    // The screen's own light rises with the screen.
+    lighting?.setLevel(assembling ? phase(p, 0.4, 1) : p)
     sound.setRunning(lamp)
     sound.setListener(-headingOffset + yawOf(camera.quaternion))
     renderer.render(scene, camera)

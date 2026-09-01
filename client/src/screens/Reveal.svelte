@@ -138,6 +138,7 @@
   posterUrl={game.clue?.posterUrl}
   title={played ? r?.movie.title : undefined}
   note={played ? `Filmed at ${r?.locationName ?? 'this spot'}` : undefined}
+  scene={played && r ? `Scene ${String(r.level).padStart(2, '0')}` : undefined}
   muted={!played}
   build={played ? null : build}
   heat={p?.heat ?? 100}

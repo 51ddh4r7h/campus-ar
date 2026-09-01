@@ -21,7 +21,7 @@ const CARD_W = 1.5
 
 export function createTitleCard(
   THREE: typeof THREE_NS,
-  text: {title: string; note: string},
+  text: {title: string; note: string; scene?: string | undefined},
 ): TitleCard {
   const canvas = document.createElement('canvas')
   canvas.width = W
@@ -46,6 +46,15 @@ export function createTitleCard(
   g.fillStyle = 'rgba(245,243,236,0.62)'
   g.font = '400 34px ui-monospace, "SF Mono", Menlo, monospace'
   g.fillText(text.note.toUpperCase(), 2, 168)
+
+  // Slate mark, set right — the number the clapperboard would have carried.
+  if (text.scene) {
+    g.textAlign = 'right'
+    g.fillStyle = 'rgba(232,165,76,0.9)'
+    g.font = '500 30px ui-monospace, "SF Mono", Menlo, monospace'
+    g.fillText(text.scene.toUpperCase(), W - 4, 172)
+    g.textAlign = 'left'
+  }
 
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
