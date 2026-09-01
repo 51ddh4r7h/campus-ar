@@ -1,19 +1,33 @@
 <script lang="ts">
+  /**
+   * Searching. The camera is a viewfinder, not a scanner — nothing is aimed at
+   * and nothing is read. Arrival is decided by GPS alone, so the only things on
+   * screen are the ones that actually help: how warm you are, and the shot you
+   * are trying to match.
+   */
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {location} from '../lib/stores/location.svelte'
-  import {toasts} from '../lib/stores/toast.svelte'
   import HudBar from '../lib/components/HudBar.svelte'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import HeatMeter from '../lib/components/HeatMeter.svelte'
   import Icon from '../lib/components/Icon.svelte'
 
   const clue = $derived(game.clue)
-  let comparing = $state(false)
 
-  const reticle = $derived(
-    !location.hasSignal ? 'searching' : location.fix && location.fixAgeMs < 4000 ? 'ok' : 'searching',
-  )
+  /**
+   * How strongly the original frame is ghosted over the live camera. Held down
+   * it fades in; released it fades out, so a flick back and forth is how you
+   * check an alignment — the comparison has to happen against the real view,
+   * which is exactly what the old full-screen still made impossible.
+   */
+  let blend = $state(0)
+  let holding = $state(false)
+
+  function hold(on: boolean): void {
+    holding = on
+    blend = on ? 1 : 0
+  }
 </script>
 
 <CameraFeed />
@@ -21,146 +35,74 @@
 <HudBar />
 <HeatMeter />
 
-<button class="compare-thumb" onclick={() => (comparing = true)}>
-  {#if clue}<img src={clue.posterUrl} alt="" />{/if}
-  <span>Compare</span>
-</button>
-
-<div class="reticle {reticle}">
-  <i></i><i></i><i></i><i></i>
-</div>
-
-{#if !location.hasSignal}
-  <p class="hint-line">Move slowly to get a signal.</p>
+{#if clue}
+  <!-- The frame you are hunting, laid over the world at whatever strength
+       you are holding. -->
+  <img
+    class="ghost"
+    class:lifted={holding}
+    style="opacity: {blend * 0.72}"
+    src={clue.sceneRefImage}
+    alt=""
+    aria-hidden="true"
+  />
 {/if}
 
-{#if comparing && clue}
-  <button class="ghost" onclick={() => (comparing = false)}>
-    <img src={clue.sceneRefImage} alt="" />
-    <p>Line it up with what's in front of you.</p>
-    <span class="close"><Icon name="x" size={20} /></span>
-  </button>
+{#if !location.hasSignal}
+  <p class="signal" role="status">Move to more open ground for a signal</p>
 {/if}
 
 <nav class="bar">
-  <button onclick={() => nav.open('hint')}><Icon name="bulb" size={22} /><span>Hint</span></button>
-  <button onclick={() => toasts.show('Recentred')}><Icon name="crosshair" size={22} /><span>Recentre</span></button>
-  <button onclick={() => nav.open('standings')}><Icon name="trophy" size={22} /><span>Standings</span></button>
+  <button onclick={() => nav.open('hint')}>
+    <Icon name="bulb" size={22} /><span>Hint</span>
+  </button>
+
+  <button
+    class="hold"
+    class:on={holding}
+    aria-pressed={holding}
+    onpointerdown={() => hold(true)}
+    onpointerup={() => hold(false)}
+    onpointerleave={() => hold(false)}
+    oncontextmenu={(e) => e.preventDefault()}
+  >
+    <Icon name="eye" size={22} /><span>{holding ? 'Release' : 'Hold to compare'}</span>
+  </button>
+
+  <button onclick={() => nav.open('standings')}>
+    <Icon name="trophy" size={22} /><span>Standings</span>
+  </button>
 </nav>
 
 <style>
-  .compare-thumb {
-    position: fixed;
-    top: calc(var(--safe-top) + 52px);
-    left: var(--edge);
-    z-index: 20;
-    width: 128px;
-    border-radius: 12px;
-    overflow: hidden;
-    background: var(--surface);
-    backdrop-filter: blur(var(--blur));
-    border: var(--glass-border);
-  }
-  .compare-thumb img {
-    width: 100%;
-    aspect-ratio: 16/9;
-    object-fit: cover;
-    display: block;
-  }
-  .compare-thumb span {
-    display: block;
-    padding: 5px 8px;
-    font-size: var(--step-13);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-  }
-  .reticle {
+  .ghost {
     position: fixed;
     top: 50%;
     left: 50%;
-    width: 54%;
-    max-width: 260px;
-    aspect-ratio: 1;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     transform: translate(-50%, -50%);
-    z-index: 10;
-    animation: breathe 3s ease-in-out infinite;
+    z-index: 6;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
   }
-  .reticle i {
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    border: 2px solid var(--amber);
-    opacity: 0.65;
+  /* A hairline while it's up, so you can see where the frame ends. */
+  .ghost.lifted {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--amber) 55%, transparent);
   }
-  .reticle.ok i {
-    opacity: 0.95;
-  }
-  .reticle i:nth-child(1) {
-    top: 0;
-    left: 0;
-    border-right: 0;
-    border-bottom: 0;
-  }
-  .reticle i:nth-child(2) {
-    top: 0;
-    right: 0;
-    border-left: 0;
-    border-bottom: 0;
-  }
-  .reticle i:nth-child(3) {
-    bottom: 0;
-    left: 0;
-    border-right: 0;
-    border-top: 0;
-  }
-  .reticle i:nth-child(4) {
-    bottom: 0;
-    right: 0;
-    border-left: 0;
-    border-top: 0;
-  }
-  .hint-line {
+  .signal {
     position: fixed;
-    top: 62%;
+    top: 58%;
     left: 0;
     right: 0;
     text-align: center;
     color: var(--text-dim);
     font-size: var(--step-15);
     z-index: 10;
-  }
-  .ghost {
-    position: fixed;
-    inset: 0;
-    z-index: 30;
-    display: block;
-    width: 100%;
-    background: rgba(0, 0, 0, 0.35);
-  }
-  .ghost img {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 78%;
-    transform: translate(-50%, -50%);
-    opacity: 0.5;
-    border: 2px solid var(--amber);
-    border-radius: 8px;
-  }
-  .ghost p {
-    position: absolute;
-    top: calc(var(--safe-top) + 92px);
-    left: 0;
-    right: 0;
-    text-align: center;
-    color: var(--text);
-  }
-  .ghost .close {
-    position: absolute;
-    top: calc(var(--safe-top) + 12px);
-    right: var(--edge);
-    color: var(--text);
+    margin: 0;
+    padding: 0 var(--edge);
+    text-shadow: 0 1px 6px #000;
   }
   .bar {
     position: fixed;
@@ -185,14 +127,18 @@
     gap: 4px;
     color: var(--text);
     font-size: var(--step-13);
-    padding: var(--sp-1) var(--sp-4);
+    padding: var(--sp-1) var(--sp-3);
+    text-align: center;
   }
   .bar :global(svg) {
     color: var(--amber);
   }
-  @keyframes breathe {
-    50% {
-      transform: translate(-50%, -50%) scale(1.04);
-    }
+  .hold {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .hold.on {
+    color: var(--amber);
   }
 </style>

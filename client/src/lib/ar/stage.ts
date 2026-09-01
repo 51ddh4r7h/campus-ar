@@ -247,8 +247,16 @@ export async function createArStage(
   // Swap in the real projector once it decodes. It never blocks the reveal —
   // a failure just leaves the primitives showing.
   let propRoot: THREE_NS.Object3D | null = null
+  // If the model is slow, show the hand-built one rather than an empty stand —
+  // but only after waiting, so a normal load never flashes the primitives.
+  const fallbackTimer = setTimeout(() => projector.useFallback(), 2500)
   void loadProp(THREE, 'film_projector', 0.62).then((model) => {
-    if (!model || disposed) return
+    clearTimeout(fallbackTimer)
+    if (disposed) return
+    if (!model) {
+      projector.useFallback()
+      return
+    }
     propRoot = model
     projector.attachModel(model, {faceOffsetY: MODEL_FACE_OFFSET_Y, lampY: 0.17})
   })
@@ -461,6 +469,7 @@ export async function createArStage(
       running = false
       disposed = true
       clearInterval(playPoll)
+      clearTimeout(fallbackTimer)
       window.removeEventListener('resize', resize)
       window.removeEventListener('deviceorientation', onOrient, true)
       window.removeEventListener('deviceorientationabsolute', onOrient, true)

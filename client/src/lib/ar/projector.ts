@@ -15,6 +15,8 @@ import type * as THREE_NS from 'three'
 
 export interface Projector {
   group: THREE_NS.Group
+  /** Give up on the model and show the hand-built machine instead. */
+  useFallback(): void
   /**
    * Swap the hand-built machine for a real model. Called only once a GLB has
    * actually decoded, so a failed download leaves the primitives in place and
@@ -91,7 +93,12 @@ export function createProjector(
 
   // The hand-built projector. Kept as the fallback: if the model 404s or the
   // decoder will not start, this is what the player sees instead of nothing.
+  // Hidden until we know whether a model is coming. Showing it immediately
+  // means every player watches the primitives for a moment and then sees them
+  // pop into a real projector — the fallback should be invisible unless it is
+  // actually needed.
   const builtIn = new THREE.Group()
+  builtIn.visible = false
   rig.add(builtIn)
 
   const body = new THREE.Mesh(keep(new THREE.BoxGeometry(0.3, 0.2, 0.44)), bodyMat)
@@ -220,11 +227,17 @@ export function createProjector(
 
   /** Materials of the loaded model, so it can fade in with everything else. */
   const modelMats: THREE_NS.Material[] = []
+  let hasModel = false
 
   return {
     group,
 
+    useFallback() {
+      if (!hasModel) builtIn.visible = true
+    },
+
     attachModel(model, opts) {
+      hasModel = true
       builtIn.visible = false
 
       // A real mesh must depth-test against itself or it renders inside out.
