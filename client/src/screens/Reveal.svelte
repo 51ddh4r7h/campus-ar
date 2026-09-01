@@ -12,7 +12,7 @@
   import {location} from '../lib/stores/location.svelte'
   import {probe} from '../lib/stores/probe.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
-  import {haptics} from '../lib/haptics'
+  import {buildPulse, haptics} from '../lib/haptics'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import ArScreen from '../lib/components/ArScreen.svelte'
   import Button from '../lib/components/Button.svelte'
@@ -105,6 +105,14 @@
       }
     }
   }
+
+  // The hold has a heartbeat: it quickens as the picture fills in, and stops
+  // the moment the scene is won.
+  $effect(() => {
+    if (played) buildPulse.stop()
+    else buildPulse.set(build)
+  })
+  $effect(() => () => buildPulse.stop())
 
   // Dwell satisfied (the server reports no outstanding failure) — claim it.
   $effect(() => {

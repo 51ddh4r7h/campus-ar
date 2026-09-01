@@ -11,6 +11,7 @@
 import type * as THREE_NS from 'three'
 import {createProjector} from './projector'
 import {createTitleCard, type TitleCard} from './title-card'
+import {createArSound} from './sound'
 
 export interface ArStage {
   /**
@@ -32,6 +33,10 @@ export interface ArStage {
 }
 
 const clamp01 = (n: number): number => (n < 0 ? 0 : n > 1 ? 1 : n)
+
+/** Heading of a quaternion about the world Y axis, in radians. */
+const yawOf = (q: THREE_NS.Quaternion): number =>
+  Math.atan2(2 * (q.w * q.y + q.x * q.z), 1 - 2 * (q.y * q.y + q.x * q.x))
 /** Progress of `p` through the window [a, b], clamped. */
 const phase = (p: number, a: number, b: number): number => clamp01((p - a) / (b - a))
 
@@ -212,6 +217,9 @@ export async function createArStage(
   })
   anchor.add(projector.group)
 
+  // The clip's own audio, placed at the screen, plus the projector's noise.
+  const sound = createArSound(video, {x: 0, z: -distance})
+
   const card: TitleCard | null = content.title
     ? createTitleCard(THREE, {title: content.title, note: content.note ?? ''})
     : null
@@ -351,7 +359,9 @@ export async function createArStage(
       faceForward()
     },
     setBuild(p) {
-      buildP = clamp01(p)
+      const next = clamp01(p)
+      if (buildP < 1 && next >= 1) sound.lock()
+      buildP = next
     },
     setMuted(m) {
       video.muted = m
@@ -376,6 +386,7 @@ export async function createArStage(
       glowTex.dispose()
       projector.dispose()
       card?.dispose()
+      sound.dispose()
       videoTex.dispose()
       posterTex?.dispose()
       renderer.dispose()
@@ -432,7 +443,10 @@ export async function createArStage(
 
     const p = entryProgress()
     applyEntry(p)
-    projector.update(dtMs, assembling ? phase(p, 0.12, 0.7) : p, !video.paused)
+    const lamp = assembling ? phase(p, 0.12, 0.7) : p
+    projector.update(dtMs, lamp, !video.paused)
+    sound.setRunning(lamp)
+    sound.setListener(-headingOffset + yawOf(camera.quaternion))
     renderer.render(scene, camera)
   }
   tick()
