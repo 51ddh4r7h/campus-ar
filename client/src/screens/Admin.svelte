@@ -7,7 +7,7 @@
    * bundled and never sent anywhere but the Worker's own /admin routes.
    */
   import {onMount} from 'svelte'
-  import {formatMarquee} from '@cmh/shared'
+  import {LEVEL_COUNT, LOCATIONS, formatMarquee} from '@cmh/shared'
   import type {StandingRow} from '@cmh/shared'
   import {api, ApiError, type BatchRow, type RosterEntry} from '../lib/api'
   import {toasts} from '../lib/stores/toast.svelte'
@@ -102,9 +102,33 @@
       })
   }
 
+  /**
+   * Pin everyone in this registration to one route.
+   *
+   * For walking the game on site. Routes are normally drawn from the balanced
+   * pool, which means a tester standing at the fountain gets sent to the
+   * amphitheatre first and has to walk the whole thing to reach the stop they
+   * came to check. Naming the five stops in order makes the walk the one you
+   * intended. Left empty, everyone gets a real assigned route.
+   */
+  let pinnedText = $state('')
+  const pinned = $derived(
+    pinnedText
+      .split(/[\s,]+/)
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  )
+  const pinnedValid = $derived(
+    pinned.length === 0 ||
+      (pinned.length === LEVEL_COUNT &&
+        new Set(pinned).size === LEVEL_COUNT &&
+        pinned.every((id) => LOCATIONS.some((l) => l.id === id))),
+  )
+
   async function addPlayers() {
-    if (!selected) return
-    const players = parseRoster(rosterText)
+    if (!selected || !pinnedValid) return
+    const roster = parseRoster(rosterText)
+    const players = pinned.length > 0 ? roster.map((p) => ({...p, route: [...pinned]})) : roster
     if (players.length === 0) return
     busy = true
     try {
@@ -194,8 +218,20 @@
         <p class="dim">One player per line: <code>Name</code> or <code>Name, rollNumber</code>.</p>
         <textarea bind:value={rosterText} rows="5" placeholder={'Aditi Sharma, 21B-1042\nRohan Mehta, 21B-1043'}
         ></textarea>
+        <details class="pin">
+          <summary>Pin a route (for testing on site)</summary>
+          <p class="dim">
+            Five location ids, in the order they should be visited. Leave empty for a real
+            assigned route.
+          </p>
+          <textarea bind:value={pinnedText} rows="2" placeholder="fountain library sibm amphitheatre symbieat"></textarea>
+          <p class="dim ids">{LOCATIONS.map((l) => l.id).join(' · ')}</p>
+          {#if !pinnedValid}
+            <p class="bad">Needs exactly {LEVEL_COUNT} distinct ids from the list above.</p>
+          {/if}
+        </details>
         <div class="row">
-          <button class="primary" disabled={busy || !rosterText.trim()} onclick={() => void addPlayers()}>
+          <button class="primary" disabled={busy || !rosterText.trim() || !pinnedValid} onclick={() => void addPlayers()}>
             Register players
           </button>
           {#if roster.length > 0}
@@ -380,6 +416,22 @@
   }
   .mono {
     font-family: var(--font-mono);
+  }
+  .pin {
+    margin: var(--sp-3) 0;
+  }
+  .pin summary {
+    cursor: pointer;
+    font-size: var(--step-14);
+  }
+  .ids {
+    font-family: var(--font-mono);
+    font-size: var(--step-13);
+    word-break: break-word;
+  }
+  .bad {
+    color: var(--alert, #e06c5a);
+    font-size: var(--step-14);
   }
   .link input {
     font-family: var(--font-mono);
