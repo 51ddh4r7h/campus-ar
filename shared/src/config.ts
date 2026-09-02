@@ -44,6 +44,37 @@ export const DEFAULT_PAR_CONSTANTS: ParConstants = {
   viewPenaltyMs: 45_000,
 }
 
+/**
+ * Client request cadence.
+ *
+ * These are a load budget, not preferences. Every one of them is multiplied by
+ * the size of the cohort, and we run cohorts of ~200: at that size a five
+ * second poll is 40 requests a second before anyone has done anything. Nothing
+ * here should be shortened without working out what it costs at 200 players —
+ * `__load.test.ts` pins the arithmetic.
+ */
+export const POLLING = {
+  /** "Am I there yet?" — read-only, a handful of indexed rows per call. */
+  nearbyMs: 5_000,
+  /** Faster while the reveal is being waited on, where latency is felt. */
+  nearbyRevealMs: 2_500,
+  /**
+   * The board. Only runs while it is on screen: it is the one read whose cost
+   * grows with the cohort, so polling it in the background cost more than
+   * everything else combined.
+   */
+  standingsMs: 12_000,
+  /** Breadcrumb upload. Batched, so this is round trips rather than rows. */
+  crumbFlushMs: 15_000,
+  /**
+   * Minimum gap between recorded breadcrumbs. `watchPosition` fires about once
+   * a second; at a walking pace 5s is about 6m, still a legible track for the
+   * organisers, at a fifth of the writes. Arrival checks are unaffected — they
+   * read the full-rate buffer.
+   */
+  crumbMinGapMs: 5_000,
+} as const
+
 /** How long a player must be stuck on a level before each hint rung unlocks. */
 export const HINT_GATES = {
   warmAfterMs: 4 * 60_000,

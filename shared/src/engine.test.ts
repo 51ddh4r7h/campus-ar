@@ -239,9 +239,10 @@ describe('engine — standings', () => {
     }
     expect(deps.t).toBeGreaterThan(t0)
 
-    const rows = await engine.standings(batch.id, p1.player.id)
+    const rows = await engine.standings(batch.id)
     expect(rows[0]!.playerName).toBe('Fast')
-    expect(rows[0]!.isSelf).toBe(true)
+    // The board is impersonal; the Worker marks the self row from playerId.
+    expect(rows[0]!.playerId).toBe(p1.player.id)
     expect(rows[0]!.rank).toBe(1)
     expect(rows[1]!.playerName).toBe('Slow')
     expect(rows[0]!.scoreMs!).toBeLessThan(rows[1]!.scoreMs!)

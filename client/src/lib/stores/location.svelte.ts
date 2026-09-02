@@ -4,7 +4,7 @@
  * Worker on a timer.
  */
 
-import {START_POINT, VALIDATION, haversineM, locationById, type GeoSample} from '@cmh/shared'
+import {POLLING, START_POINT, VALIDATION, haversineM, locationById, type GeoSample} from '@cmh/shared'
 import {api} from '../api'
 import {recentSamples, trimBuffer} from '../geo-buffer'
 import {game} from './game.svelte'
@@ -13,7 +13,9 @@ type Mode = 'off' | 'real' | 'sim'
 export type PermissionState = 'unknown' | 'granted' | 'denied' | 'unavailable'
 
 const BUFFER_MS = 60_000
-const CRUMB_FLUSH_MS = 15_000
+/** Upload cadence and crumb spacing are a cohort-wide load budget — see POLLING. */
+const CRUMB_FLUSH_MS = POLLING.crumbFlushMs
+const CRUMB_MIN_GAP_MS = POLLING.crumbMinGapMs
 /** How long the demo simulator takes to "walk" one leg. */
 const SIM_LEG_MS = 22_000
 
@@ -24,6 +26,7 @@ class Location {
 
   private buffer: GeoSample[] = []
   private crumbs: GeoSample[] = []
+  private lastCrumbMs = 0
   private watchId: number | null = null
   private simTimer: ReturnType<typeof setInterval> | null = null
   private flushTimer: ReturnType<typeof setInterval> | null = null
@@ -63,7 +66,10 @@ class Location {
   private ingest(s: GeoSample): void {
     this.fix = s
     this.buffer.push(s)
-    this.crumbs.push(s)
+    if (s.tsMs - this.lastCrumbMs >= CRUMB_MIN_GAP_MS) {
+      this.crumbs.push(s)
+      this.lastCrumbMs = s.tsMs
+    }
     this.buffer = trimBuffer(this.buffer, Date.now(), BUFFER_MS)
   }
 

@@ -34,7 +34,7 @@ import type {
   Session,
   Split,
   SplitView,
-  StandingRow,
+  StandingEntry,
   StartHuntResponse,
   ValidationFailure,
   ValidationResult,
@@ -512,7 +512,8 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       await store.addBreadcrumbs(crumbs.map((c) => ({playerId: player.id, ...c})))
     },
 
-    async standings(batchId: string, selfPlayerId?: string): Promise<StandingRow[]> {
+    /** Impersonal by design — see StandingEntry. The caller marks the self row. */
+    async standings(batchId: string): Promise<StandingEntry[]> {
       const [players, sessions] = await Promise.all([
         store.listPlayers(batchId),
         store.listSessions(batchId),
@@ -530,8 +531,8 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         })
       return sorted.map((s, i) => ({
         rank: i + 1,
+        playerId: s.playerId,
         playerName: nameById.get(s.playerId) ?? '—',
-        isSelf: s.playerId === selfPlayerId,
         scoreMs: s.status === 'complete' ? s.scoreMs : null,
         level: s.status === 'complete' ? null : s.currentLevel,
       }))

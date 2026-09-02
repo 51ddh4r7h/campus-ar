@@ -10,6 +10,7 @@
   import {standings} from './lib/stores/standings.svelte'
   import {haptics} from './lib/haptics'
   import {playerLink, demoAllowed, adminRequested} from './lib/mode'
+  import {POLLING} from '@cmh/shared'
 
   import Splash from './screens/Splash.svelte'
   import Join from './screens/Join.svelte'
@@ -107,20 +108,31 @@
       }
     }
     void run()
-    const id = setInterval(run, nav.screen === 'reveal' ? 2_500 : 5_000)
+    const id = setInterval(run, nav.screen === 'reveal' ? POLLING.nearbyRevealMs : POLLING.nearbyMs)
     return () => {
       clearInterval(id)
       clearTimeout(arm)
     }
   })
 
-  // Poll standings whenever we belong to a batch.
+  /**
+   * Standings, only while someone is looking.
+   *
+   * This used to poll every 12s for the whole game. The board is a sheet that
+   * spends nearly all its time closed, and the request is the most expensive
+   * one we make — it reads every player and every session in the batch. With a
+   * cohort of 200 that was a few thousand rows a second, permanently, to render
+   * a screen nobody had open. Now it runs while the sheet is up, and once on
+   * the wrap where the final rank is actually shown.
+   */
   $effect(() => {
     const batchId = game.batchId
     if (!batchId) return
+    const watching = nav.sheet === 'standings' || nav.screen === 'finish'
+    if (!watching) return
     const poll = () => void standings.refresh(batchId, game.token ?? undefined)
     poll()
-    const id = setInterval(poll, 12_000)
+    const id = setInterval(poll, POLLING.standingsMs)
     return () => clearInterval(id)
   })
 </script>

@@ -247,3 +247,15 @@ export interface StandingRow {
   /** Current level for players in progress; null once complete. */
   level: number | null
 }
+
+/**
+ * A board row before it is addressed to anyone.
+ *
+ * Everyone in a batch gets the same rows bar which one is theirs, so the board
+ * is computed and cached in this form and marked per request. `playerId` is
+ * how that marking is done and is stripped before the response leaves the
+ * Worker — clients only ever see names.
+ */
+export interface StandingEntry extends Omit<StandingRow, 'isSelf'> {
+  playerId: string
+}

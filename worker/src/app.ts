@@ -10,6 +10,7 @@ import {
   type GameStore,
 } from '@cmh/shared'
 import type {Env} from './env'
+import {readCached, writeCached} from './standings-cache'
 import {
   BadInput,
   parseCreateBatch,
@@ -218,10 +219,33 @@ export const createApp = (
     return c.body(null, 204)
   })
 
+  /**
+   * Run work after the response has gone out, where the runtime offers that.
+   * Reading `executionCtx` throws when there is none — tests drive the app as a
+   * plain fetch handler — and a cache refresh must never fail a request.
+   */
+  const detach = (c: {executionCtx: {waitUntil(p: Promise<unknown>): void}}, work: Promise<void>): void => {
+    try {
+      c.executionCtx.waitUntil(work)
+    } catch {
+      void work
+    }
+  }
+
+  /** The board. Served from a short shared cache — see ./standings-cache. */
   app.get('/standings/:batchId', async (c) => {
+    const batchId = c.req.param('batchId')
     const token = c.req.header('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]
     const selfId = token ? (await makeStore(c.env).getPlayerByToken(token))?.id : undefined
-    return c.json({rows: await engineFor(c.env).standings(c.req.param('batchId'), selfId)})
+
+    const cached = await readCached(batchId)
+    const entries = cached ?? (await engineFor(c.env).standings(batchId))
+    if (!cached) detach(c, writeCached(batchId, entries))
+
+    // playerId is the marking key and stops here; clients see names only.
+    return c.json({
+      rows: entries.map(({playerId, ...r}) => ({...r, isSelf: playerId === selfId})),
+    })
   })
 
   app.onError((err, c) => {
