@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "type": "module",
-  "description": "Campus Movie Hunt \u2014 an individual, timed campus game. Recognise a movie scene, walk to where it was shot, and watch it come alive in AR. Server-authoritative, par-time scored.",
+  "description": "Campus Movie Hunt — an individual, timed campus game. Recognise a movie scene, walk to where it was shot, and watch it come alive in AR. Server-authoritative, par-time scored.",
   "workspaces": [
     "shared",
     "worker",
@@ -23,15 +23,20 @@
     "deploy": "bash scripts/deploy.sh",
     "layout": "tsx scripts/layout-report.ts",
     "map": "tsx scripts/build-campus-map.ts",
-    "clips": "tsx scripts/check-clips.ts"
+    "clips": "tsx scripts/check-clips.ts",
+    "clips:build": "node scripts/build-clips.mjs"
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.80.0",
     "@types/node": "^26.2.0",
+    "ffmpeg-static": "^5.3.0",
     "oxlint": "^1.80.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11",
     "wrangler": "^4.124.0"
+  },
+  "allowScripts": {
+    "ffmpeg-static@5.3.0": true
   }
 }

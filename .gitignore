@@ -16,3 +16,6 @@ movie clips/
 
 # Generated route pool (regenerated per batch)
 scripts/out/
+
+# Clip sources fetched by scripts/build-clips.mjs — large, regenerable
+.clip-src/
