@@ -86,7 +86,7 @@ Edit the simulator in `src/location.ts` or the explicit demo hooks in
 2. `npm run typecheck`
 3. `npm run build`
 4. `node scripts/e2e-smoke.mjs` with Vite running
-5. Manual phone test: demo CTA → Mind Studio → visible cinemascope → clip
+5. Manual phone test: demo CTA → Amphitheatre → visible cinemascope → clip
 
 The browser test needs a working local Chromium installation and may be
 blocked by host sandbox permissions even when the app itself is healthy.

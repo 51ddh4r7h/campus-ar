@@ -1,20 +1,21 @@
 /**
- * Campus content.
+ * Campus content — the real scene list.
  *
- * PLACE NAMES AND COORDINATES ARE REAL — every one is a named feature in
- * OpenStreetMap on the Lavale hilltop, pulled by `npm run map`. They are here
- * so the geofencing, spacing and the campus plan are computed against the
- * actual site rather than invented geography.
+ * Every location here is a place a scene was actually shot, at coordinates
+ * surveyed on site with GPS Map Camera (see `Clips Master Sheet`). Clue text is
+ * written from the frames themselves: it describes what is visible in the shot,
+ * never something invented about the place.
  *
- * EVERYTHING ELSE IS PROVISIONAL. Which production was shot where, what
- * happens in each scene, and the campus facts are unknown until the scene list
- * arrives; `movie.title` says so, `campusFact` is deliberately empty rather
- * than filled with plausible-sounding fiction, and the clue ladders describe
- * only what the map can vouch for (a theatre has tiered seating, a mess hall
- * has tables). Rewrite all of it against the real scenes.
+ * TWELVE sites were surveyed. NINE are in play. Three are parked, not because
+ * anything is wrong with the clips but because they sit too close to another
+ * site for consumer GPS to tell apart — see PARKED below. That is a physical
+ * limit, not a tuning choice: a fence you cannot stand outside of is not a
+ * fence. Re-survey any of them a little further out and it can come straight
+ * back in.
  *
- * The ten below are a spread across the hilltop, not a claim about where
- * anything was filmed.
+ * Still to fill in: `campusFact` is deliberately empty rather than filled with
+ * plausible fiction. Par tiers are first drafts to be recalibrated against the
+ * first batch's real leg times.
  */
 
 import type {LatLng} from './geo'
@@ -23,15 +24,19 @@ import {deriveLimits, safeRadiusM} from './layout'
 
 /**
  * Shared assembly point. Every player's clock and Level-1 walk par start here,
- * so the opening leg is fair regardless of which clue they draw first. A batch
- * may override this; the value is a placeholder pending survey.
+ * so the opening leg is fair regardless of which clue they draw first. Sits
+ * roughly in the middle of the play area; replace with the real muster point
+ * once the organisers pick one.
  */
-export const START_POINT: LatLng = {lat: 18.53390, lng: 73.73340}
+export const START_POINT: LatLng = {lat: 18.53715, lng: 73.73215}
 
 /**
- * Reward media is served from the app's own origin (`client/public/clips/`) —
- * no third-party host, no cross-origin load to fail, no CORS taint on the AR
- * video texture.
+ * Reward media is served from the app's own origin (`client/public/clips/`).
+ *
+ * This is not just about a flaky host. The AR screen paints the clip as a WebGL
+ * video texture and photo mode reads pixels back off that canvas — a
+ * cross-origin video without correct CORS headers taints the canvas and makes
+ * the capture throw. Same-origin removes the whole class of problem.
  */
 const media = (id: string): Pick<GameLocation, 'clipUrl' | 'posterUrl' | 'sceneRefImage'> => ({
   clipUrl: `/clips/${id}.mp4`,
@@ -39,172 +44,220 @@ const media = (id: string): Pick<GameLocation, 'clipUrl' | 'posterUrl' | 'sceneR
   sceneRefImage: `/clips/${id}-poster.jpg`,
 })
 
-/** As surveyed. `radiusM` here is a *request* — see LOCATIONS below. */
+const BODYGUARD = 'Bodyguard'
+const HOSTEL_DAZE = 'Hostel Daze'
+
+/**
+ * Surveyed, and in play. `radiusM` here is a *request* — LOCATIONS below shrinks
+ * it to whatever the nearest neighbour actually leaves room for.
+ *
+ * Numbers in the comments are the row in the master sheet, kept so a clip can
+ * be traced back to its source.
+ */
 const SURVEYED: readonly GameLocation[] = [
   {
+    // Sheet 1 — behind ssbf
+    id: 'behind-ssbf',
+    name: 'Behind SSBF',
+    lat: 18.537202,
+    lng: 73.731891,
+    radiusM: 15,
+    difficulty: 2,
+    ...media('behind-ssbf'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'A chase down the stone arcade, the whole cast strung out along the colonnade.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'A long covered walk of rough stone, cut through by square openings that let the daylight in.',
+      warm: 'Squat stone pillars on both sides, with lawn showing through the gaps.',
+      close: 'The arcade running along the back of the banking and finance block.',
+    },
+  },
+  {
+    // Sheet 2 — Sibm
+    id: 'sibm',
+    name: 'SIBM',
+    lat: 18.537566,
+    lng: 73.731803,
+    radiusM: 15,
+    difficulty: 2,
+    ...media('sibm'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'Crossing the forecourt in front of the institute, students all around.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'A wide open forecourt under a run of white angled struts, with a curved brick wall on one side.',
+      warm: 'Patterned paving, long benches, and a noticeboard on the brick.',
+      close: 'The courtyard outside the business management institute.',
+    },
+  },
+  {
+    // Sheet 3 — sidtm admin office
+    id: 'sidtm-admin',
+    name: 'SIDTM Admin Office',
+    lat: 18.538066,
+    lng: 73.731658,
+    radiusM: 15,
+    difficulty: 3,
+    ...media('sidtm-admin'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'A phone call taken on the move, seen through the glass of the office frontage.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'A glass frontage with orange columns, and a printed list of departments beside the door.',
+      warm: 'You are looking through glass into a lobby — reflections of the walkway on it.',
+      close: 'The admin office at the telecom and digital management institute.',
+    },
+  },
+  {
+    // Sheet 4 — Auditorium
+    id: 'auditorium',
+    name: 'Auditorium',
+    lat: 18.536747,
+    lng: 73.732526,
+    radiusM: 15,
+    difficulty: 3,
+    ...media('auditorium'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'A lone figure framed in the archway at the end of a long dark passage.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'A high archway at the end of a passage, with a polished floor throwing the light back.',
+      warm: 'Panels mounted along one wall, and the way out framed as a bright arch.',
+      close: 'The approach to the main auditorium.',
+    },
+  },
+  {
+    // Sheet 7 — fountain
+    id: 'fountain',
+    name: 'The Fountain',
+    lat: 18.536108,
+    lng: 73.732878,
+    radiusM: 15,
+    difficulty: 1,
+    ...media('fountain'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'A busy establishing shot: the broad steps, the canopy, and the water running.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'A broad flight of steps up to a building under a white sail-shaped canopy, with the wooded hillside behind.',
+      warm: 'Water on one side of the steps, a clock on the building opposite.',
+      close: 'The steps and the fountain below them.',
+    },
+  },
+  {
+    // Sheet 8 — Library
+    id: 'library',
+    name: 'Library',
+    lat: 18.53653,
+    lng: 73.732741,
+    radiusM: 15,
+    difficulty: 3,
+    ...media('library'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'An argument in a doorway, half in and half out of the hall.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'Tall pale doors standing open, with the tail of a sign visible on the wall above them.',
+      warm: 'Pale panelling, a bin beside the door, shelving just inside.',
+      close: 'The doors into the library.',
+    },
+  },
+  {
+    // Sheet 10 — Amphitheatre
     id: 'amphitheatre',
     name: 'Amphitheatre',
-    lat: 18.53751,
-    lng: 73.73132,
-    radiusM: 18,
+    lat: 18.537528,
+    lng: 73.731222,
+    radiusM: 15,
     difficulty: 1,
     ...media('amphitheatre'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    movie: {
+      title: BODYGUARD,
+      blurb: 'The big song: hundreds of dancers packing the tiers, one figure on the central stair.',
+    },
     campusFact: '',
     clue: {
-      far: 'Tiered steps curve around an open stage, with nothing above but sky.',
-      warm: 'Built so a crowd can sit and watch something in the open air.',
-      close: 'The curved seating up beside the institute blocks.',
+      far: 'Wide stone tiers stepping down towards a stage, with a stair cut straight through the middle.',
+      warm: 'Open to the sky. Seating enough for hundreds, all facing one way.',
+      close: 'The amphitheatre.',
     },
   },
   {
+    // Sheet 11 — Symbieat
     id: 'symbieat',
-    name: 'Symbieat',
-    lat: 18.53739,
-    lng: 73.73234,
-    radiusM: 18,
-    difficulty: 2,
+    name: 'Symbi Eat',
+    lat: 18.537331,
+    lng: 73.732295,
+    radiusM: 15,
+    difficulty: 3,
     ...media('symbieat'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
+    movie: {
+      title: HOSTEL_DAZE,
+      blurb: 'A birthday at a table after dark — candles, party hats, and the cake.',
+    },
     campusFact: '',
     clue: {
-      far: 'Where people queue for something hot between classes.',
-      warm: 'A counter, some tables, and the smell of frying.',
-      close: 'The eatery next to the media block.',
+      far: 'Shot after dark at a table, with foliage behind and nothing of the building in frame.',
+      warm: 'Somewhere people sit down to eat together in the evening.',
+      close: 'The food court.',
     },
   },
   {
-    id: 'simc',
-    name: 'SIMC',
-    lat: 18.53675,
-    lng: 73.7316,
-    radiusM: 18,
+    // Sheet 12 — outside C hall
+    id: 'outside-c-hall',
+    name: 'Outside C Hall',
+    lat: 18.536958,
+    lng: 73.731443,
+    radiusM: 15,
     difficulty: 2,
-    ...media('simc'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
-    campusFact: '',
-    clue: {
-      far: 'A teaching block everyone refers to by four letters.',
-      warm: 'Where the media students spend their days.',
-      close: 'The institute building on the upper road.',
+    ...media('outside-c-hall'),
+    movie: {
+      title: HOSTEL_DAZE,
+      blurb: 'Two of them messing about on the grass outside the hall with a hosepipe.',
     },
-  },
-  {
-    id: 'rangoli',
-    name: 'Rangoli',
-    lat: 18.5343,
-    lng: 73.73337,
-    radiusM: 18,
-    difficulty: 2,
-    ...media('rangoli'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
     campusFact: '',
     clue: {
-      far: 'A building sharing its name with a pattern drawn on the floor.',
-      warm: 'One of the residential blocks on the middle level.',
-      close: 'The block just above the dining hall.',
-    },
-  },
-  {
-    id: 'mess',
-    name: 'Mess',
-    lat: 18.53371,
-    lng: 73.73318,
-    radiusM: 18,
-    difficulty: 1,
-    ...media('mess'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
-    campusFact: '',
-    clue: {
-      far: 'Long tables, steel trays, and the loudest room at eight in the morning.',
-      warm: 'Where the whole campus eats.',
-      close: 'The dining hall on the middle level.',
-    },
-  },
-  {
-    id: 'multi-purpose-ground',
-    name: 'Multi Purpose Ground',
-    lat: 18.5328,
-    lng: 73.73221,
-    radiusM: 18,
-    difficulty: 1,
-    ...media('multi-purpose-ground'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
-    campusFact: '',
-    clue: {
-      far: 'Flat, open, and marked out for more than one game.',
-      warm: 'The largest open ground here.',
-      close: 'The playing field below the hostels.',
-    },
-  },
-  {
-    id: 'swimming-pool',
-    name: 'Swimming Pool',
-    lat: 18.53184,
-    lng: 73.73329,
-    radiusM: 18,
-    difficulty: 2,
-    ...media('swimming-pool'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
-    campusFact: '',
-    clue: {
-      far: 'Blue water, lane markings, and a very particular smell.',
-      warm: 'Somewhere you come to train rather than to study.',
-      close: 'Beside the sports facilities on the lower level.',
-    },
-  },
-  {
-    id: 'calendula',
-    name: 'Calendula',
-    lat: 18.53208,
-    lng: 73.73377,
-    radiusM: 18,
-    difficulty: 3,
-    ...media('calendula'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
-    campusFact: '',
-    clue: {
-      far: 'Named after a flower, like the blocks around it.',
-      warm: 'A residential block on the lower level.',
-      close: 'One of the flower-named hostels.',
-    },
-  },
-  {
-    id: 'lotus',
-    name: 'Lotus',
-    lat: 18.53172,
-    lng: 73.73187,
-    radiusM: 18,
-    difficulty: 3,
-    ...media('lotus'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
-    campusFact: '',
-    clue: {
-      far: 'Another flower, another block, another flight of stairs.',
-      warm: 'A hostel among several with botanical names.',
-      close: 'The block nearest the open ground.',
-    },
-  },
-  {
-    id: 'petunia',
-    name: 'Petunia',
-    lat: 18.53189,
-    lng: 73.73076,
-    radiusM: 18,
-    difficulty: 3,
-    ...media('petunia'),
-    movie: {title: 'TBC — pending the scene list', blurb: ''},
-    campusFact: '',
-    clue: {
-      far: 'The furthest of the flower-named blocks.',
-      warm: 'A hostel at the far edge of the residential cluster.',
-      close: 'The last block before the road bends away.',
+      far: 'A clipped lawn in front of a brick and white building, with a single tree breaking the frontage.',
+      warm: 'A low hedge along the edge of the grass, and a stairway at the far end of the block.',
+      close: 'The lawn outside C hall.',
     },
   },
 ]
 
-if (SURVEYED.length !== 10) {
-  throw new Error(`content: expected 10 locations, found ${SURVEYED.length}`)
+/**
+ * Surveyed but NOT in play — each sits inside a neighbour's fence.
+ *
+ * Consumer GPS on this hilltop resolves to roughly ±10-20m. Two stops closer
+ * together than that cannot be separated at all: a player standing at one is
+ * physically inside the other, so an arrival could validate the wrong level, or
+ * refuse the right one. `ABSOLUTE_MIN_SPACING_M` in ./layout is the floor, and
+ * these three are under it against the neighbour named.
+ *
+ * Kept here rather than deleted: the clips are fine, and a fresh survey a few
+ * dozen metres away — or dropping the neighbour instead — brings any of them
+ * straight back.
+ */
+export const PARKED = [
+  {sheet: 5, id: 'xerox', name: 'Xerox', lat: 18.537208, lng: 73.731825, clashesWith: 'behind-ssbf', gapM: 7},
+  {sheet: 6, id: 'behind-amphi', name: 'Behind Amphi', lat: 18.537417, lng: 73.731711, clashesWith: 'sibm', gapM: 19},
+  {sheet: 9, id: 'siu-admin', name: 'SIU Admin Office', lat: 18.536825, lng: 73.732653, clashesWith: 'auditorium', gapM: 16},
+] as const
+
+if (SURVEYED.length !== 9) {
+  throw new Error(`content: expected 9 locations, found ${SURVEYED.length}`)
 }
 
 /**

@@ -98,7 +98,7 @@ describe('engine — full playthrough', () => {
 
   it('honours a pinned route (demo)', async () => {
     const batch = await engine.createBatch({name: 'Batch P'})
-    const pinned = ['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground']
+    const pinned = ['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain']
     const {player} = await engine.registerPlayer({
       batchId: batch.id,
       name: 'Demo',

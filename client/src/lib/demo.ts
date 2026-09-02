@@ -8,8 +8,8 @@
 import {api} from './api'
 import {game} from './stores/game.svelte'
 
-/** Real surveyed campus spots, Mind Studio (the one with a real clip) first. */
-const DEMO_ROUTE = ['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground']
+/** Real surveyed film locations, the amphitheatre (the biggest set-piece) first. */
+const DEMO_ROUTE = ['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain']
 
 export async function startDemo(): Promise<void> {
   const s = await api.demoSession(DEMO_ROUTE)

@@ -561,6 +561,6 @@ them easy to change:
    a 4-digit input step before "Reveal the scene".
 4. **Players per batch** — affects the Leaderboard's row count and grouping.
 
-Placeholder location names for the prototype (real campus spots, order/pairing
-not final): Mind Studio, Aqua Point, The Fountain, Central Library, Auditorium,
-plus five more to reach ten.
+The nine locations in play, all real film sites (see `shared/src/content.ts`):
+Behind SSBF, SIBM, SIDTM Admin Office, Auditorium, The Fountain, Library,
+Amphitheatre, Symbi Eat, Outside C Hall.

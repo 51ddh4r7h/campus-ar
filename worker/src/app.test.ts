@@ -86,7 +86,7 @@ describe('app', () => {
   })
 
   it('registers a pinned demo route and starts', async () => {
-    const stops = ['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground']
+    const stops = ['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain']
     const p = await bootPlayer(stops)
     expect(p.stops).toEqual(stops)
 
@@ -98,7 +98,7 @@ describe('app', () => {
   })
 
   it('nearby reports warmth without leaking a coordinate', async () => {
-    const p = await bootPlayer(['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground'])
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
     await json('/session/start', {}, {authorization: `Bearer ${p.sessionToken}`})
 
     const res = await json(
@@ -113,7 +113,7 @@ describe('app', () => {
   })
 
   it('validates an arrival and serves the reveal', async () => {
-    const p = await bootPlayer(['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground'])
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
     const auth = {authorization: `Bearer ${p.sessionToken}`}
     await json('/session/start', {}, auth)
 
@@ -126,12 +126,12 @@ describe('app', () => {
   })
 
   it('rejects an arrival at the wrong place', async () => {
-    const p = await bootPlayer(['amphitheatre', 'symbieat', 'simc', 'mess', 'multi-purpose-ground'])
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
     const auth = {authorization: `Bearer ${p.sessionToken}`}
     await json('/session/start', {}, auth)
     clock.advance(LAYOUT.minLegMs + 60_000)
     // Standing at a later stop → level_locked, level does not advance.
-    const res = await json('/session/arrive', {samples: parkedAt('simc', clock.now())}, auth)
+    const res = await json('/session/arrive', {samples: parkedAt('fountain', clock.now())}, auth)
     const body = (await res.json()) as {ok: boolean; failure: string}
     expect(body.ok).toBe(false)
     expect(body.failure).toBe('level_locked')

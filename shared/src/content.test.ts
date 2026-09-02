@@ -44,7 +44,7 @@ describe('location content invariants', () => {
     for (const l of LOCATIONS) counts[l.difficulty]++
     expect(counts[1]).toBeGreaterThanOrEqual(2)
     expect(counts[3]).toBeGreaterThanOrEqual(2)
-    expect(counts[1] + counts[2] + counts[3]).toBe(10)
+    expect(counts[1] + counts[2] + counts[3]).toBe(LOCATION_POOL_SIZE)
   })
 
   // Self-maintaining: derived from the location list rather than a hand-kept

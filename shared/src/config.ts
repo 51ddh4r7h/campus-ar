@@ -7,7 +7,11 @@
 import type {ParConstants} from './types'
 
 export const LEVEL_COUNT = 5
-export const LOCATION_POOL_SIZE = 10
+/**
+ * Locations in play. Nine of the twelve surveyed sites — the other three sit
+ * inside a neighbour's geofence and are parked in ./content.
+ */
+export const LOCATION_POOL_SIZE = 9
 
 /** Validation thresholds applied server-side on every arrival check. */
 /**

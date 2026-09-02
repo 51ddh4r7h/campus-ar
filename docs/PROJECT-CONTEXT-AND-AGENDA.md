@@ -143,9 +143,10 @@ Pages. It currently includes:
 - Development-only simulation and debug hooks.
 - Automated unit, typecheck, lint, build, and browser smoke coverage.
 
-The primary verified clip is the Mind Studio / `Dear Zindagi` reveal. Other
-spots safely fall back to their visual asset until their final clip files are
-available.
+The scene list is settled: twelve sites surveyed on 28/08/2026 and 02/09/2026,
+nine of them in play (see `shared/src/content.ts`). Clips 1-10 are from
+`Bodyguard`, 11-12 from `Hostel Daze`. Spots fall back to their visual asset
+until their clip file is in `client/public/clips/`.
 
 Latest verified deployment at the time this document was written:
 
@@ -480,7 +481,7 @@ Campus AR is succeeding when:
 - They explore rather than simply follow arrows.
 - The answer remains hidden until they reach the place.
 - The AR cinemascope appears reliably and stays put.
-- The `Dear Zindagi` clip and future clips play without breaking the reveal.
+- Every scene clip plays without breaking the reveal.
 - A discovery feels worth the walk.
 - The player can continue smoothly to the next mystery.
 - Demo mode is repeatable for testing and orientation staff.

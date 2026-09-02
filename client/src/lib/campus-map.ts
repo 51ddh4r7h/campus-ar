@@ -32,63 +32,57 @@ export const MAP_FEATURES: readonly MapFeature[] = [{"kind":"wood","d":"M649.7 1
 export const MAP_LANDMARKS: readonly MapLandmark[] = [{"name":"Symbiosis Medical College for Women","x":279.5,"y":34.3},{"name":"SIMC","x":435.8,"y":144.2},{"name":"SIBM","x":447,"y":87.3},{"name":"SIDTM","x":432.4,"y":116.2}]
 export const MAP_STOPS: readonly MapStop[] = [
   {
+    "id": "behind-ssbf",
+    "name": "Behind SSBF",
+    "x": 451.7,
+    "y": 118.1
+  },
+  {
+    "id": "sibm",
+    "name": "SIBM",
+    "x": 446.8,
+    "y": 96.8
+  },
+  {
+    "id": "sidtm-admin",
+    "name": "SIDTM Admin Office",
+    "x": 438.7,
+    "y": 67.6
+  },
+  {
+    "id": "auditorium",
+    "name": "Auditorium",
+    "x": 486.9,
+    "y": 144.7
+  },
+  {
+    "id": "fountain",
+    "name": "The Fountain",
+    "x": 506.4,
+    "y": 182
+  },
+  {
+    "id": "library",
+    "name": "Library",
+    "x": 498.8,
+    "y": 157.3
+  },
+  {
     "id": "amphitheatre",
     "name": "Amphitheatre",
-    "x": 420,
-    "y": 100.1
+    "x": 414.6,
+    "y": 99
   },
   {
     "id": "symbieat",
-    "name": "Symbieat",
-    "x": 476.5,
-    "y": 107.1
+    "name": "Symbi Eat",
+    "x": 474.1,
+    "y": 110.5
   },
   {
-    "id": "simc",
-    "name": "SIMC",
-    "x": 435.5,
-    "y": 144.5
-  },
-  {
-    "id": "rangoli",
-    "name": "Rangoli",
-    "x": 533.6,
-    "y": 287.7
-  },
-  {
-    "id": "mess",
-    "name": "Mess",
-    "x": 523.1,
-    "y": 322.1
-  },
-  {
-    "id": "multi-purpose-ground",
-    "name": "Multi Purpose Ground",
-    "x": 469.3,
-    "y": 375.3
-  },
-  {
-    "id": "swimming-pool",
-    "name": "Swimming Pool",
-    "x": 529.2,
-    "y": 431.4
-  },
-  {
-    "id": "calendula",
-    "name": "Calendula",
-    "x": 555.8,
-    "y": 417.4
-  },
-  {
-    "id": "lotus",
-    "name": "Lotus",
-    "x": 450.5,
-    "y": 438.4
-  },
-  {
-    "id": "petunia",
-    "name": "Petunia",
-    "x": 389,
-    "y": 428.5
+    "id": "outside-c-hall",
+    "name": "Outside C Hall",
+    "x": 426.8,
+    "y": 132.3
   }
 ]
