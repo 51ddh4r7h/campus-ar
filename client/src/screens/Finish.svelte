@@ -12,6 +12,7 @@
   import Icon from '../lib/components/Icon.svelte'
   import {rungIcon} from '../lib/rung-icons'
   import CampusMap from '../lib/components/CampusMap.svelte'
+  import FilmStrip from '../lib/components/FilmStrip.svelte'
 
   onMount(() => haptics.fanfare())
 
@@ -58,6 +59,12 @@
       {self.rank}{#if standings.rows.length} of {standings.rows.length}{/if}
     </p>
   {/if}
+
+  <!-- The strip the player watched fill up, finished. Warm frames are the legs
+       they beat par on. -->
+  <div class="reel">
+    <FilmStrip {splits} size="full" />
+  </div>
 
   <ol class="splits">
     {#each splits as s}
@@ -200,6 +207,9 @@
   }
   .rank :global(svg) {
     color: var(--amber);
+  }
+  .reel {
+    margin: var(--sp-5) 0 var(--sp-4);
   }
   .splits {
     list-style: none;

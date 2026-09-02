@@ -3,17 +3,9 @@
   import {clock} from '../stores/clock.svelte'
   import {game} from '../stores/game.svelte'
   import Icon from './Icon.svelte'
+  import FilmStrip from './FilmStrip.svelte'
 
   const {faded = false}: {faded?: boolean} = $props()
-
-  const dots = $derived(
-    Array.from({length: 5}, (_, i) => {
-      const level = i + 1
-      if (level < game.level) return 'done'
-      if (level === game.level && game.inProgress) return 'current'
-      return 'locked'
-    }),
-  )
 </script>
 
 <div class="hud" class:faded>
@@ -21,10 +13,8 @@
     <Icon name="timer" size={15} />
     <span>{formatMarquee(clock.elapsedMs)}</span>
   </div>
-  <div class="chip dots" aria-label="Level {game.level} of 5">
-    {#each dots as state}
-      <i class={state}></i>
-    {/each}
+  <div class="chip">
+    <FilmStrip splits={game.splits} current={game.inProgress ? game.level : 0} />
   </div>
 </div>
 
@@ -59,20 +49,5 @@
     font-size: var(--step-15);
     font-variant-numeric: tabular-nums;
     color: var(--amber);
-  }
-  .dots {
-    gap: 5px;
-  }
-  .dots i {
-    width: 14px;
-    height: 3px;
-    border-radius: 2px;
-    background: var(--hairline);
-  }
-  .dots i.done {
-    background: var(--success);
-  }
-  .dots i.current {
-    background: var(--amber);
   }
 </style>

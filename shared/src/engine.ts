@@ -33,6 +33,7 @@ import type {
   Route,
   Session,
   Split,
+  SplitView,
   StandingRow,
   StartHuntResponse,
   ValidationFailure,
@@ -142,6 +143,25 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       if (!loc) throw new Error(`engine: unknown location "${id}" in route`)
       return loc
     })
+
+  /**
+   * Dress completed legs for the client. A split on its own is a level number
+   * and a duration; the progress strip needs the still to develop and the par
+   * to judge it against, and both are already known to a player who has been
+   * through that level.
+   */
+  const splitViews = (route: Route, splits: readonly Split[]): SplitView[] => {
+    const stops = resolveStops(route)
+    return splits.map((s) => {
+      const loc = stops[s.level - 1]
+      return {
+        ...s,
+        locationName: loc?.name ?? '',
+        posterUrl: loc?.posterUrl ?? '',
+        parMs: route.legParMs[s.level - 1] ?? 0,
+      }
+    })
+  }
 
   const clueView = (route: Route, session: Session): ClueView => {
     const level = session.currentLevel
@@ -320,13 +340,13 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     async getState(token: string): Promise<{
       session: Session
       clue: ClueView | null
-      splits: Split[]
+      splits: SplitView[]
     }> {
       const {session, route} = await authed(token)
       const splits = await store.listSplits(session.playerId)
       const clue =
         session.status === 'in_progress' ? clueView(route, session) : null
-      return {session, clue, splits}
+      return {session, clue, splits: splitViews(route, splits)}
     },
 
     async nearby(
@@ -415,7 +435,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         ok: true,
         failure: null,
         session: next,
-        split,
+        split: splitViews(route, [split])[0]!,
         reveal: revealView(target, split, complete),
         nextClue: complete ? null : clueView(route, next),
       }

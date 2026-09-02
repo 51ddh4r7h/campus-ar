@@ -93,7 +93,7 @@ const jsonAuth = (token: string): HeadersInit => ({...auth(token), 'content-type
 export interface StateResponse {
   session: Session
   clue: ClueView | null
-  splits: import('@cmh/shared').Split[]
+  splits: import('@cmh/shared').SplitView[]
 }
 
 export const api = {

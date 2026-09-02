@@ -8,12 +8,14 @@
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {location} from '../lib/stores/location.svelte'
+  import {probe} from '../lib/stores/probe.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
   import {revealVideo} from '../lib/reveal-video'
   import {formatMarquee} from '@cmh/shared'
   import HudBar from '../lib/components/HudBar.svelte'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import HeatMeter from '../lib/components/HeatMeter.svelte'
+  import ProximityRing from '../lib/components/ProximityRing.svelte'
   import Icon from '../lib/components/Icon.svelte'
 
   const clue = $derived(game.clue)
@@ -87,6 +89,12 @@
 
 <HudBar />
 <HeatMeter />
+
+<!-- The last stretch only. GPS is good to ±10-20m out here, which is the whole
+     of the final leg, so this is drawn around the player rather than on the
+     target: a ring centred on you cannot be misplaced by your own position
+     error, and a circle cannot accidentally point anywhere. -->
+<ProximityRing heat={probe.last?.heat ?? 0} />
 
 {#if clue}
   <!-- The frame you are hunting, laid over the world at whatever strength

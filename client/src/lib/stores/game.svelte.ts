@@ -3,7 +3,7 @@
  * client mirrors what the Worker returns and never advances a level itself.
  */
 
-import type {ClueView, GeoSample, HintRung, RevealView, Session, Split} from '@cmh/shared'
+import type {ClueView, GeoSample, HintRung, RevealView, Session, SplitView} from '@cmh/shared'
 import {DEFAULT_PAR_CONSTANTS} from '@cmh/shared'
 
 const FREE_VIEWS = DEFAULT_PAR_CONSTANTS.freeViews
@@ -50,7 +50,7 @@ class Game {
 
   session = $state<Session | null>(null)
   clue = $state<ClueView | null>(null)
-  splits = $state<Split[]>([])
+  splits = $state<SplitView[]>([])
   lastReveal = $state<RevealView | null>(null)
   playerName = $state<string>('')
 

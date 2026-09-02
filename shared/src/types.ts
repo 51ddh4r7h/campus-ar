@@ -101,6 +101,19 @@ export interface Split {
   penaltyMs: number
 }
 
+/**
+ * A completed leg, as the player is allowed to see it. Everything added here is
+ * already-revealed information about a level they have finished — the name they
+ * were shown on the reveal, the still they watched, and the par they were
+ * racing. None of it says anything about levels still to come.
+ */
+export interface SplitView extends Split {
+  locationName: string
+  posterUrl: string
+  /** Target time for this leg. Beating it is what tints the frame warm. */
+  parMs: number
+}
+
 export type GameEventType =
   | 'hunt_started'
   | 'clue_served'
@@ -201,7 +214,7 @@ export interface ValidationResult {
   failure: ValidationFailure | null
   session: Session
   /** Present when a level was just completed. */
-  split: Split | null
+  split: SplitView | null
   /** The reward for the level just completed. */
   reveal: RevealView | null
   /** The next clue, or null when the hunt is complete. */
