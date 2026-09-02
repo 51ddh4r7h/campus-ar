@@ -22,7 +22,8 @@
     "db:migrate:local": "npm run db:migrate:local --workspace worker",
     "deploy": "bash scripts/deploy.sh",
     "layout": "tsx scripts/layout-report.ts",
-    "map": "tsx scripts/build-campus-map.ts"
+    "map": "tsx scripts/build-campus-map.ts",
+    "clips": "tsx scripts/check-clips.ts"
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.80.0",

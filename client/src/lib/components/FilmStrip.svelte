@@ -32,6 +32,17 @@
 
   const {splits, current = 0, size = 'hud'}: Props = $props()
 
+  /**
+   * Stills that would not load. A location whose clip files are not in place
+   * yet still counts as found — the frame is exposed, it just has no picture on
+   * it. Better a blank frame in a strip of film than a row of broken-image
+   * glyphs in the HUD.
+   */
+  let blank = $state(new Set<string>())
+  const markBlank = (id: string) => {
+    if (!blank.has(id)) blank = new Set(blank).add(id)
+  }
+
   type Frame =
     | {state: 'exposed'; level: number; split: SplitView; underPar: boolean}
     | {state: 'gate' | 'blank'; level: number}
@@ -61,8 +72,15 @@
       class:par={f.state === 'exposed' && f.underPar}
       title={f.state === 'exposed' ? f.split.locationName : ''}
     >
-      {#if f.state === 'exposed'}
-        <img src={f.split.posterUrl} alt="" loading="lazy" />
+      {#if f.state === 'exposed' && !blank.has(f.split.locationId)}
+        <img
+          src={f.split.posterUrl}
+          alt=""
+          loading="lazy"
+          onerror={() => markBlank(f.split.locationId)}
+        />
+      {:else if f.state === 'exposed'}
+        <span class="mark">{f.level}</span>
       {/if}
       {#if size === 'full' && f.state === 'exposed'}
         <span class="cap">{f.split.locationName}</span>
@@ -158,6 +176,23 @@
     flex: 1 1 0;
     aspect-ratio: 2.39 / 1;
     border-radius: 2px;
+  }
+  /* An exposed frame with no still: keep it clearly *found*, just pictureless. */
+  .cell.exposed {
+    background: color-mix(in srgb, var(--amber) 12%, #16181c);
+  }
+  .mark {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--amber);
+    opacity: 0.7;
+  }
+  .full .mark {
+    font-size: 15px;
   }
   .cap {
     position: absolute;
