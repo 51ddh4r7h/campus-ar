@@ -194,6 +194,17 @@ export const createApp = (
   })
 
   /**
+   * What a signup link points at. Public and deliberately thin: it exists so the
+   * sign-in screen can say "Induction 2026" rather than leaving the player to
+   * guess whether they have the right link. Names an event, counts nobody.
+   */
+  app.get('/event/:code', async (c) => {
+    const batch = await makeStore(c.env).getBatchByCode(c.req.param('code'))
+    if (!batch) return c.json({error: 'batch_not_found'}, 404)
+    return c.json({name: batch.name, status: batch.status, isDemo: batch.isDemo})
+  })
+
+  /**
    * Self-serve signup. Open — the batch's event code is the only gate. Returns
    * the same shape the magic-link bootstrap does, so the client path after this
    * is identical.

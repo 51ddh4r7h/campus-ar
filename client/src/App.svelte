@@ -9,13 +9,13 @@
   import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
   import {haptics} from './lib/haptics'
-  import {playerLink, demoAllowed, adminRequested, eventCode} from './lib/mode'
+  import {playerLink, adminRequested} from './lib/mode'
   import {POLLING} from '@cmh/shared'
 
   import Splash from './screens/Splash.svelte'
-  import Join from './screens/Join.svelte'
+  import Hero from './screens/Hero.svelte'
   import Signin from './screens/Signin.svelte'
-  import Welcome from './screens/Welcome.svelte'
+  import Briefing from './screens/Briefing.svelte'
   import Permissions from './screens/Permissions.svelte'
   import Ready from './screens/Ready.svelte'
   import Clue from './screens/Clue.svelte'
@@ -30,15 +30,29 @@
   import Toaster from './lib/components/Toaster.svelte'
   import DemoBadge from './lib/components/DemoBadge.svelte'
 
-  const screens = {splash: Splash, join: Join, signin: Signin, welcome: Welcome, permissions: Permissions, ready: Ready, clue: Clue, search: Search, reveal: Reveal, finish: Finish}
+  const screens = {
+    splash: Splash,
+    hero: Hero,
+    signin: Signin,
+    briefing: Briefing,
+    permissions: Permissions,
+    ready: Ready,
+    clue: Clue,
+    search: Search,
+    reveal: Reveal,
+    finish: Finish,
+  }
   const Screen = $derived(screens[nav.screen])
 
+  /** Entry screens cross-fade; in-game ones cut, so the camera never blinks. */
+  const SOFT: readonly ScreenName[] = ['hero', 'signin', 'briefing', 'permissions', 'ready']
+
   /**
-   * Where someone with no live session lands. A cohort's `?e=` link goes to
-   * sign-in; a bare visit to the practice run in dev, or the "use your link"
-   * dead end otherwise.
+   * Everyone without a live session lands on the hero. It knows what to offer:
+   * a way in for a cohort link, a practice run where that is allowed, and an
+   * explanation otherwise. One screen instead of three.
    */
-  const entryScreen = (): ScreenName => (eventCode ? 'signin' : demoAllowed ? 'welcome' : 'join')
+  const entryScreen = (): ScreenName => 'hero'
 
   /** The session lives on the server — keep asking through a bad cold start. */
   async function restoreSession(): Promise<void> {
@@ -54,7 +68,8 @@
     if (!game.token) nav.go(entryScreen())
     else if (game.complete) nav.go('finish')
     else if (game.inProgress) nav.go('clue')
-    else nav.go('welcome')
+    // Signed in but not started — the briefing, which owns the way forward.
+    else nav.go('briefing')
   }
 
   onMount(async () => {
@@ -67,8 +82,10 @@
       history.replaceState(null, '', window.location.pathname)
     }
 
+    // Nothing to restore — show the hero straight away. The splash exists to
+    // cover the session fetch below, not to make a new player wait.
     if (!game.token) {
-      setTimeout(() => nav.go(entryScreen()), 1400)
+      nav.go(entryScreen())
       return
     }
     await restoreSession()
@@ -79,7 +96,7 @@
   /** Screens shot through the live camera. */
   const THROUGH_LENS: readonly ScreenName[] = ['search', 'reveal']
   /** Screens where the hunt isn't running, so the sensors should be off. */
-  const IDLE: readonly ScreenName[] = ['finish', 'welcome']
+  const IDLE: readonly ScreenName[] = ['finish', 'briefing']
 
   const playing = $derived(game.inProgress && PLAYING.includes(nav.screen))
   const wantsCamera = $derived(playing && THROUGH_LENS.includes(nav.screen))
@@ -145,7 +162,15 @@
 {#if adminRequested}
   <Admin />
 {:else}
-  <Screen />
+  <!-- Keyed so a screen change is a real swap Svelte can transition. Only the
+       pre-game screens fade; cross-fading a live camera view would strobe. -->
+  {#key nav.screen}
+    {#if SOFT.includes(nav.screen)}
+      <div class="screen-fade"><Screen /></div>
+    {:else}
+      <Screen />
+    {/if}
+  {/key}
 {/if}
 
 {#if nav.sheet === 'howto'}<HowToSheet />{/if}
@@ -171,6 +196,15 @@
 <Toaster />
 
 <style>
+  .screen-fade {
+    animation: screen-in var(--dur-standard) var(--ease-spring) both;
+  }
+  @keyframes screen-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
   .offline {
     position: fixed;
     top: calc(var(--safe-top) + var(--sp-2));

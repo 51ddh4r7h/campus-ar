@@ -44,8 +44,9 @@
   }
 
   async function proceed() {
+    // No session and no way to make one — back to the hero, which explains why.
     if (!game.token && !demoAllowed) {
-      nav.go('join')
+      nav.go('hero')
       return
     }
     try {

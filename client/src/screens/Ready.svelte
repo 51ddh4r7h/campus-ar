@@ -43,6 +43,7 @@
     {:else}
       <p class="sub">Your timer starts the moment you tap.</p>
     {/if}
+    <button class="rules" onclick={() => nav.open('howto')}>Read the rules again</button>
   </div>
 </main>
 
@@ -52,6 +53,14 @@
     display: grid;
     place-items: center;
     padding: var(--edge);
+  }
+  .rules {
+    margin-top: var(--sp-6);
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: 999px;
+    border: 1px solid var(--hairline);
+    color: var(--text-dim);
+    font-size: var(--step-13);
   }
   .chip {
     position: fixed;

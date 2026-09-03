@@ -2,9 +2,9 @@
 
 export type Screen =
   | 'splash'
-  | 'join'
+  | 'hero'
   | 'signin'
-  | 'welcome'
+  | 'briefing'
   | 'permissions'
   | 'ready'
   | 'clue'

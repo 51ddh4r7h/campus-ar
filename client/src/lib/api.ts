@@ -148,6 +148,10 @@ export const api = {
       headers: token ? auth(token) : undefined,
     }),
 
+  /** What a signup link points at — so the player can see they have the right one. */
+  event: (code: string) =>
+    request<{name: string; status: string; isDemo: boolean}>(`/event/${encodeURIComponent(code)}`),
+
   /** Self-serve signup against a cohort's event code. No admin key. */
   signup: (body: {eventCode: string; username: string; name: string; password: string}) =>
     request<{batchId: string; sessionToken: string; name: string; stops: string[]}>(
