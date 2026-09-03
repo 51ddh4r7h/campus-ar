@@ -30,6 +30,12 @@ class Clock implements EngineDeps {
   randomToken() {
     return `tok-${Math.random().toString(36).slice(2)}`
   }
+  async hashPassword(pw: string) {
+    return `h:${pw}`
+  }
+  async verifyPassword(pw: string, stored: string) {
+    return stored === `h:${pw}`
+  }
   advance(ms: number) {
     this.t += ms
   }

@@ -72,6 +72,7 @@ export interface BatchRow {
   isDemo: boolean
   createdAtMs: number
   playerCount: number
+  eventCode: string | null
 }
 
 export interface RosterEntry {
@@ -147,6 +148,21 @@ export const api = {
       headers: token ? auth(token) : undefined,
     }),
 
+  /** Self-serve signup against a cohort's event code. No admin key. */
+  signup: (body: {eventCode: string; username: string; name: string; password: string}) =>
+    request<{batchId: string; sessionToken: string; name: string; stops: string[]}>(
+      '/session/signup',
+      {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)},
+    ),
+
+  /** Return visit — roll number + password back for the session token. */
+  login: (body: {eventCode: string; username: string; password: string}) =>
+    request<{batchId: string; sessionToken: string; name: string}>('/session/login', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify(body),
+    }),
+
   /** Practice run. Needs no admin key — the server marks the batch as demo. */
   demoSession: (route?: string[]) =>
     request<{batchId: string; sessionToken: string; name: string; stops: string[]}>(
@@ -159,12 +175,20 @@ export const api = {
     ),
 
   // Organiser console — every one of these needs the admin key.
-  createBatch: (name: string, demo = false, adminKey?: string) =>
-    request<{id: string; name: string; isDemo: boolean; poolSize: number}>('/admin/batches', {
+  createBatch: (name: string, demo = false, adminKey?: string, eventCode?: string) => {
+    const body = eventCode ? {name, demo, eventCode} : {name, demo}
+    return request<{
+      id: string
+      name: string
+      isDemo: boolean
+      poolSize: number
+      eventCode: string | null
+    }>('/admin/batches', {
       method: 'POST',
       headers: adminJson(adminKey),
-      body: JSON.stringify({name, demo}),
-    }),
+      body: JSON.stringify(body),
+    })
+  },
 
   registerPlayers: (
     batchId: string,

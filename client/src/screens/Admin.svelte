@@ -23,7 +23,20 @@
   let busy = $state(false)
 
   let newBatchName = $state('')
+  let newBatchCode = $state('')
   let rosterText = $state('')
+
+  /** The one link an organiser shares with a whole cohort. */
+  const signupLink = (code: string): string => `${window.location.origin}/?e=${encodeURIComponent(code)}`
+
+  async function copySignupLink(code: string) {
+    try {
+      await navigator.clipboard.writeText(signupLink(code))
+      toasts.show('Signup link copied', 'success')
+    } catch {
+      toasts.show('Clipboard blocked — select and copy manually', 'alert')
+    }
+  }
 
   const playerLink = (r: RosterEntry): string =>
     `${window.location.origin}/?t=${encodeURIComponent(r.sessionToken)}&b=${encodeURIComponent(
@@ -55,8 +68,9 @@
     if (!newBatchName.trim()) return
     busy = true
     try {
-      await api.createBatch(newBatchName.trim(), false, adminKey)
+      await api.createBatch(newBatchName.trim(), false, adminKey, newBatchCode.trim() || undefined)
       newBatchName = ''
+      newBatchCode = ''
       await refreshBatches()
     } catch (err) {
       toasts.show(err instanceof ApiError ? err.message : 'Could not create the batch', 'alert')
@@ -193,6 +207,11 @@
           Create
         </button>
       </div>
+      <input
+        class="code-in"
+        bind:value={newBatchCode}
+        placeholder="Signup code (optional — e.g. induction26). Auto-generated if left blank."
+      />
       {#if batches.length === 0}
         <p class="dim">No batches yet.</p>
       {:else}
@@ -213,8 +232,23 @@
     </section>
 
     {#if selected}
+      {#if selected.eventCode}
+        {@const code = selected.eventCode}
+        <section class="share">
+          <h2>Signup link — {selected.name}</h2>
+          <p class="dim">Share this one link with the whole cohort. Players sign up with their roll number.</p>
+          <div class="row">
+            <input readonly value={signupLink(code)} onfocus={(e) => e.currentTarget.select()} />
+            <button class="ghost" onclick={() => void copySignupLink(code)}>Copy</button>
+          </div>
+        </section>
+      {/if}
       <section>
         <h2>Roster — {selected.name}</h2>
+        <p class="dim">
+          Roster upload is optional with self-serve signup — use it to pre-seed names, or leave it and
+          players register themselves.
+        </p>
         <p class="dim">One player per line: <code>Name</code> or <code>Name, rollNumber</code>.</p>
         <textarea bind:value={rosterText} rows="5" placeholder={'Aditi Sharma, 21B-1042\nRohan Mehta, 21B-1043'}
         ></textarea>
@@ -432,6 +466,16 @@
   .bad {
     color: var(--alert, #e06c5a);
     font-size: var(--step-14);
+  }
+  .code-in {
+    width: 100%;
+    margin-top: var(--sp-2);
+    font-family: var(--font-mono);
+    font-size: var(--step-13);
+  }
+  .share .row input {
+    font-family: var(--font-mono);
+    font-size: var(--step-13);
   }
   .link input {
     font-family: var(--font-mono);

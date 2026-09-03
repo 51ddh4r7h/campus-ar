@@ -11,6 +11,7 @@ import {
 } from '@cmh/shared'
 import type {Env} from './env'
 import {readCached, writeCached} from './standings-cache'
+import {hashPassword, verifyPassword} from './password'
 import {
   BadInput,
   parseCreateBatch,
@@ -19,6 +20,8 @@ import {
   parseHintRung,
   parseRegisterPlayers,
   parseSamples,
+  parseSignup,
+  parseLogin,
 } from './guards'
 
 const realDeps: EngineDeps = {
@@ -26,6 +29,8 @@ const realDeps: EngineDeps = {
   randomId: () => crypto.randomUUID(),
   randomToken: () =>
     crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, ''),
+  hashPassword,
+  verifyPassword,
 }
 
 const bearer = (auth: string | undefined): string => {
@@ -74,12 +79,18 @@ export const createApp = (
   app.post('/admin/batches', async (c) => {
     requireAdmin(c.env, c.req.header('X-Admin-Key'))
     const body = parseCreateBatch(await c.req.json())
-    const batch = await engineFor(c.env).createBatch({name: body.name, isDemo: body.demo})
+    const batchInput: Parameters<ReturnType<typeof engineFor>['createBatch']>[0] = {
+      name: body.name,
+      isDemo: body.demo,
+    }
+    if (body.eventCode) batchInput.eventCode = body.eventCode
+    const batch = await engineFor(c.env).createBatch(batchInput)
     return c.json({
       id: batch.id,
       name: batch.name,
       status: batch.status,
       isDemo: batch.isDemo,
+      eventCode: batch.eventCode,
       poolSize: batch.pool.routes.length,
       relaxed: batch.pool.relaxed,
       stats: batch.pool.stats,
@@ -98,6 +109,7 @@ export const createApp = (
         name: b.name,
         status: b.status,
         isDemo: b.isDemo,
+        eventCode: b.eventCode,
         createdAtMs: b.createdAtMs,
         playerCount: players.length,
       })
@@ -181,6 +193,34 @@ export const createApp = (
     })
   })
 
+  /**
+   * Self-serve signup. Open — the batch's event code is the only gate. Returns
+   * the same shape the magic-link bootstrap does, so the client path after this
+   * is identical.
+   */
+  app.post('/session/signup', async (c) => {
+    const engine = engineFor(c.env)
+    const store = makeStore(c.env)
+    const {player} = await engine.signup(parseSignup(await c.req.json()))
+    const route = await store.getRoute(player.id)
+    return c.json({
+      batchId: player.batchId,
+      sessionToken: player.sessionToken,
+      name: player.name,
+      stops: route?.stops ?? [],
+    })
+  })
+
+  /** Return visit: roll number + password back for the session token. */
+  app.post('/session/login', async (c) => {
+    const {player} = await engineFor(c.env).login(parseLogin(await c.req.json()))
+    return c.json({
+      batchId: player.batchId,
+      sessionToken: player.sessionToken,
+      name: player.name,
+    })
+  })
+
   app.post('/session/start', async (c) =>
     c.json(await engineFor(c.env).startHunt(bearer(c.req.header('Authorization')))),
   )
@@ -251,7 +291,12 @@ export const createApp = (
   app.onError((err, c) => {
     if (err instanceof BadInput) return c.json({error: 'bad_input', message: err.message}, 400)
     if (err instanceof EngineError) {
-      const status = err.code === 'bad_token' ? 401 : err.code === 'batch_not_found' ? 404 : 409
+      const status =
+        err.code === 'bad_token' || err.code === 'bad_password'
+          ? 401
+          : err.code === 'batch_not_found'
+            ? 404
+            : 409
       return c.json({error: err.code, message: err.message}, status)
     }
     if (err instanceof HTTPException) return err.getResponse()

@@ -28,6 +28,7 @@ interface BatchRow {
   par_constants: string
   is_demo: number
   pool: string
+  event_code: string | null
 }
 interface PlayerRow {
   id: string
@@ -35,6 +36,7 @@ interface PlayerRow {
   name: string
   roster_id: string
   session_token: string
+  password_hash: string | null
 }
 interface RouteRow {
   player_id: string
@@ -75,6 +77,7 @@ const toBatch = (r: BatchRow): StoredBatch => ({
   parConstants: json(r.par_constants),
   isDemo: r.is_demo === 1,
   pool: json(r.pool),
+  eventCode: r.event_code,
 })
 
 const toPlayer = (r: PlayerRow): Player => ({
@@ -83,6 +86,7 @@ const toPlayer = (r: PlayerRow): Player => ({
   name: r.name,
   rosterId: r.roster_id,
   sessionToken: r.session_token,
+  passwordHash: r.password_hash,
 })
 
 const toRoute = (r: RouteRow): Route => ({
@@ -123,10 +127,11 @@ export class D1Store implements GameStore {
   async putBatch(b: StoredBatch): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO batch (id, name, status, created_at_ms, route_pool_seed, par_constants, is_demo, pool)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        `INSERT INTO batch
+           (id, name, status, created_at_ms, route_pool_seed, par_constants, is_demo, pool, event_code)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          ON CONFLICT(id) DO UPDATE SET
-           name = ?2, status = ?3, par_constants = ?6, pool = ?8`,
+           name = ?2, status = ?3, par_constants = ?6, pool = ?8, event_code = ?9`,
       )
       .bind(
         b.id,
@@ -137,12 +142,21 @@ export class D1Store implements GameStore {
         JSON.stringify(b.parConstants),
         b.isDemo ? 1 : 0,
         JSON.stringify(b.pool),
+        b.eventCode,
       )
       .run()
   }
 
   async getBatch(id: string): Promise<StoredBatch | null> {
     const row = await this.db.prepare('SELECT * FROM batch WHERE id = ?1').bind(id).first<BatchRow>()
+    return row ? toBatch(row) : null
+  }
+
+  async getBatchByCode(code: string): Promise<StoredBatch | null> {
+    const row = await this.db
+      .prepare('SELECT * FROM batch WHERE event_code = ?1')
+      .bind(code)
+      .first<BatchRow>()
     return row ? toBatch(row) : null
   }
 
@@ -156,11 +170,18 @@ export class D1Store implements GameStore {
   async putPlayer(p: Player): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO player (id, batch_id, name, roster_id, session_token)
-         VALUES (?1, ?2, ?3, ?4, ?5)
+        `INSERT INTO player (id, batch_id, name, roster_id, session_token, password_hash)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(id) DO UPDATE SET name = ?3`,
       )
-      .bind(p.id, p.batchId, p.name, p.rosterId, p.sessionToken)
+      .bind(p.id, p.batchId, p.name, p.rosterId, p.sessionToken, p.passwordHash)
+      .run()
+  }
+
+  async setPlayerPassword(playerId: string, passwordHash: string): Promise<void> {
+    await this.db
+      .prepare('UPDATE player SET password_hash = ?2 WHERE id = ?1')
+      .bind(playerId, passwordHash)
       .run()
   }
 

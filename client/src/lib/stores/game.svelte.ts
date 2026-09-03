@@ -88,6 +88,18 @@ class Game {
     save(LS_DEMO_STOPS, opts.demoStops ? JSON.stringify(opts.demoStops) : null)
   }
 
+  /** Create an account against a cohort's event code, then hold the session. */
+  async signUp(input: {eventCode: string; username: string; name: string; password: string}): Promise<void> {
+    const s = await api.signup(input)
+    this.setCredentials(s.sessionToken, s.batchId, s.name, {demo: false})
+  }
+
+  /** Return visit — roll number + password back for the session. */
+  async logIn(input: {eventCode: string; username: string; password: string}): Promise<void> {
+    const s = await api.login(input)
+    this.setCredentials(s.sessionToken, s.batchId, s.name, {demo: false})
+  }
+
   /** @returns true once a session snapshot was loaded. */
   async refresh(): Promise<boolean> {
     if (!this.token) return false

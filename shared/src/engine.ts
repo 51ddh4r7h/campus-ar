@@ -47,6 +47,9 @@ export type EngineErrorCode =
   | 'not_in_progress'
   | 'hint_locked'
   | 'pool_empty'
+  | 'bad_password'
+  | 'signups_closed'
+  | 'roster_taken'
 
 export class EngineError extends Error {
   constructor(readonly code: EngineErrorCode, message?: string) {
@@ -59,6 +62,9 @@ export interface EngineDeps {
   now(): number
   randomId(): string
   randomToken(): string
+  /** PBKDF2 in production; a trivial stand-in in tests. */
+  hashPassword(password: string): Promise<string>
+  verifyPassword(password: string, stored: string): Promise<boolean>
 }
 
 const HINT_ORDER: readonly HintRung[] = ['warm', 'close', 'showLocation']
@@ -118,6 +124,22 @@ export interface CreateBatchInput {
   name: string
   parConstants?: ParConstants
   isDemo?: boolean
+  /** Short signup code. Auto-generated from the name when omitted. */
+  eventCode?: string
+}
+
+export interface SignupInput {
+  eventCode: string
+  /** Roll number — the username. */
+  username: string
+  name: string
+  password: string
+}
+
+export interface LoginInput {
+  eventCode: string
+  username: string
+  password: string
 }
 
 export interface RegisterPlayerInput {
@@ -233,6 +255,65 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     return {player, session, route, batch}
   }
 
+  /** A short, URL-safe signup code from a batch name, plus 3 hex for uniqueness. */
+  const codeFromName = (name: string): string => {
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 24)
+    return `${slug || 'hunt'}-${deps.randomId().replace(/[^a-z0-9]/gi, '').slice(0, 3)}`
+  }
+
+  /** Build the route + session for a new player and persist all three rows. */
+  const seatPlayer = async (
+    batch: StoredBatch,
+    player: Player,
+    pinnedRoute?: readonly string[],
+  ): Promise<Session> => {
+    let stops: Route['stops']
+    let parTotalMs: number
+    let legParMs: Route['legParMs']
+    if (pinnedRoute) {
+      const locs = pinnedRoute.map((id) => locationById(id))
+      if (
+        pinnedRoute.length !== LEVEL_COUNT ||
+        new Set(pinnedRoute).size !== LEVEL_COUNT ||
+        locs.some((l) => !l)
+      ) {
+        throw new EngineError('pool_empty', 'pinnedRoute must be 5 distinct known location ids')
+      }
+      // SAFETY: the guard above proved every entry resolves and the length is 5.
+      const resolved = locs as GameLocation[]
+      const par = routePar(resolved, START_POINT, batch.parConstants)
+      stops = [pinnedRoute[0]!, pinnedRoute[1]!, pinnedRoute[2]!, pinnedRoute[3]!, pinnedRoute[4]!]
+      parTotalMs = par.totalMs
+      legParMs = par.legMs
+    } else {
+      const assigned = await store.assignedRouteKeys(batch.id)
+      const tmpl = assignRoute(batch.pool, assigned)
+      stops = tmpl.stops
+      parTotalMs = tmpl.parTotalMs
+      legParMs = tmpl.legParMs
+    }
+    const session: Session = {
+      playerId: player.id,
+      status: 'not_started',
+      startTsMs: null,
+      endTsMs: null,
+      currentLevel: 1,
+      currentLevelHints: 0,
+      currentLevelViews: 0,
+      hintCreditUsed: false,
+      penaltyMs: 0,
+      scoreMs: null,
+    }
+    await store.putPlayer(player)
+    await store.putRoute({playerId: player.id, stops, parTotalMs, legParMs})
+    await store.putSession(session)
+    return session
+  }
+
   return {
     async createBatch(input: CreateBatchInput): Promise<StoredBatch> {
       const pc = input.parConstants ?? DEFAULT_PAR_CONSTANTS
@@ -249,6 +330,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         parConstants: pc,
         isDemo: input.isDemo ?? false,
         pool,
+        eventCode: input.eventCode?.trim() || codeFromName(input.name),
       }
       await store.putBatch(batch)
       return batch
@@ -272,46 +354,68 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         name: input.name,
         rosterId: input.rosterId,
         sessionToken: deps.randomToken(),
+        passwordHash: null,
+      }
+      const session = await seatPlayer(batch, player, input.pinnedRoute)
+      return {player, session}
+    },
+
+    /**
+     * Self-serve account creation against a batch's signup code.
+     *
+     * Open signup: anyone with the code can create an account. The code is the
+     * only gate, so a real cohort's code is shared only with that cohort while a
+     * public test batch's can go anywhere. A roll number already claimed with a
+     * password is rejected — that person should sign in. A roll number that
+     * exists WITHOUT a password is a magic-link registration being claimed:
+     * the password and name are set on the existing row, route intact.
+     */
+    async signup(input: SignupInput): Promise<{player: Player; session: Session}> {
+      const batch = await store.getBatchByCode(input.eventCode.trim())
+      if (!batch) throw new EngineError('batch_not_found', 'No event with that code')
+      if (batch.status !== 'open') throw new EngineError('signups_closed', 'This event is closed')
+
+      const username = input.username.trim()
+      const hash = await deps.hashPassword(input.password)
+      const existing = await store.getPlayerByRoster(batch.id, username)
+
+      if (existing) {
+        if (existing.passwordHash) {
+          throw new EngineError('roster_taken', 'That roll number is already registered — sign in')
+        }
+        await store.setPlayerPassword(existing.id, hash)
+        await store.putPlayer({...existing, name: input.name.trim(), passwordHash: hash})
+        const session =
+          (await store.getSession(existing.id)) ??
+          (await seatPlayer(batch, {...existing, passwordHash: hash}, undefined))
+        return {player: {...existing, name: input.name.trim(), passwordHash: hash}, session}
       }
 
-      let stops: Route['stops']
-      let parTotalMs: number
-      let legParMs: Route['legParMs']
-      if (input.pinnedRoute) {
-        const pinned = input.pinnedRoute
-        const locs = pinned.map((id) => locationById(id))
-        if (pinned.length !== LEVEL_COUNT || new Set(pinned).size !== LEVEL_COUNT || locs.some((l) => !l)) {
-          throw new EngineError('pool_empty', 'pinnedRoute must be 5 distinct known location ids')
-        }
-        // SAFETY: the guard above proved every entry resolves and the length is 5.
-        const resolved = locs as GameLocation[]
-        const par = routePar(resolved, START_POINT, batch.parConstants)
-        stops = [pinned[0]!, pinned[1]!, pinned[2]!, pinned[3]!, pinned[4]!]
-        parTotalMs = par.totalMs
-        legParMs = par.legMs
-      } else {
-        const assigned = await store.assignedRouteKeys(input.batchId)
-        const tmpl = assignRoute(batch.pool, assigned)
-        stops = tmpl.stops
-        parTotalMs = tmpl.parTotalMs
-        legParMs = tmpl.legParMs
+      const player: Player = {
+        id: deps.randomId(),
+        batchId: batch.id,
+        name: input.name.trim(),
+        rosterId: username,
+        sessionToken: deps.randomToken(),
+        passwordHash: hash,
       }
-      const route: Route = {playerId: player.id, stops, parTotalMs, legParMs}
-      const session: Session = {
-        playerId: player.id,
-        status: 'not_started',
-        startTsMs: null,
-        endTsMs: null,
-        currentLevel: 1,
-        currentLevelHints: 0,
-        currentLevelViews: 0,
-        hintCreditUsed: false,
-        penaltyMs: 0,
-        scoreMs: null,
+      const session = await seatPlayer(batch, player, undefined)
+      return {player, session}
+    },
+
+    /** Exchange roll number + password for the session token on a return visit. */
+    async login(input: LoginInput): Promise<{player: Player; session: Session}> {
+      const batch = await store.getBatchByCode(input.eventCode.trim())
+      if (!batch) throw new EngineError('batch_not_found', 'No event with that code')
+
+      const player = await store.getPlayerByRoster(batch.id, input.username.trim())
+      if (!player || !player.passwordHash) {
+        throw new EngineError('bad_password', 'No account for that roll number — sign up first')
       }
-      await store.putPlayer(player)
-      await store.putRoute(route)
-      await store.putSession(session)
+      if (!(await deps.verifyPassword(input.password, player.passwordHash))) {
+        throw new EngineError('bad_password', 'Wrong roll number or password')
+      }
+      const session = (await store.getSession(player.id)) ?? (await seatPlayer(batch, player, undefined))
       return {player, session}
     },
 

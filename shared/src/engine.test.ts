@@ -18,6 +18,13 @@ class TestDeps implements EngineDeps {
   randomToken(): string {
     return `tok-${++this.n}`
   }
+  // Not real hashing — the engine only needs a deterministic round trip.
+  async hashPassword(pw: string): Promise<string> {
+    return `h:${pw}`
+  }
+  async verifyPassword(pw: string, stored: string): Promise<boolean> {
+    return stored === `h:${pw}`
+  }
   advance(ms: number): void {
     this.t += ms
   }
@@ -246,5 +253,85 @@ describe('engine — standings', () => {
     expect(rows[0]!.rank).toBe(1)
     expect(rows[1]!.playerName).toBe('Slow')
     expect(rows[0]!.scoreMs!).toBeLessThan(rows[1]!.scoreMs!)
+  })
+})
+
+describe('engine — password signup and login', () => {
+  it('creates an account against the batch code and assigns a route', async () => {
+    const batch = await engine.createBatch({name: 'Induction 2026', eventCode: 'induct26'})
+    const {player, session} = await engine.signup({
+      eventCode: 'induct26',
+      username: '21B-1042',
+      name: 'Aditi',
+      password: 'a-good-password',
+    })
+    expect(player.rosterId).toBe('21B-1042')
+    expect(player.name).toBe('Aditi')
+    expect(player.batchId).toBe(batch.id)
+    expect(session.status).toBe('not_started')
+    const route = await store.getRoute(player.id)
+    expect(route?.stops).toHaveLength(5)
+  })
+
+  it('auto-generates a code when none is given', async () => {
+    const batch = await engine.createBatch({name: 'Group A / Blue'})
+    expect(batch.eventCode).toMatch(/^group-a-blue-[a-z0-9]{1,3}$/)
+  })
+
+  it('logs a returning player back in with the same token', async () => {
+    await engine.createBatch({name: 'B', eventCode: 'code1'})
+    const first = await engine.signup({
+      eventCode: 'code1',
+      username: 'r1',
+      name: 'Sam',
+      password: 'secret123',
+    })
+    const back = await engine.login({eventCode: 'code1', username: 'r1', password: 'secret123'})
+    expect(back.player.sessionToken).toBe(first.player.sessionToken)
+  })
+
+  it('rejects a second signup on a claimed roll number', async () => {
+    await engine.createBatch({name: 'B', eventCode: 'code2'})
+    await engine.signup({eventCode: 'code2', username: 'r1', name: 'Sam', password: 'secret123'})
+    await expect(
+      engine.signup({eventCode: 'code2', username: 'r1', name: 'Imposter', password: 'other-pass'}),
+    ).rejects.toThrow(/already registered/i)
+  })
+
+  it('rejects login with the wrong password', async () => {
+    await engine.createBatch({name: 'B', eventCode: 'code3'})
+    await engine.signup({eventCode: 'code3', username: 'r1', name: 'Sam', password: 'secret123'})
+    await expect(
+      engine.login({eventCode: 'code3', username: 'r1', password: 'wrong'}),
+    ).rejects.toThrow()
+  })
+
+  it('rejects an unknown event code', async () => {
+    await expect(
+      engine.signup({eventCode: 'nope', username: 'r1', name: 'Sam', password: 'secret123'}),
+    ).rejects.toThrow(/no event/i)
+  })
+
+  it('lets a pre-registered magic-link player claim their spot with a password', async () => {
+    const batch = await engine.createBatch({name: 'B', eventCode: 'code4'})
+    const pre = await engine.registerPlayer({batchId: batch.id, name: 'Placeholder', rosterId: 'r9'})
+    const claimed = await engine.signup({
+      eventCode: 'code4',
+      username: 'r9',
+      name: 'Real Name',
+      password: 'claimed-pass',
+    })
+    // Same player row, same route — just a password and the real name now.
+    expect(claimed.player.id).toBe(pre.player.id)
+    expect(claimed.player.name).toBe('Real Name')
+    expect(claimed.player.sessionToken).toBe(pre.player.sessionToken)
+  })
+
+  it('refuses signup once the batch is closed', async () => {
+    const batch = await engine.createBatch({name: 'B', eventCode: 'code5'})
+    await store.putBatch({...(await store.getBatch(batch.id))!, status: 'closed'})
+    await expect(
+      engine.signup({eventCode: 'code5', username: 'r1', name: 'Sam', password: 'secret123'}),
+    ).rejects.toThrow(/closed/i)
   })
 })

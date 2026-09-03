@@ -21,6 +21,12 @@ class Clock {
   randomToken() {
     return `tok-${++this.n}`
   }
+  async hashPassword(pw: string) {
+    return `h:${pw}`
+  }
+  async verifyPassword(pw: string, stored: string) {
+    return stored === `h:${pw}`
+  }
   advance(ms: number) {
     this.t += ms
   }
@@ -308,5 +314,72 @@ describe('the reward ladder', () => {
     const second = (await (await hint('close')).json()) as {penaltyMs: number}
     expect(first.penaltyMs).toBe(0)
     expect(second.penaltyMs).toBeGreaterThan(0)
+  })
+})
+
+describe('app — password login', () => {
+  const anon = (path: string, body: unknown) =>
+    app.request(
+      path,
+      {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)},
+      env,
+    )
+
+  it('signs up against an event code and then plays', async () => {
+    const batch = (await (
+      await json('/admin/batches', {name: 'Induction', eventCode: 'induct26'})
+    ).json()) as {eventCode: string}
+    expect(batch.eventCode).toBe('induct26')
+
+    const signup = await anon('/session/signup', {
+      eventCode: 'induct26',
+      username: '21B-1042',
+      name: 'Aditi',
+      password: 'a-good-password',
+    })
+    expect(signup.status).toBe(200)
+    const {sessionToken} = (await signup.json()) as {sessionToken: string}
+
+    const start = await app.request(
+      '/session/start',
+      {method: 'POST', headers: {Authorization: `Bearer ${sessionToken}`}},
+      env,
+    )
+    expect(start.status).toBe(200)
+  })
+
+  it('logs a returning player back in', async () => {
+    await json('/admin/batches', {name: 'B', eventCode: 'code9'})
+    await anon('/session/signup', {eventCode: 'code9', username: 'r1', name: 'Sam', password: 'secret123'})
+    const back = await anon('/session/login', {eventCode: 'code9', username: 'r1', password: 'secret123'})
+    expect(back.status).toBe(200)
+  })
+
+  it('rejects a bad password with 401', async () => {
+    await json('/admin/batches', {name: 'B', eventCode: 'code10'})
+    await anon('/session/signup', {eventCode: 'code10', username: 'r1', name: 'Sam', password: 'secret123'})
+    const bad = await anon('/session/login', {eventCode: 'code10', username: 'r1', password: 'nope'})
+    expect(bad.status).toBe(401)
+  })
+
+  it('rejects an unknown event code with 404', async () => {
+    const res = await anon('/session/signup', {
+      eventCode: 'ghost',
+      username: 'r1',
+      name: 'Sam',
+      password: 'secret123',
+    })
+    expect(res.status).toBe(404)
+  })
+
+  it('rejects a short password with 400', async () => {
+    await json('/admin/batches', {name: 'B', eventCode: 'code11'})
+    const res = await anon('/session/signup', {
+      eventCode: 'code11',
+      username: 'r1',
+      name: 'Sam',
+      password: 'x',
+    })
+    expect(res.status).toBe(400)
   })
 })

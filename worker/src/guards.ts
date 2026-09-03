@@ -16,7 +16,28 @@ export class BadInput extends Error {
 const NonEmpty = v.pipe(v.string(), v.minLength(1))
 const Finite = v.pipe(v.number(), v.finite())
 
-const CreateBatchSchema = v.object({name: NonEmpty, demo: v.optional(v.boolean(), false)})
+const Handle = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40))
+const DisplayName = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(60))
+const Password = v.pipe(v.string(), v.minLength(6), v.maxLength(200))
+
+const CreateBatchSchema = v.object({
+  name: NonEmpty,
+  demo: v.optional(v.boolean(), false),
+  eventCode: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(40))),
+})
+
+const SignupSchema = v.object({
+  eventCode: Handle,
+  username: Handle,
+  name: DisplayName,
+  password: Password,
+})
+
+const LoginSchema = v.object({
+  eventCode: Handle,
+  username: Handle,
+  password: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+})
 
 /** A practice run may pin its route; everything else is server-chosen. */
 const DemoSessionSchema = v.object({
@@ -69,7 +90,8 @@ const parse = <TSchema extends v.GenericSchema>(
   return result.output
 }
 
-export const parseCreateBatch = (raw: unknown): {name: string; demo: boolean} => parse(CreateBatchSchema, raw)
+export const parseCreateBatch = (raw: unknown): v.InferOutput<typeof CreateBatchSchema> =>
+  parse(CreateBatchSchema, raw)
 
 export const parseDemoSession = (raw: unknown): {route?: string[] | undefined} =>
   parse(DemoSessionSchema, raw)
@@ -78,6 +100,11 @@ export const parseRegisterPlayers = (
   raw: unknown,
 ): {players: ReadonlyArray<{name: string; rosterId: string; route?: string[] | undefined}>} =>
   parse(RegisterPlayersSchema, raw)
+
+export const parseSignup = (raw: unknown): v.InferOutput<typeof SignupSchema> =>
+  parse(SignupSchema, raw)
+
+export const parseLogin = (raw: unknown): v.InferOutput<typeof LoginSchema> => parse(LoginSchema, raw)
 
 export const parseSamples = (raw: unknown): GeoSample[] => parse(SamplesSchema, raw).samples
 

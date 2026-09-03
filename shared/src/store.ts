@@ -19,6 +19,8 @@ export type StoredBatch = Batch & {pool: RoutePool}
 export interface GameStore {
   putBatch(batch: StoredBatch): Promise<void>
   getBatch(id: string): Promise<StoredBatch | null>
+  /** Resolve the short signup code from the URL to its batch. */
+  getBatchByCode(code: string): Promise<StoredBatch | null>
   /** Newest first. Organiser console only. */
   listBatches(): Promise<StoredBatch[]>
 
@@ -26,6 +28,7 @@ export interface GameStore {
   getPlayer(id: string): Promise<Player | null>
   getPlayerByToken(token: string): Promise<Player | null>
   getPlayerByRoster(batchId: string, rosterId: string): Promise<Player | null>
+  setPlayerPassword(playerId: string, passwordHash: string): Promise<void>
   listPlayers(batchId: string): Promise<Player[]>
 
   putRoute(route: Route): Promise<void>
@@ -61,6 +64,10 @@ export class InMemoryStore implements GameStore {
   async getBatch(id: string): Promise<StoredBatch | null> {
     return this.batches.get(id) ?? null
   }
+  async getBatchByCode(code: string): Promise<StoredBatch | null> {
+    for (const b of this.batches.values()) if (b.eventCode === code) return b
+    return null
+  }
   async listBatches(): Promise<StoredBatch[]> {
     return [...this.batches.values()].sort((a, b) => b.createdAtMs - a.createdAtMs)
   }
@@ -80,6 +87,10 @@ export class InMemoryStore implements GameStore {
       if (p.batchId === batchId && p.rosterId === rosterId) return p
     }
     return null
+  }
+  async setPlayerPassword(playerId: string, passwordHash: string): Promise<void> {
+    const p = this.players.get(playerId)
+    if (p) this.players.set(playerId, {...p, passwordHash})
   }
   async listPlayers(batchId: string): Promise<Player[]> {
     return [...this.players.values()].filter((p) => p.batchId === batchId)

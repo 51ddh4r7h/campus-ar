@@ -45,15 +45,26 @@ export interface Batch {
   parConstants: ParConstants
   /** A throwaway practice batch — never mixed with real event results. */
   isDemo: boolean
+  /**
+   * Short code the shared signup URL carries (`/?e=<code>`). One link for the
+   * whole cohort; players tell themselves apart by roll number + password.
+   * Null on batches created before password login, which have no self-serve
+   * signup.
+   */
+  eventCode: string | null
 }
 
 export interface Player {
   id: string
   batchId: string
   name: string
-  /** University roster / student id — the anti-cheat identity anchor. */
+  /** University roster / student id — the anti-cheat identity anchor, and the
+   *  username for password login. */
   rosterId: string
   sessionToken: string
+  /** PBKDF2 string, or null for a player who has not set a password (a
+   *  magic-link registration that was never claimed). Never sent to a client. */
+  passwordHash: string | null
 }
 
 /** A player's assigned path: five location ids in play order, with par split out. */

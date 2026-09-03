@@ -9,11 +9,12 @@
   import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
   import {haptics} from './lib/haptics'
-  import {playerLink, demoAllowed, adminRequested} from './lib/mode'
+  import {playerLink, demoAllowed, adminRequested, eventCode} from './lib/mode'
   import {POLLING} from '@cmh/shared'
 
   import Splash from './screens/Splash.svelte'
   import Join from './screens/Join.svelte'
+  import Signin from './screens/Signin.svelte'
   import Welcome from './screens/Welcome.svelte'
   import Permissions from './screens/Permissions.svelte'
   import Ready from './screens/Ready.svelte'
@@ -29,11 +30,15 @@
   import Toaster from './lib/components/Toaster.svelte'
   import DemoBadge from './lib/components/DemoBadge.svelte'
 
-  const screens = {splash: Splash, join: Join, welcome: Welcome, permissions: Permissions, ready: Ready, clue: Clue, search: Search, reveal: Reveal, finish: Finish}
+  const screens = {splash: Splash, join: Join, signin: Signin, welcome: Welcome, permissions: Permissions, ready: Ready, clue: Clue, search: Search, reveal: Reveal, finish: Finish}
   const Screen = $derived(screens[nav.screen])
 
-  /** Where someone with no live session lands. */
-  const entryScreen = (): ScreenName => (demoAllowed ? 'welcome' : 'join')
+  /**
+   * Where someone with no live session lands. A cohort's `?e=` link goes to
+   * sign-in; a bare visit to the practice run in dev, or the "use your link"
+   * dead end otherwise.
+   */
+  const entryScreen = (): ScreenName => (eventCode ? 'signin' : demoAllowed ? 'welcome' : 'join')
 
   /** The session lives on the server — keep asking through a bad cold start. */
   async function restoreSession(): Promise<void> {
