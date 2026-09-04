@@ -59,6 +59,49 @@ describe('route pool generation', () => {
   })
 })
 
+describe('difficulty ramp', () => {
+  const tiers = (stops: readonly string[]) => stops.map((id) => locationById(id)!.difficulty)
+
+  it('never asks for a harder recognition than the one before', () => {
+    for (const r of pool.routes) {
+      const d = tiers(r.stops)
+      for (let i = 1; i < d.length; i++) {
+        expect(d[i]!, `route ${r.stops.join('>')} falls at level ${i + 1}`).toBeGreaterThanOrEqual(d[i - 1]!)
+      }
+    }
+  })
+
+  it('puts every marked-Difficult scene at the end of its route', () => {
+    for (const r of pool.routes) {
+      const d = tiers(r.stops)
+      const firstHard = d.indexOf(3)
+      if (firstHard === -1) continue
+      // Once it goes hard it stays hard — so the hard ones are a tail.
+      expect(d.slice(firstHard).every((x) => x === 3)).toBe(true)
+    }
+  })
+
+  it('always includes at least one hard clue, so the two Difficult scenes get played', () => {
+    // Without a floor the balancer settles on all-easy routes, because with
+    // seven easy locations against two hard ones that bucket is much the
+    // largest — and the Difficult clips would never be served to anyone.
+    for (const r of pool.routes) {
+      expect(tiers(r.stops).filter((d) => d === 3).length).toBeGreaterThanOrEqual(
+        ROUTE_POOL.minHardClues,
+      )
+    }
+  })
+
+  it('finishes on a hard clue', () => {
+    for (const r of pool.routes) expect(tiers(r.stops).at(-1)).toBe(3)
+  })
+
+  it('still spreads the opening across the easy locations', () => {
+    const firsts = new Set(pool.routes.map((r) => r.stops[0]))
+    expect(firsts.size).toBeGreaterThanOrEqual(5)
+  })
+})
+
 describe('assignRoute', () => {
   it('hands out distinct routes until the pool is exhausted', () => {
     const seen = new Set<string>()

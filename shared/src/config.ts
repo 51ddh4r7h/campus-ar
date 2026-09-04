@@ -93,6 +93,25 @@ export const ROUTE_POOL = {
   maxFirstLevelDifficulty: 1,
   /** No route may contain more than this many hard (tier 3) clues. */
   maxHardClues: 2,
+  /**
+   * Nor fewer than this. Without a floor the pool collapses to all-easy
+   * routes: the balancer anchors on whichever total-difficulty bucket holds
+   * the most candidates, and with seven easy locations against two hard ones
+   * that is always the bucket with no hard clue in it. Every player would
+   * finish without ever meeting one of the two scenes the organisers marked
+   * Difficult.
+   */
+  minHardClues: 1,
+  /**
+   * Difficulty may not fall as a route progresses.
+   *
+   * A player who opens on the hardest clue on campus has no idea yet what the
+   * game even feels like, and that is where people give up. So the ramp only
+   * ever goes one way: the easy recognitions come first and build the habit,
+   * and the marked-Difficult scenes land at the end, on someone who now knows
+   * exactly what they are looking for.
+   */
+  difficultyRamp: true,
   /** A single leg may not exceed this share of the route's total walk distance. */
   maxLegShareOfRoute: 0.42,
 } as const

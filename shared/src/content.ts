@@ -13,9 +13,21 @@
  * fence. Re-survey any of them a little further out and it can come straight
  * back in.
  *
+ * The coordinates come from the GPS stamps in the master sheet, paired to rows
+ * by where each stamp sits on the page. That detail matters: the stamps are NOT
+ * stored in row order in the file, and reading them in file order silently
+ * swapped two pairs — Behind SSBF with SIDTM Admin (about 96m apart) and the
+ * Library with SIU Admin (34m). Both fences were in the wrong place. If these
+ * are ever re-extracted, pair by position, never by order.
+ *
+ * `difficulty` is the organiser's own marking from the master sheet — Easy is
+ * tier 1, Difficult is tier 3. It is not a guess from the footage: an earlier
+ * pass read the fountain as the easiest shot on the list and it is marked
+ * Difficult. Tier 2 is unused for now; nothing was marked in between.
+ *
  * Still to fill in: `campusFact` is deliberately empty rather than filled with
- * plausible fiction. Par tiers are first drafts to be recalibrated against the
- * first batch's real leg times.
+ * plausible fiction. Par times per tier are first drafts to be recalibrated
+ * against the first batch's real leg times.
  */
 
 import type {LatLng} from './geo'
@@ -59,10 +71,10 @@ const SURVEYED: readonly GameLocation[] = [
     // Sheet 1 — behind ssbf
     id: 'behind-ssbf',
     name: 'Behind SSBF',
-    lat: 18.537202,
-    lng: 73.731891,
+    lat: 18.538066,
+    lng: 73.731658,
     radiusM: 15,
-    difficulty: 2,
+    difficulty: 1,
     ...media('behind-ssbf'),
     movie: {
       title: BODYGUARD,
@@ -82,7 +94,7 @@ const SURVEYED: readonly GameLocation[] = [
     lat: 18.537566,
     lng: 73.731803,
     radiusM: 15,
-    difficulty: 2,
+    difficulty: 1,
     ...media('sibm'),
     movie: {
       title: BODYGUARD,
@@ -99,10 +111,10 @@ const SURVEYED: readonly GameLocation[] = [
     // Sheet 3 — sidtm admin office
     id: 'sidtm-admin',
     name: 'SIDTM Admin Office',
-    lat: 18.538066,
-    lng: 73.731658,
+    lat: 18.537202,
+    lng: 73.731891,
     radiusM: 15,
-    difficulty: 3,
+    difficulty: 1,
     ...media('sidtm-admin'),
     movie: {
       title: BODYGUARD,
@@ -116,33 +128,13 @@ const SURVEYED: readonly GameLocation[] = [
     },
   },
   {
-    // Sheet 4 — Auditorium
-    id: 'auditorium',
-    name: 'Auditorium',
-    lat: 18.536747,
-    lng: 73.732526,
-    radiusM: 15,
-    difficulty: 3,
-    ...media('auditorium'),
-    movie: {
-      title: BODYGUARD,
-      blurb: 'A lone figure framed in the archway at the end of a long dark passage.',
-    },
-    campusFact: '',
-    clue: {
-      far: 'A high archway at the end of a passage, with a polished floor throwing the light back.',
-      warm: 'Panels mounted along one wall, and the way out framed as a bright arch.',
-      close: 'The approach to the main auditorium.',
-    },
-  },
-  {
     // Sheet 7 — fountain
     id: 'fountain',
     name: 'The Fountain',
     lat: 18.536108,
     lng: 73.732878,
     radiusM: 15,
-    difficulty: 1,
+    difficulty: 3,
     ...media('fountain'),
     movie: {
       title: BODYGUARD,
@@ -159,8 +151,8 @@ const SURVEYED: readonly GameLocation[] = [
     // Sheet 8 — Library
     id: 'library',
     name: 'Library',
-    lat: 18.53653,
-    lng: 73.732741,
+    lat: 18.536825,
+    lng: 73.732653,
     radiusM: 15,
     difficulty: 3,
     ...media('library'),
@@ -173,6 +165,26 @@ const SURVEYED: readonly GameLocation[] = [
       far: 'Tall pale doors standing open, with the tail of a sign visible on the wall above them.',
       warm: 'Pale panelling, a bin beside the door, shelving just inside.',
       close: 'The doors into the library.',
+    },
+  },
+  {
+    // Sheet 9 — SIU admin office
+    id: 'siu-admin',
+    name: 'SIU Admin Office',
+    lat: 18.53653,
+    lng: 73.732741,
+    radiusM: 15,
+    difficulty: 3,
+    ...media('siu-admin'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'Three of them stopped mid-conversation at the foot of the stairs.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'A pale open hall with a staircase climbing across the back of it, and a brick pier at one side.',
+      warm: 'Potted palms at the foot of the stairs; a mezzanine walkway above.',
+      close: 'The university administration building.',
     },
   },
   {
@@ -202,7 +214,7 @@ const SURVEYED: readonly GameLocation[] = [
     lat: 18.537331,
     lng: 73.732295,
     radiusM: 15,
-    difficulty: 3,
+    difficulty: 1,
     ...media('symbieat'),
     movie: {
       title: HOSTEL_DAZE,
@@ -222,7 +234,7 @@ const SURVEYED: readonly GameLocation[] = [
     lat: 18.536958,
     lng: 73.731443,
     radiusM: 15,
-    difficulty: 2,
+    difficulty: 1,
     ...media('outside-c-hall'),
     movie: {
       title: HOSTEL_DAZE,
@@ -251,9 +263,9 @@ const SURVEYED: readonly GameLocation[] = [
  * straight back.
  */
 export const PARKED = [
-  {sheet: 5, id: 'xerox', name: 'Xerox', lat: 18.537208, lng: 73.731825, clashesWith: 'behind-ssbf', gapM: 7},
-  {sheet: 6, id: 'behind-amphi', name: 'Behind Amphi', lat: 18.537417, lng: 73.731711, clashesWith: 'sibm', gapM: 19},
-  {sheet: 9, id: 'siu-admin', name: 'SIU Admin Office', lat: 18.536825, lng: 73.732653, clashesWith: 'auditorium', gapM: 16},
+  {sheet: 4, id: 'auditorium', name: 'Auditorium', lat: 18.536747, lng: 73.732526, clashesWith: 'library', gapM: 16, difficulty: 1},
+  {sheet: 5, id: 'xerox', name: 'Xerox', lat: 18.537208, lng: 73.731825, clashesWith: 'sidtm-admin', gapM: 7, difficulty: 1},
+  {sheet: 6, id: 'behind-amphi', name: 'Behind Amphi', lat: 18.537417, lng: 73.731713, clashesWith: 'sibm', gapM: 19, difficulty: 3},
 ] as const
 
 if (SURVEYED.length !== 9) {

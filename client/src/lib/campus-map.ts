@@ -34,8 +34,8 @@ export const MAP_STOPS: readonly MapStop[] = [
   {
     "id": "behind-ssbf",
     "name": "Behind SSBF",
-    "x": 451.7,
-    "y": 118.1
+    "x": 438.7,
+    "y": 67.6
   },
   {
     "id": "sibm",
@@ -46,14 +46,8 @@ export const MAP_STOPS: readonly MapStop[] = [
   {
     "id": "sidtm-admin",
     "name": "SIDTM Admin Office",
-    "x": 438.7,
-    "y": 67.6
-  },
-  {
-    "id": "auditorium",
-    "name": "Auditorium",
-    "x": 486.9,
-    "y": 144.7
+    "x": 451.7,
+    "y": 118.1
   },
   {
     "id": "fountain",
@@ -64,6 +58,12 @@ export const MAP_STOPS: readonly MapStop[] = [
   {
     "id": "library",
     "name": "Library",
+    "x": 493.9,
+    "y": 140.1
+  },
+  {
+    "id": "siu-admin",
+    "name": "SIU Admin Office",
     "x": 498.8,
     "y": 157.3
   },

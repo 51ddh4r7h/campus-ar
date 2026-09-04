@@ -60,6 +60,31 @@ interface Candidate extends RouteTemplate {
   resolved: GameLocation[]
 }
 
+/** True when no leg asks for a harder recognition than the one before it. */
+const ramps = (perm: readonly GameLocation[]): boolean => {
+  for (let i = 1; i < perm.length; i++) {
+    if (perm[i]!.difficulty < perm[i - 1]!.difficulty) return false
+  }
+  return true
+}
+
+/**
+ * The ordering rules, before any walking is costed.
+ *
+ * A player who opens on the hardest clue on campus has no idea yet what the
+ * game feels like, and that is where people give up — so difficulty only ever
+ * climbs. The floor on hard clues matters just as much: without it the
+ * balancer settles on all-easy routes, because with seven easy locations
+ * against two hard ones that bucket is much the largest, and the two scenes
+ * the organisers marked Difficult would never be served to anybody.
+ */
+const playableOrder = (perm: readonly GameLocation[]): boolean => {
+  if (perm[0]!.difficulty > ROUTE_POOL.maxFirstLevelDifficulty) return false
+  const hard = perm.filter((l) => l.difficulty === 3).length
+  if (hard > ROUTE_POOL.maxHardClues || hard < ROUTE_POOL.minHardClues) return false
+  return !ROUTE_POOL.difficultyRamp || ramps(perm)
+}
+
 function buildCandidates(
   locations: readonly GameLocation[],
   startPoint: LatLng,
@@ -67,9 +92,7 @@ function buildCandidates(
 ): Candidate[] {
   const out: Candidate[] = []
   for (const perm of permutations(locations, LEVEL_COUNT)) {
-    const first = perm[0]!
-    if (first.difficulty > ROUTE_POOL.maxFirstLevelDifficulty) continue
-    if (perm.filter((l) => l.difficulty === 3).length > ROUTE_POOL.maxHardClues) continue
+    if (!playableOrder(perm)) continue
 
     const par = routePar(perm, startPoint, pc)
 
