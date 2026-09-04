@@ -11,6 +11,9 @@
   import Icon from '../lib/components/Icon.svelte'
   import StepDots from '../lib/components/StepDots.svelte'
 
+  /** Lazy, like the hero's beam: three.js is a chunk, not a line. */
+  const scan = import('../lib/components/bits/GridScan.svelte')
+
   let step = $state<'location' | 'camera'>('location')
   let phase = $state<'ask' | 'waiting' | 'denied' | 'unavailable'>('ask')
 
@@ -69,6 +72,18 @@
   const bad = $derived(phase === 'denied' || phase === 'unavailable')
 </script>
 
+<!-- A grid sweeping the ground while we ask for the sensors that will read it.
+     Tilts with the phone via the component's own gyroscope handler. -->
+<div class="scan" aria-hidden="true">
+  {#await scan then GridScan}
+    <GridScan.default
+      linesColor="#2a2f37"
+      scanColor="#e8a54c"
+      enableGyro={true}
+    />
+  {/await}
+</div>
+
 <main>
   <div class="progress">
     <StepDots
@@ -118,6 +133,20 @@
 </main>
 
 <style>
+  .scan {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: var(--bg);
+    /* Well under the copy: this is a texture, not a picture. */
+    opacity: 0.5;
+    mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+  }
+  main {
+    position: relative;
+    z-index: 1;
+  }
   .progress {
     padding-top: var(--sp-2);
   }

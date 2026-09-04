@@ -13,7 +13,6 @@
   import {HOW_TO} from '../lib/how-to'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
-  import SceneBackdrop from '../lib/components/SceneBackdrop.svelte'
   import EdgeBlur from '../lib/components/EdgeBlur.svelte'
 
   const first = $derived(game.playerName?.trim().split(/\s+/)[0] ?? '')
@@ -31,9 +30,6 @@
   }
 </script>
 
-<!-- Dimmer than the hero: the same stills, but this screen carries six rules
-     and the copy has to win. -->
-<SceneBackdrop strength={0.16} />
 <EdgeBlur height="70vh" strength={16} />
 
 <main>

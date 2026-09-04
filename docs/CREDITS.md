@@ -47,11 +47,26 @@ Use the "Copy Credits" button on each model's download page and paste the exact
 text here. Once complete, surface it in the app — the How to play sheet is the
 natural home, since it is reachable without interrupting a run.
 
-## UI techniques — svelte-bits
+## svelte-bits
 
-`Sheen`, `EdgeBlur` and `StepDots` on the entry screens are our own code, but
-the ideas behind the first two come from svelte-bits (the Svelte port of React
-Bits) — `ShinyText` and `GradualBlur` respectively.
+Three components are vendored from svelte-bits (the Svelte port of React Bits)
+into `client/src/lib/components/bits/`, kept close to upstream so they can be
+re-synced: **LaserFlow** (the projector beam on the hero), **GridScan** (the
+surveying grid behind the permissions screen) and **TrueFocus** (the rack-focus
+title). They are exempted from the house lint rules in `oxlint.config.ts` for
+that reason — those rules police code we write.
+
+One change is not cosmetic. **GridScan's face-tracking path is removed**, and
+with it the `face-api.js` dependency: it opened the *front* camera on the
+landing screen and fetched model weights from a CDN at runtime. This app asks
+for the *rear* camera later, with an explanation, and a selfie prompt at the
+door would be refused by most people — a refusal there poisons the request we
+actually need. The component's own gyroscope handler drives the tilt instead,
+which is the right input on a phone anyway.
+
+`Sheen`, `EdgeBlur` and `StepDots` are separate, and are our own code; the ideas
+behind the first two come from the same library — `ShinyText` and `GradualBlur`
+respectively.
 
 > svelte-bits, Copyright (c) 2026 David Haz. MIT + Commons Clause.
 > https://github.com/DavidHDev/svelte-bits

@@ -11,10 +11,20 @@
   import {nav} from '../lib/stores/nav.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
-  import SceneBackdrop from '../lib/components/SceneBackdrop.svelte'
   import EdgeBlur from '../lib/components/EdgeBlur.svelte'
   import Sheen from '../lib/components/Sheen.svelte'
+  import TrueFocus from '../lib/components/bits/TrueFocus.svelte'
   import {isInAppBrowser} from '../lib/env'
+
+  /**
+   * The beam is three.js and three.js is a 730KB chunk, so it is imported only
+   * when this screen mounts rather than sitting in the entry bundle. Loading it
+   * here is not purely a cost either: the AR stage needs the same chunk at the
+   * first reveal, and fetching it while someone reads the hero is a better
+   * moment than fetching it while they are standing in a car park waiting for a
+   * scene to play.
+   */
+  const beam = import('../lib/components/bits/LaserFlow.svelte')
 
   const inApp = isInAppBrowser()
 
@@ -25,7 +35,24 @@
   ] as const
 </script>
 
-<SceneBackdrop />
+<!-- The projector. Sits behind everything, pointing down the screen. -->
+<div class="beam" aria-hidden="true">
+  {#await beam then LaserFlow}
+    <LaserFlow.default
+      color="#e8a54c"
+      dpr={1}
+      horizontalBeamOffset={0.0}
+      verticalBeamOffset={-0.42}
+      verticalSizing={1.9}
+      horizontalSizing={0.62}
+      flowSpeed={0.28}
+      fogIntensity={0.38}
+      wispIntensity={4}
+      wispDensity={0.8}
+      mouseTiltStrength={0}
+    />
+  {/await}
+</div>
 <EdgeBlur height="46vh" />
 
 <main>
@@ -37,7 +64,7 @@
 
   <div class="top">
     <span class="eyebrow"><Sheen text="Shot on this campus" /></span>
-    <h1>Campus<br />Movie&nbsp;Hunt</h1>
+    <h1><TrueFocus sentence="Campus Movie Hunt" blurAmount={6} /></h1>
     <p class="tag">Five scenes were filmed here. Find where.</p>
   </div>
 
@@ -76,6 +103,30 @@
     justify-content: flex-end;
     gap: var(--sp-8);
     padding: calc(var(--safe-top) + var(--sp-8)) var(--edge) calc(var(--safe-bottom) + var(--sp-8));
+  }
+  /* Behind the copy, and darkened at the bottom by EdgeBlur so the beam never
+     competes with the words. */
+  .beam {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: var(--bg);
+  }
+  /* The beam splashes where it hits, and that splash was landing on the title.
+     The words win: everything below the beam's pool is taken back to near-black
+     so the copy always reads. */
+  .beam::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(10, 11, 13, 0.55) 24%,
+      rgba(10, 11, 13, 0.94) 40%,
+      var(--bg) 56%
+    );
   }
   .warn {
     position: fixed;

@@ -58,6 +58,25 @@ const config: OxlintConfig = {
       },
     },
     {
+      /**
+       * Vendored from svelte-bits, kept close to upstream on purpose.
+       *
+       * These rules police code we write. Rewriting a third party's shader
+       * plumbing to satisfy them makes the next update a merge conflict and
+       * risks breaking WebGL internals nobody here owns. The house rules still
+       * apply to every line we wrote, including the screens that use these.
+       */
+      files: ['client/src/lib/components/bits/**'],
+      rules: {
+        'anti-slop/no-chained-type-assertions': 'off',
+        'anti-slop/no-runtime-typeof': 'off',
+        'anti-slop/no-unsafe-dictionary-type': 'off',
+        'anti-slop/require-safety-comment-for-type-assertion': 'off',
+        'no-unassigned-vars': 'off',
+        complexity: 'off',
+      },
+    },
+    {
       // Browser-capability detection — feature-testing platform APIs (Vibration,
       // DeviceOrientation, WebGL) genuinely needs `typeof`/`in`/narrowing casts.
       files: [
