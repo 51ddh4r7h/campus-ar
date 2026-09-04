@@ -305,6 +305,10 @@ export class D1Store implements GameStore {
       .run()
   }
 
+  async clearSplits(playerId: string): Promise<void> {
+    await this.db.prepare('DELETE FROM split WHERE player_id = ?1').bind(playerId).run()
+  }
+
   async listSplits(playerId: string): Promise<Split[]> {
     const {results} = await this.db
       .prepare('SELECT * FROM split WHERE player_id = ?1 ORDER BY level')

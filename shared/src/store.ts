@@ -42,6 +42,8 @@ export interface GameStore {
 
   putSplit(split: Split): Promise<void>
   listSplits(playerId: string): Promise<Split[]>
+  /** Drop a player's history — only when their route is being reissued. */
+  clearSplits(playerId: string): Promise<void>
 
   appendEvent(event: GameEvent): Promise<void>
   addBreadcrumbs(crumbs: readonly Breadcrumb[]): Promise<void>
@@ -132,6 +134,9 @@ export class InMemoryStore implements GameStore {
     return this.splits
       .filter((s) => s.playerId === playerId)
       .sort((a, b) => a.level - b.level)
+  }
+  async clearSplits(playerId: string): Promise<void> {
+    this.splits = this.splits.filter((s) => s.playerId !== playerId)
   }
 
   async appendEvent(event: GameEvent): Promise<void> {

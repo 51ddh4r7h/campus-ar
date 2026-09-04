@@ -135,6 +135,7 @@ export type GameEventType =
   | 'skip_attempt'
   | 'speed_flag'
   | 'signal_lost'
+  | 'route_reissued'
 
 export interface GameEvent {
   playerId: string

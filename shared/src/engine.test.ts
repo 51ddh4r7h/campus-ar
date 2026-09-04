@@ -335,3 +335,63 @@ describe('engine — password signup and login', () => {
     ).rejects.toThrow(/closed/i)
   })
 })
+
+describe('engine — content changed under a live batch', () => {
+  /** Put a player on a route naming a location the content no longer has. */
+  async function strand() {
+    const batch = await engine.createBatch({name: 'Old', eventCode: 'old1'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    const route = (await store.getRoute(player.id))!
+    await store.putRoute({...route, stops: ['amphitheatre', 'sibm', 'auditorium', 'symbieat', 'library']})
+    return {batch, player}
+  }
+
+  it('starts the hunt instead of throwing when a stop no longer exists', async () => {
+    const {player} = await strand()
+    // Before the fix this threw `unknown location "auditorium" in route`, which
+    // the Worker turned into a 500 and the client blamed on the network.
+    const {clue} = await engine.startHunt(player.sessionToken)
+    expect(clue.level).toBe(1)
+  })
+
+  it('reissues a route made only of locations that still exist', async () => {
+    const {player} = await strand()
+    await engine.startHunt(player.sessionToken)
+    const route = (await store.getRoute(player.id))!
+    for (const id of route.stops) expect(locationById(id), id).toBeDefined()
+    expect(route.stops).not.toContain('auditorium')
+  })
+
+  it('clears splits that pointed at the old route', async () => {
+    const {player} = await strand()
+    await store.putSplit({
+      playerId: player.id,
+      level: 1,
+      locationId: 'auditorium',
+      reachedTsMs: deps.now(),
+      splitMs: 1000,
+      hintsUsed: 0,
+      penaltyMs: 0,
+    })
+    await engine.startHunt(player.sessionToken)
+    expect(await store.listSplits(player.id)).toHaveLength(0)
+  })
+
+  it('rebuilds a batch pool whose routes are all stale, so new players are not stranded too', async () => {
+    const batch = await engine.createBatch({name: 'Stale', eventCode: 'stale1'})
+    const stored = (await store.getBatch(batch.id))!
+    await store.putBatch({
+      ...stored,
+      pool: {
+        ...stored.pool,
+        routes: stored.pool.routes.map((r) => ({
+          ...r,
+          stops: ['amphitheatre', 'sibm', 'auditorium', 'symbieat', 'library'] as typeof r.stops,
+        })),
+      },
+    })
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'B', rosterId: 'r2'})
+    const route = (await store.getRoute(player.id))!
+    for (const id of route.stops) expect(locationById(id), id).toBeDefined()
+  })
+})

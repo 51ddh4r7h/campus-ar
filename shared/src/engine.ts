@@ -11,7 +11,7 @@ import {
   LEVEL_COUNT,
 } from './config'
 import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
-import {generateRoutePool} from './routes'
+import {generateRoutePool, type RoutePool} from './routes'
 import {assignRoute} from './routes'
 import {routePar, sessionScoreMs} from './scoring'
 import {VALIDATION} from './config'
@@ -252,7 +252,25 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       store.getBatch(player.batchId),
     ])
     if (!session || !route || !batch) throw new EngineError('bad_token')
-    return {player, session, route, batch}
+    if (routeIsLive(route.stops)) return {player, session, route, batch}
+
+    /**
+     * The route names a location the content no longer has.
+     *
+     * This happens when the location list is edited under a live batch, and
+     * until now it surfaced as an unhandled throw deep in clueView — a 500 that
+     * the client reported to the player as a connection problem. There is
+     * nothing to salvage: the stops cannot be resolved, so the clues cannot be
+     * served and the recorded splits point at places that no longer exist.
+     * Reissue rather than strand them. Losing a part-finished run is bad; being
+     * unable to play at all is worse, and only one of the two is recoverable.
+     */
+    await store.clearSplits(player.id)
+    const fresh = await seatPlayer(batch, player, undefined)
+    await event(player.id, 'route_reissued', {had: route.stops.join('>')})
+    const reissued = await store.getRoute(player.id)
+    if (!reissued) throw new EngineError('pool_empty')
+    return {player, session: fresh, route: reissued, batch}
   }
 
   /** A short, URL-safe signup code from a batch name, plus 3 hex for uniqueness. */
@@ -263,6 +281,29 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       .replace(/^-+|-+$/g, '')
       .slice(0, 24)
     return `${slug || 'hunt'}-${deps.randomId().replace(/[^a-z0-9]/gi, '').slice(0, 3)}`
+  }
+
+  /** Every stop still names a location that exists in the current content. */
+  const routeIsLive = (stops: readonly string[]): boolean =>
+    stops.every((id) => locationById(id) !== undefined)
+
+  /**
+   * A batch's route pool, minus anything the content no longer contains.
+   *
+   * A batch stores the pool it was created with, so editing the location list
+   * strands every batch made before the edit — and the stale routes are handed
+   * out to new players, not just held by old ones. Filtering keeps whatever is
+   * still playable; when nothing is, the pool is rebuilt from current content
+   * against the batch's original seed and written back.
+   */
+  const livePool = async (batch: StoredBatch): Promise<RoutePool> => {
+    const usable = batch.pool.routes.filter((r) => routeIsLive(r.stops))
+    if (usable.length === batch.pool.routes.length) return batch.pool
+    if (usable.length > 0) return {...batch.pool, routes: usable}
+
+    const pool = generateRoutePool(LOCATIONS, START_POINT, batch.parConstants, batch.routePoolSeed)
+    await store.putBatch({...batch, pool})
+    return pool
   }
 
   /** Build the route + session for a new player and persist all three rows. */
@@ -290,8 +331,11 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       parTotalMs = par.totalMs
       legParMs = par.legMs
     } else {
-      const assigned = await store.assignedRouteKeys(batch.id)
-      const tmpl = assignRoute(batch.pool, assigned)
+      const [assigned, pool] = await Promise.all([
+        store.assignedRouteKeys(batch.id),
+        livePool(batch),
+      ])
+      const tmpl = assignRoute(pool, assigned)
       stops = tmpl.stops
       parTotalMs = tmpl.parTotalMs
       legParMs = tmpl.legParMs

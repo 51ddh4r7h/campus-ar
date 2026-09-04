@@ -4,6 +4,7 @@
   import {game} from '../lib/stores/game.svelte'
   import {clock} from '../lib/stores/clock.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
+  import {ApiError} from '../lib/api'
   import {revealVideo} from '../lib/reveal-video'
 
   const resuming = $derived(game.inProgress)
@@ -24,8 +25,18 @@
     try {
       await game.start()
       nav.go('clue')
-    } catch {
-      toasts.show('Could not start — check your connection', 'alert')
+    } catch (err) {
+      // Blaming the network for everything sent a real server fault looking
+      // like a wifi problem. Say which it was: `net.online` already knows
+      // whether the request even left the device.
+      toasts.show(
+        !game.online
+          ? "Can't reach the server — check your connection"
+          : err instanceof ApiError
+            ? `Could not start — ${err.message}`
+            : 'Could not start. Try again, or tell an organiser.',
+        'alert',
+      )
       starting = false
     }
   }
