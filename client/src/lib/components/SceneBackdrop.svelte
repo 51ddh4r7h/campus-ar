@@ -13,7 +13,10 @@
   import {onMount} from 'svelte'
   import {LOCATIONS} from '@cmh/shared'
 
-  const {intervalMs = 5200}: {intervalMs?: number} = $props()
+  /** `strength` is how far the stills come up. Screens carrying a lot of copy
+   *  turn it down rather than dropping the backdrop, so the flow stays one
+   *  place while the text stays readable. */
+  const {intervalMs = 5200, strength = 0.34}: {intervalMs?: number; strength?: number} = $props()
 
   /** Shuffled once per mount, so two players don't see the same opening frame. */
   const posters = LOCATIONS.map((l) => l.posterUrl).sort(() => Math.random() - 0.5)
@@ -34,7 +37,7 @@
   })
 </script>
 
-<div class="backdrop" aria-hidden="true">
+<div class="backdrop" style="--on: {strength}" aria-hidden="true">
   {#each usable as src, i (src)}
     <img {src} alt="" class:on={i === index % Math.max(1, usable.length)} onerror={() => drop(src)} />
   {/each}
@@ -65,7 +68,7 @@
       transform 6s linear;
   }
   img.on {
-    opacity: 0.34;
+    opacity: var(--on);
     transform: scale(1.16);
   }
   /* Bottom-weighted so the copy always sits on near-black. */

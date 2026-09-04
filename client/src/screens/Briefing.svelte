@@ -13,9 +13,28 @@
   import {HOW_TO} from '../lib/how-to'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import SceneBackdrop from '../lib/components/SceneBackdrop.svelte'
+  import EdgeBlur from '../lib/components/EdgeBlur.svelte'
 
   const first = $derived(game.playerName?.trim().split(/\s+/)[0] ?? '')
+
+  /**
+   * There was no way out of a session. Once signed in you landed straight on
+   * the clue for the rest of that browser's life — which is wrong on a shared
+   * phone, wrong when someone signs in as the wrong person, and the reason the
+   * entry screens looked to us like they had never deployed. This is the last
+   * screen before the clock starts, so it is the right place to offer it.
+   */
+  function signOut() {
+    game.reset()
+    nav.go('hero')
+  }
 </script>
+
+<!-- Dimmer than the hero: the same stills, but this screen carries six rules
+     and the copy has to win. -->
+<SceneBackdrop strength={0.16} />
+<EdgeBlur height="70vh" strength={16} />
 
 <main>
   <header>
@@ -40,12 +59,17 @@
 
   <div class="actions">
     <Button onclick={() => nav.go('permissions')}>Continue</Button>
-    <p class="note">Next: location and camera access. Both are needed to play.</p>
+    <p class="note">
+      Next: location and camera access. Both are needed to play.
+      {#if game.token}<br /><button class="out" onclick={signOut}>Not {first || 'you'}? Sign out</button>{/if}
+    </p>
   </div>
 </main>
 
 <style>
   main {
+    position: relative;
+    z-index: 1;
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
@@ -130,6 +154,14 @@
     text-align: center;
     color: var(--text-faint);
     font-size: var(--step-13);
+  }
+  .out {
+    margin-top: var(--sp-2);
+    padding: var(--sp-2);
+    color: var(--text-dim);
+    font-size: var(--step-13);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   @keyframes rise {
