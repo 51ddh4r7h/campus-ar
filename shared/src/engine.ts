@@ -11,7 +11,7 @@ import {
   LEVEL_COUNT,
 } from './config'
 import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
-import {generateRoutePool, type RoutePool} from './routes'
+import {generateRoutePool, playableOrder, type RoutePool} from './routes'
 import {assignRoute} from './routes'
 import {routePar, sessionScoreMs} from './scoring'
 import {VALIDATION} from './config'
@@ -288,16 +288,30 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     stops.every((id) => locationById(id) !== undefined)
 
   /**
+   * Resolvable AND still shaped the way the current rules want.
+   *
+   * Resolvable alone is not enough. A pool built before the difficulty ramp
+   * existed is full of routes that resolve perfectly and open on a scene marked
+   * Difficult — no crash, just the wrong game, and silently so. A batch created
+   * under older rules should catch up rather than keep serving them.
+   */
+  const routeIsCurrent = (stops: readonly string[]): boolean => {
+    if (!routeIsLive(stops)) return false
+    // SAFETY: routeIsLive proved every id resolves.
+    return playableOrder(stops.map((id) => locationById(id)) as GameLocation[])
+  }
+
+  /**
    * A batch's route pool, minus anything the content no longer contains.
    *
    * A batch stores the pool it was created with, so editing the location list
    * strands every batch made before the edit — and the stale routes are handed
    * out to new players, not just held by old ones. Filtering keeps whatever is
-   * still playable; when nothing is, the pool is rebuilt from current content
-   * against the batch's original seed and written back.
+   * still playable under today's rules; when nothing is, the pool is rebuilt
+   * from current content against the batch's original seed and written back.
    */
   const livePool = async (batch: StoredBatch): Promise<RoutePool> => {
-    const usable = batch.pool.routes.filter((r) => routeIsLive(r.stops))
+    const usable = batch.pool.routes.filter((r) => routeIsCurrent(r.stops))
     if (usable.length === batch.pool.routes.length) return batch.pool
     if (usable.length > 0) return {...batch.pool, routes: usable}
 

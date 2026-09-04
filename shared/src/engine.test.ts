@@ -377,6 +377,28 @@ describe('engine — content changed under a live batch', () => {
     expect(await store.listSplits(player.id)).toHaveLength(0)
   })
 
+  it('rebuilds a pool built before the difficulty ramp, rather than serving its shape', async () => {
+    // These resolve fine — they just open on a Difficult scene, which is the
+    // thing the ramp exists to prevent. Resolvable is not the same as current.
+    const batch = await engine.createBatch({name: 'PreRamp', eventCode: 'preramp'})
+    const stored = (await store.getBatch(batch.id))!
+    await store.putBatch({
+      ...stored,
+      pool: {
+        ...stored.pool,
+        routes: stored.pool.routes.map((r) => ({
+          ...r,
+          stops: ['fountain', 'sibm', 'symbieat', 'outside-c-hall', 'behind-ssbf'] as typeof r.stops,
+        })),
+      },
+    })
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'C', rosterId: 'r3'})
+    const stops = (await store.getRoute(player.id))!.stops
+    const tiers = stops.map((id) => locationById(id)!.difficulty)
+    expect(tiers[0]).toBe(1)
+    for (let i = 1; i < tiers.length; i++) expect(tiers[i]!).toBeGreaterThanOrEqual(tiers[i - 1]!)
+  })
+
   it('rebuilds a batch pool whose routes are all stale, so new players are not stranded too', async () => {
     const batch = await engine.createBatch({name: 'Stale', eventCode: 'stale1'})
     const stored = (await store.getBatch(batch.id))!

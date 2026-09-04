@@ -78,7 +78,7 @@ const ramps = (perm: readonly GameLocation[]): boolean => {
  * against two hard ones that bucket is much the largest, and the two scenes
  * the organisers marked Difficult would never be served to anybody.
  */
-const playableOrder = (perm: readonly GameLocation[]): boolean => {
+export const playableOrder = (perm: readonly GameLocation[]): boolean => {
   if (perm[0]!.difficulty > ROUTE_POOL.maxFirstLevelDifficulty) return false
   const hard = perm.filter((l) => l.difficulty === 3).length
   if (hard > ROUTE_POOL.maxHardClues || hard < ROUTE_POOL.minHardClues) return false
