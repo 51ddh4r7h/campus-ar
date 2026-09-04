@@ -9,6 +9,7 @@
   import {toasts} from '../lib/stores/toast.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import StepDots from '../lib/components/StepDots.svelte'
 
   let step = $state<'location' | 'camera'>('location')
   let phase = $state<'ask' | 'waiting' | 'denied' | 'unavailable'>('ask')
@@ -69,6 +70,13 @@
 </script>
 
 <main>
+  <div class="progress">
+    <StepDots
+      current={step === 'location' ? 1 : 2}
+      total={2}
+      labels={['Location', 'Camera']}
+    />
+  </div>
   <div class="body">
     <div class="icon" class:bad>
       <Icon name={step === 'camera' ? 'camera' : 'pin'} size={28} />
@@ -110,6 +118,9 @@
 </main>
 
 <style>
+  .progress {
+    padding-top: var(--sp-2);
+  }
   main {
     min-height: 100dvh;
     display: flex;

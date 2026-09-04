@@ -46,3 +46,32 @@ CC-BY despite its name.
 Use the "Copy Credits" button on each model's download page and paste the exact
 text here. Once complete, surface it in the app — the How to play sheet is the
 natural home, since it is reachable without interrupting a run.
+
+## UI techniques — svelte-bits
+
+`Sheen`, `EdgeBlur` and `StepDots` on the entry screens are our own code, but
+the ideas behind the first two come from svelte-bits (the Svelte port of React
+Bits) — `ShinyText` and `GradualBlur` respectively.
+
+> svelte-bits, Copyright (c) 2026 David Haz. MIT + Commons Clause.
+> https://github.com/DavidHDev/svelte-bits
+
+The licence permits use as part of an application and forbids reselling the
+components themselves, which is not something we do. Their source was not
+copied, for reasons that are worth recording:
+
+- Those components are styled with Tailwind; this app has no Tailwind, only the
+  tokens in `client/src/tokens.css`.
+- `ShinyText` animates a gradient by writing component state from a
+  requestAnimationFrame loop — sixty renders a second for something CSS does on
+  the compositor for nothing. On a screen that is already cross-fading a
+  photographic backdrop on a mid-range phone, that is the wrong trade.
+- `GradualBlur` stacks five to ten layers, each with its own `backdrop-filter`.
+  Every one of those forces a separate full-screen render pass. `EdgeBlur` uses
+  three, which is where the ramp stops looking stepped, and stops there.
+
+Most of the library needs a cursor — `Magnet`, `GlareHover`, `SplashCursor`,
+`TextPressure` and friends — so it has nothing to offer a phone-only game. The
+WebGL backgrounds were declined for the same reason the proximity ring avoids a
+second WebGL context: three.js is already a lazy chunk for the AR stage and the
+entry screen is the worst place to pay for another one.

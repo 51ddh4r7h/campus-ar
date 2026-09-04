@@ -15,6 +15,7 @@
   import {api, ApiError} from '../lib/api'
   import Button from '../lib/components/Button.svelte'
   import SceneBackdrop from '../lib/components/SceneBackdrop.svelte'
+  import EdgeBlur from '../lib/components/EdgeBlur.svelte'
 
   const code = eventCode ?? ''
 
@@ -77,6 +78,7 @@
 </script>
 
 <SceneBackdrop />
+<EdgeBlur height="64vh" strength={18} />
 
 <main>
   <button class="back" onclick={() => nav.go('hero')} aria-label="Back">←</button>

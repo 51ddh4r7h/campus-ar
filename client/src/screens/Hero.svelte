@@ -12,6 +12,8 @@
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
   import SceneBackdrop from '../lib/components/SceneBackdrop.svelte'
+  import EdgeBlur from '../lib/components/EdgeBlur.svelte'
+  import Sheen from '../lib/components/Sheen.svelte'
   import {isInAppBrowser} from '../lib/env'
 
   const inApp = isInAppBrowser()
@@ -24,6 +26,7 @@
 </script>
 
 <SceneBackdrop />
+<EdgeBlur height="46vh" />
 
 <main>
   {#if inApp}
@@ -33,7 +36,7 @@
   {/if}
 
   <div class="top">
-    <span class="eyebrow">Shot on this campus</span>
+    <span class="eyebrow"><Sheen text="Shot on this campus" /></span>
     <h1>Campus<br />Movie&nbsp;Hunt</h1>
     <p class="tag">Five scenes were filmed here. Find where.</p>
   </div>
