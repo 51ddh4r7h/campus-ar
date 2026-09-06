@@ -210,7 +210,7 @@
   <div class="offline" role="status">Reconnecting…</div>
 {/if}
 
-{#if game.demo && ['ready', 'clue', 'search', 'reveal', 'finish'].includes(nav.screen)}
+{#if game.demo && ['briefing', 'permissions', 'ready', 'clue', 'search', 'reveal', 'finish'].includes(nav.screen)}
   <DemoBadge />
 {/if}
 

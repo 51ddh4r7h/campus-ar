@@ -62,7 +62,24 @@
     }
   }
 
+  /**
+   * Practice is only for people without a real session.
+   *
+   * This used to be offered to everyone, on a text button sitting under the
+   * location prompt, and it set `game.demo` regardless of who was asking. For a
+   * signed-in player that swapped their real hunt onto the GPS simulator, which
+   * walks between stops on a timer: the game would play itself through all five
+   * levels while they stood still, and record the score. A player with a slow
+   * fix, one tap from the prompt, could do that by accident — which is exactly
+   * how a field test today ended up completing two levels from a classroom.
+   *
+   * A real session that cannot get a location is a problem to fix, not to
+   * simulate around.
+   */
+  const canPractise = $derived(demoAllowed && !game.token)
+
   function demoInstead() {
+    if (!canPractise) return
     game.demo = true
     location.permission = 'denied'
     step = 'camera'
@@ -116,13 +133,22 @@
   </div>
 
   <div class="actions">
-    {#if step === 'location' && bad}
+    {#if step === 'location' && bad && canPractise}
       <Button onclick={demoInstead}>Play the demo</Button>
+    {:else if step === 'location' && bad}
+      <!-- No simulated way past this for a real hunt: the walk is the game. -->
+      <Button disabled={phase === 'waiting'} onclick={askLocation}>Try again</Button>
+      <p class="help">
+        Location is required to play. Turn it on for this site in your browser
+        settings, then tap Try again. If it still won't work, find an organiser.
+      </p>
     {:else if step === 'location'}
       <Button disabled={phase === 'waiting'} onclick={askLocation}>
         {phase === 'waiting' ? 'Waiting…' : 'Enable location'}
       </Button>
-      <Button variant="text" onclick={demoInstead}>Can't enable this?</Button>
+      {#if canPractise}
+        <Button variant="text" onclick={demoInstead}>Can't enable this?</Button>
+      {/if}
     {:else}
       <Button disabled={phase === 'waiting'} onclick={askCamera}>
         {phase === 'waiting' ? 'Waiting…' : 'Enable camera'}
@@ -149,6 +175,13 @@
   }
   .progress {
     padding-top: var(--sp-2);
+  }
+  .help {
+    margin: var(--sp-2) 0 0;
+    color: var(--text-dim);
+    font-size: var(--step-13);
+    text-align: center;
+    max-width: 34ch;
   }
   main {
     min-height: 100dvh;
