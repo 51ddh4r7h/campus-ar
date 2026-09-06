@@ -34,5 +34,13 @@ export const debugMode = params.has('debug')
  */
 export const adminRequested = params.has('admin')
 
-/** Practice runs are allowed when explicitly requested, or in any dev build. */
-export const demoAllowed = demoRequested || import.meta.env.DEV
+/**
+ * Practice runs live on `?demo` and nowhere else.
+ *
+ * This used to be `demoRequested || import.meta.env.DEV`, so a development
+ * build behaved differently from the one people actually use — which is how a
+ * whole class of bug hides until it is in someone's hands. One rule now, the
+ * same everywhere: without `?demo` or `?sim` in the URL, nothing in this app
+ * simulates anything.
+ */
+export const demoAllowed = demoRequested

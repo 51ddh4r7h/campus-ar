@@ -9,7 +9,7 @@
   import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
   import {haptics} from './lib/haptics'
-  import {playerLink, adminRequested} from './lib/mode'
+  import {playerLink, adminRequested, demoAllowed} from './lib/mode'
   import {POLLING} from '@cmh/shared'
 
   import Splash from './screens/Splash.svelte'
@@ -95,6 +95,22 @@
       return
     }
     await restoreSession()
+
+    /**
+     * A practice session cannot survive onto a real link.
+     *
+     * Starting one replaces the stored token with the practice player's, so the
+     * plain link would restore it and quietly hand back a simulated hunt — the
+     * URL said nothing about practice, and the app played it anyway. Anything
+     * simulated now belongs to `?demo` alone: on any other URL a practice
+     * session is dropped rather than resumed.
+     */
+    if (game.demo && !demoAllowed) {
+      game.reset()
+      nav.go(entryScreen())
+      return
+    }
+
     routeToSession()
   })
 

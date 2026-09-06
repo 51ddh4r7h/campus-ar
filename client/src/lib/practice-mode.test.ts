@@ -28,9 +28,34 @@ describe('practice mode eligibility', () => {
     expect(canPractise({demoAllowed: true, hasToken: false})).toBe(true)
   })
 
-  it('is closed by default in production, where demoAllowed needs ?demo', () => {
-    // `demoAllowed` is `demoRequested || import.meta.env.DEV` — false in a
-    // production build unless the URL carries ?demo or ?sim.
+  it('is closed unless the URL asked, in every build', () => {
+    // `demoAllowed` is now exactly `demoRequested` — no development exception,
+    // so what is tested locally is what ships.
     expect(canPractise({demoAllowed: false, hasToken: true})).toBe(false)
+  })
+})
+
+/**
+ * A practice session must not survive onto a real link.
+ *
+ * Starting one replaces the stored token with the practice player's, so the
+ * plain event link would restore it and hand back a simulated hunt without the
+ * URL ever mentioning practice.
+ */
+const keepSession = (opts: {sessionIsDemo: boolean; demoAllowed: boolean}): boolean =>
+  !opts.sessionIsDemo || opts.demoAllowed
+
+describe('resuming a stored session', () => {
+  it('drops a practice session on a plain link', () => {
+    expect(keepSession({sessionIsDemo: true, demoAllowed: false})).toBe(false)
+  })
+
+  it('keeps a practice session on ?demo', () => {
+    expect(keepSession({sessionIsDemo: true, demoAllowed: true})).toBe(true)
+  })
+
+  it('always keeps a real session', () => {
+    expect(keepSession({sessionIsDemo: false, demoAllowed: false})).toBe(true)
+    expect(keepSession({sessionIsDemo: false, demoAllowed: true})).toBe(true)
   })
 })
