@@ -10,6 +10,7 @@
 export const SESSION_ERRORS = {
   already_started: 'This hunt has already been played.',
   not_in_progress: "This hunt isn't running.",
+  not_finished: 'Finish or end this hunt before playing again.',
   bad_token: 'Your session has expired — sign in again.',
   batch_not_found: "That event doesn't exist any more.",
   signups_closed: 'This event has closed.',

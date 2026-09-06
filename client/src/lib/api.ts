@@ -113,6 +113,8 @@ export const api = {
     request<{session: Session}>('/session/resume', {method: 'POST', headers: auth(token)}),
   abandon: (token: string) =>
     request<{session: Session}>('/session/abandon', {method: 'POST', headers: auth(token)}),
+  replay: (token: string) =>
+    request<{session: Session}>('/session/replay', {method: 'POST', headers: auth(token)}),
 
   nearby: (token: string, samples: GeoSample[]) =>
     request<NearbyResult>('/session/nearby', {

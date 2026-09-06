@@ -441,6 +441,18 @@ describe('app — pause, resume, abandon', () => {
     expect((await post('/session/resume', p.sessionToken)).status).toBe(409)
   })
 
+  it('prepares an ended hunt for replay over HTTP', async () => {
+    const p = await started()
+    await post('/session/abandon', p.sessionToken)
+
+    const replay = (await (await post('/session/replay', p.sessionToken)).json()) as {
+      session: {status: string; startTsMs: number | null}
+    }
+
+    expect(replay.session).toMatchObject({status: 'not_started', startTsMs: null})
+    expect((await post('/session/start', p.sessionToken)).status).toBe(200)
+  })
+
   it('leaves a hunt nobody paused unchanged, so old sessions still work', async () => {
     const p = await started()
     clock.advance(90_000)

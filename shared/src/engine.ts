@@ -51,6 +51,7 @@ export type EngineErrorCode =
   | 'signups_closed'
   | 'roster_taken'
   | 'player_not_found'
+  | 'not_finished'
   | 'paused'
 
 export class EngineError extends Error {
@@ -475,20 +476,13 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     /**
      * Give a player a fresh hunt — a new route, a new clock, the same account.
      *
-     * A player gets one session, so a hunt that ends is the end of it. That is
-     * right for scoring and wrong for everything else: a phone that dies, a
-     * player who quits and comes back, an organiser testing the flow. Without
-     * this the only remedy was a new roll number, which is a second person in
-     * the standings for the same human.
-     *
-     * Organiser-only, deliberately. Self-serve replay would let a player walk
-     * the route once, learn the locations, and restart with that knowledge — a
-     * different problem from the one this solves.
-     *
      * Their splits go with the old route: they describe a hunt that no longer
      * exists, and leaving them would credit the new run with the old one's
      * finds. Token and password are untouched, so whatever is signed in on
      * their phone stays signed in and simply finds itself back at the start.
+     *
+     * Organisers may use this recovery path at any point. Players get the
+     * narrower `replay` path below, which only opens after a hunt has ended.
      */
     async resetPlayer(batchId: string, playerId: string): Promise<Session> {
       const batch = await store.getBatch(batchId)
@@ -506,6 +500,29 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         reason: 'organiser_reset',
       })
       return session
+    },
+
+    /**
+     * Let a signed-in player start over after finishing or abandoning a hunt.
+     *
+     * Replaying replaces the previous result because this data model has one
+     * session and one set of splits per player. A fresh route prevents the new
+     * clock from being paired with locations the player has already learned.
+     */
+    async replay(token: string): Promise<Session> {
+      const {batch, player, session, route} = await authed(token)
+      if (batch.status !== 'open') throw new EngineError('signups_closed')
+      if (session.status !== 'complete' && session.status !== 'abandoned') {
+        throw new EngineError('not_finished', 'Finish or end this hunt before playing again')
+      }
+
+      await store.clearSplits(player.id)
+      const fresh = await seatPlayer(batch, player, undefined)
+      await event(player.id, 'route_reissued', {
+        had: route.stops.join('>'),
+        reason: 'player_replay',
+      })
+      return fresh
     },
 
     /**

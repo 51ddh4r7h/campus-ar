@@ -277,6 +277,11 @@ export const createApp = (
     c.json({session: await engineFor(c.env).abandon(bearer(c.req.header('Authorization')))}),
   )
 
+  /** Start over after an ended hunt, keeping the same account and sign-in. */
+  app.post('/session/replay', async (c) =>
+    c.json({session: await engineFor(c.env).replay(bearer(c.req.header('Authorization')))}),
+  )
+
   app.post('/session/nearby', async (c) => {
     const token = bearer(c.req.header('Authorization'))
     const samples = parseSamples(await c.req.json())

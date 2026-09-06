@@ -646,3 +646,54 @@ describe('engine — organiser reset', () => {
     await expect(engine.resetPlayer(a.id, 'nobody')).rejects.toThrow(/player_not_found|No such player/)
   })
 })
+
+describe('engine — player replay', () => {
+  it('lets a finished player replace their result with a fresh playable route', async () => {
+    const batch = await engine.createBatch({name: 'Replayable'})
+    const {player} = await engine.registerPlayer({
+      batchId: batch.id,
+      name: 'Dev P.',
+      rosterId: 'S-003',
+    })
+    await playThrough(player.sessionToken)
+    expect(await store.listSplits(player.id)).toHaveLength(5)
+
+    const replay = await engine.replay(player.sessionToken)
+
+    expect(replay.status).toBe('not_started')
+    expect(replay.startTsMs).toBeNull()
+    expect(replay.scoreMs).toBeNull()
+    expect(await store.listSplits(player.id)).toHaveLength(0)
+    await expect(engine.startHunt(player.sessionToken)).resolves.toMatchObject({
+      session: {status: 'in_progress'},
+      clue: {level: 1},
+    })
+  })
+
+  it('refuses replay while the current hunt has not ended', async () => {
+    const batch = await engine.createBatch({name: 'Still playing'})
+    const {player} = await engine.registerPlayer({
+      batchId: batch.id,
+      name: 'Dev P.',
+      rosterId: 'S-004',
+    })
+
+    await expect(engine.replay(player.sessionToken)).rejects.toThrow(/Finish or end/)
+    await engine.startHunt(player.sessionToken)
+    await expect(engine.replay(player.sessionToken)).rejects.toThrow(/Finish or end/)
+  })
+
+  it('does not reopen a closed event', async () => {
+    const batch = await engine.createBatch({name: 'Closed replay'})
+    const {player} = await engine.registerPlayer({
+      batchId: batch.id,
+      name: 'Dev P.',
+      rosterId: 'S-005',
+    })
+    await engine.startHunt(player.sessionToken)
+    await engine.abandon(player.sessionToken)
+    await engine.closeBatch(batch.id)
+
+    await expect(engine.replay(player.sessionToken)).rejects.toThrow(/signups_closed/)
+  })
+})

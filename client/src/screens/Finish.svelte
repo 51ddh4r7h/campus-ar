@@ -19,19 +19,28 @@
 
   let starting = $state(false)
   /**
-   * Only ever a practice run — it discards the current session and creates a
-   * throwaway simulated one. A real player gets a single scored hunt, so on a
-   * real link this is not offered at all; the way out is to sign out.
+   * Practice gets another throwaway simulated session. A signed-in player keeps
+   * their account but replaces the ended run with a clean route, then returns to
+   * the start line. Its START tap gives Safari the gesture needed for the camera
+   * and makes the exact moment the new timer begins unambiguous.
    */
   async function playAgain() {
     starting = true
     try {
-      game.reset()
-      await startDemo()
-      await game.start()
-      nav.go('clue')
-    } catch {
-      toasts.show('Could not start a new run', 'alert')
+      if (demoAllowed) {
+        game.reset()
+        await startDemo()
+      } else {
+        await game.replay()
+      }
+      nav.go('ready')
+    } catch (err) {
+      toasts.show(
+        err instanceof Error && !game.online
+          ? "Can't reach the server — check your connection"
+          : 'Could not prepare a new hunt — try again',
+        'alert',
+      )
       starting = false
     }
   }
@@ -43,7 +52,7 @@
   // Splits carry a locationId — safe to name now.
   const name = (id: string) => locationById(id)?.name ?? id
 
-  const earned = $derived(perksEarned(game.level))
+  const earned = $derived(perksEarned(splits.length))
   const visited = $derived(new Set(splits.map((s) => s.locationId)))
   /** Rung 5: the half of campus a randomised route never sent you to. */
   const wrapped = $derived(game.complete)
@@ -52,6 +61,23 @@
   function signOut() {
     game.reset()
     nav.go('hero')
+  }
+
+  /** Share on phones; copy on browsers without a native share sheet. */
+  async function shareResult() {
+    const text = game.abandoned
+      ? `I found ${splits.length} of ${LEVEL_COUNT} scenes in Campus Movie Hunt.`
+      : `I finished Campus Movie Hunt ${formatScore(score)} vs par!`
+    try {
+      if (navigator.share) {
+        await navigator.share({title: 'Campus Movie Hunt', text})
+        return
+      }
+      await navigator.clipboard.writeText(text)
+      toasts.show('Result copied')
+    } catch {
+      toasts.show("Couldn't share this result", 'alert')
+    }
   }
 </script>
 
@@ -134,12 +160,12 @@
 
   <div class="actions">
     <Button variant="secondary" onclick={() => nav.open('standings')}>View standings</Button>
-    {#if demoAllowed}
-      <Button disabled={starting} onclick={playAgain}>{starting ? 'Starting…' : 'Play again'}</Button>
-    {:else}
-      <Button variant="text" onclick={signOut}>Sign out</Button>
+    <Button disabled={starting} onclick={playAgain}>{starting ? 'Preparing…' : 'Play again'}</Button>
+    {#if !demoAllowed}
+      <p class="replay-note">A new route replaces this result in the standings.</p>
     {/if}
-    <Button variant="text" onclick={() => navigator.share?.({title: 'Campus Movie Hunt', text: `I finished ${formatScore(score)} vs par!`})}>
+    <Button variant="text" onclick={signOut}>{demoAllowed ? 'Leave practice' : 'Sign out'}</Button>
+    <Button variant="text" onclick={() => void shareResult()}>
       Share result
     </Button>
   </div>
@@ -207,6 +233,12 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text-dim);
+  }
+  .replay-note {
+    margin: calc(-1 * var(--sp-2)) 0 0;
+    color: var(--text-faint);
+    font-size: var(--step-13);
+    text-align: center;
   }
   h1 {
     font-family: var(--font-display);

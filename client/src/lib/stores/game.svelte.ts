@@ -123,6 +123,14 @@ class Game {
     if (!this.token) return
     this.session = (await api.abandon(this.token)).session
   }
+  /** Replace an ended run with a fresh, unstarted route; keep this account signed in. */
+  async replay(): Promise<void> {
+    if (!this.token) throw new Error('no token')
+    this.session = (await api.replay(this.token)).session
+    this.clue = null
+    this.splits = []
+    this.lastReveal = null
+  }
 
   /** @returns true once a session snapshot was loaded. */
   async refresh(): Promise<boolean> {
