@@ -23,18 +23,34 @@
     }
   })
 
-  // Hidden until there's any warmth at all — the clue does the long-range work.
-  const visible = $derived(target > 4 || band > 0)
+  /**
+   * Up from the moment the search starts.
+   *
+   * It used to hide itself until there was warmth to report — but heat reads a
+   * flat zero beyond the layout's range, which is exactly where a player stands
+   * when they have just been handed the clue. The gauge was therefore absent at
+   * the one moment someone looks for it, and an instrument that is missing
+   * reads as broken rather than as informative. "Cold" is a reading; nothing is
+   * not.
+   *
+   * The only state still worth hiding for is having no fix at all, and that
+   * says so rather than showing a zero it cannot stand behind.
+   */
+  const waiting = $derived(probe.last === null || probe.last.signalOk === false)
 </script>
 
-{#if visible}
-  <div class="meter" style="--h: {shown}">
-    <div class="track"><div class="fill"></div></div>
-    <span class="word">{BAND_WORDS[band]}</span>
-  </div>
-{/if}
+<div class="meter" class:waiting style="--h: {waiting ? 0 : shown}">
+  <div class="track"><div class="fill"></div></div>
+  <span class="word">{waiting ? 'Locating…' : BAND_WORDS[band]}</span>
+</div>
 
 <style>
+  .waiting .word {
+    color: var(--text-faint);
+  }
+  .waiting .fill {
+    opacity: 0.25;
+  }
   .meter {
     position: fixed;
     right: var(--edge);

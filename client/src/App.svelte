@@ -99,8 +99,14 @@
   })
 
   const PLAYING: readonly ScreenName[] = ['clue', 'search', 'reveal']
-  /** Screens shot through the live camera. */
-  const THROUGH_LENS: readonly ScreenName[] = ['search', 'reveal']
+  /**
+   * Screens shot through the live camera — which is to say, every screen that
+   * renders CameraFeed. The clue was missing from this list while rendering the
+   * feed anyway: arriving from the search screen the stream was already running
+   * so it looked right, but resuming a hunt lands here directly and the camera
+   * had never been started. The clip floated on black.
+   */
+  const THROUGH_LENS: readonly ScreenName[] = ['clue', 'search', 'reveal']
   /** Screens where the hunt isn't running, so the sensors should be off. */
   const IDLE: readonly ScreenName[] = ['finish', 'briefing', 'hero', 'signin']
 
