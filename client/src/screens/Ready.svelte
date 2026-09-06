@@ -55,59 +55,69 @@
     }
   }
 
-  async function go() {
-    /**
-     * This tap is the session's one guaranteed user gesture, so everything that
-     * needs one is spent here.
-     *
-     * The camera is why this matters. A resumed session used to route straight
-     * to the clue, and the camera was then started from a reactive effect on
-     * the search screen — not from a gesture. Safari refuses getUserMedia
-     * outside a gesture without even prompting, which is exactly the reported
-     * symptom: no camera, and no permission dialog either. Asking here, on a
-     * real tap, is the fix.
-     */
+  /**
+   * Everything that needs a real user gesture, spent before the first await.
+   *
+   * The camera is why this matters. A resumed session used to route straight
+   * to the clue, and the camera was then started from a reactive effect on the
+   * search screen — not from a gesture. Safari refuses getUserMedia outside a
+   * gesture without even prompting, which is exactly the reported symptom: no
+   * camera, and no permission dialog either. Asking here, on a real tap, is
+   * the fix — and it has to happen synchronously, because the gesture does not
+   * survive an await.
+   */
+  function spendGesture(): void {
     const v = revealVideo()
     v.muted = true
     void v.play().catch(() => {})
     void camera.start()
     void ar.ensure()
+  }
 
-    if (resuming) {
-      starting = true
-      try {
-        // A paused session has to be un-paused before anything will validate.
-        if (game.paused) await game.resume()
-        nav.go('clue')
-      } catch {
-        toasts.show('Could not resume — try again', 'alert')
-        starting = false
-      }
-      return
+  /**
+   * Why a start failed, in the player's words.
+   *
+   * Blaming the network for everything sent a real server fault looking like a
+   * wifi problem. `net.online` already knows whether the request even left the
+   * device, so say which it was.
+   */
+  function startFailure(err: ApiError | null): string {
+    const fallback = 'Could not start. Try again, or tell an organiser.'
+    if (!game.online) return "Can't reach the server — check your connection"
+    return err ? readableError(err.code, fallback) : fallback
+  }
+
+  async function resumeHunt(): Promise<void> {
+    try {
+      // A paused session has to be un-paused before anything will validate.
+      if (game.paused) await game.resume()
+      nav.go('clue')
+    } catch {
+      toasts.show('Could not resume — try again', 'alert')
+      starting = false
     }
-    starting = true
+  }
+
+  async function beginHunt(): Promise<void> {
     try {
       await game.start()
       nav.go('clue')
     } catch (err) {
       starting = false
+      const failed = err instanceof ApiError ? err : null
 
       // A 409 means this screen is out of date, not that the player did
       // something wrong. Ask the server where they actually are and go there.
-      if (err instanceof ApiError && err.status === 409 && (await resync())) return
+      if (failed?.status === 409 && (await resync())) return
 
-      // Blaming the network for everything sent a real server fault looking
-      // like a wifi problem. Say which it was: `net.online` already knows
-      // whether the request even left the device.
-      toasts.show(
-        !game.online
-          ? "Can't reach the server — check your connection"
-          : err instanceof ApiError
-            ? readableError(err.code, 'Could not start. Try again, or tell an organiser.')
-            : 'Could not start. Try again, or tell an organiser.',
-        'alert',
-      )
+      toasts.show(startFailure(failed), 'alert')
     }
+  }
+
+  async function go(): Promise<void> {
+    spendGesture()
+    starting = true
+    await (resuming ? resumeHunt() : beginHunt())
   }
 </script>
 
