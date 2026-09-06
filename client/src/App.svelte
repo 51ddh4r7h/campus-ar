@@ -130,6 +130,23 @@
     const run = async () => {
       const r = await api.nearby(token, location.recent()).catch(() => null)
       if (r) probe.last = r
+
+      /**
+       * The hunt stopped running underneath them.
+       *
+       * The six-hour cap and an organiser closing a batch both end a session
+       * while the app is still open and the player is still walking. Without
+       * this they keep searching for a level the server will never accept, with
+       * nothing on screen to say so. Re-sync and go wherever the server says
+       * they now are.
+       */
+      if (r?.failure === 'not_in_progress') {
+        await game.refresh()
+        if (game.finished) nav.go('finish')
+        else if (game.paused) nav.go('ready')
+        return
+      }
+
       if (armed && r?.atTarget && nav.screen === 'search') {
         haptics.arrive()
         nav.go('reveal')

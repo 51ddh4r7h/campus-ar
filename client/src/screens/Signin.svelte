@@ -13,6 +13,7 @@
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {api, ApiError} from '../lib/api'
+  import {readableError} from '../lib/errors'
   import Button from '../lib/components/Button.svelte'
   import EdgeBlur from '../lib/components/EdgeBlur.svelte'
 
@@ -60,7 +61,7 @@
       nav.go(game.inProgress ? 'clue' : 'briefing')
     } catch (err) {
       if (err instanceof ApiError) {
-        error = err.message
+        error = readableError(err.code, err.message)
         // "Already registered" is not a failure, it is the wrong tab. Move them
         // to it and keep what they have already typed.
         if (err.code === 'roster_taken') {

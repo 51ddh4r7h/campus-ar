@@ -5,14 +5,44 @@
   import {clock} from '../lib/stores/clock.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
   import {ApiError} from '../lib/api'
+  import {readableError} from '../lib/errors'
   import {revealVideo} from '../lib/reveal-video'
   import {camera} from '../lib/stores/camera.svelte'
   import {ar} from '../lib/stores/ar.svelte'
 
   const resuming = $derived(game.inProgress || game.paused)
+
+  /**
+   * A hunt that is already over does not belong on this screen.
+   *
+   * It can land here when the client's view of the session is behind the
+   * server's — the six-hour cap or an organiser closing the batch both end a
+   * hunt underneath an app that is still open. Without this the screen offers
+   * START, and the server answers `already_started`.
+   */
+  $effect(() => {
+    if (game.finished) nav.go('finish')
+  })
   let starting = $state(false)
   let confirming = $state(false)
   let ending = $state(false)
+
+  /**
+   * Re-read the session and follow it. True when it moved us somewhere, which
+   * means the failure has been dealt with and needs no message.
+   */
+  async function resync(): Promise<boolean> {
+    await game.refresh()
+    if (game.finished) {
+      nav.go('finish')
+      return true
+    }
+    if (game.inProgress) {
+      nav.go('clue')
+      return true
+    }
+    return false
+  }
 
   async function endNow() {
     ending = true
@@ -60,6 +90,12 @@
       await game.start()
       nav.go('clue')
     } catch (err) {
+      starting = false
+
+      // A 409 means this screen is out of date, not that the player did
+      // something wrong. Ask the server where they actually are and go there.
+      if (err instanceof ApiError && err.status === 409 && (await resync())) return
+
       // Blaming the network for everything sent a real server fault looking
       // like a wifi problem. Say which it was: `net.online` already knows
       // whether the request even left the device.
@@ -67,11 +103,10 @@
         !game.online
           ? "Can't reach the server — check your connection"
           : err instanceof ApiError
-            ? `Could not start — ${err.message}`
+            ? readableError(err.code, 'Could not start. Try again, or tell an organiser.')
             : 'Could not start. Try again, or tell an organiser.',
         'alert',
       )
-      starting = false
     }
   }
 </script>
