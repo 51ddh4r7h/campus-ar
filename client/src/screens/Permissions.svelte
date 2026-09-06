@@ -118,10 +118,18 @@
     {#if step === 'location'}
       {#if phase === 'denied'}
         <h1>Location is off</h1>
-        <p>Turn it back on in Settings, or play the demo instead.</p>
+        <p>
+          {canPractise
+            ? 'Turn it back on in Settings, or play the demo instead.'
+            : 'Turn it back on in Settings to carry on.'}
+        </p>
       {:else if phase === 'unavailable'}
         <h1>No location signal</h1>
-        <p>We can't get a fix here. You can still play the demo.</p>
+        <p>
+          {canPractise
+            ? "We can't get a fix here. You can still play the demo."
+            : "We can't get a fix here. Step outside and try again."}
+        </p>
       {:else}
         <h1>Turn on location</h1>
         <p>We use it only to check when you've reached a scene. We never show your position to anyone.</p>

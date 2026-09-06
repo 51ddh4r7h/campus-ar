@@ -5,7 +5,7 @@
  *  - `?e=<code>`                         — a cohort's shared signup link
  *  - `?demo` / `?sim`                    — a simulated practice run
  *  - anything else                       — no way in (a "your link is personal"
- *    screen), except in dev builds where practice is always allowed
+ *    screen)
  */
 
 const params =

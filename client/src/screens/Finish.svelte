@@ -7,6 +7,7 @@
   import {clock} from '../lib/stores/clock.svelte'
   import {haptics} from '../lib/haptics'
   import {startDemo} from '../lib/demo'
+  import {demoAllowed} from '../lib/mode'
   import {toasts} from '../lib/stores/toast.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
@@ -17,6 +18,11 @@
   onMount(() => haptics.fanfare())
 
   let starting = $state(false)
+  /**
+   * Only ever a practice run — it discards the current session and creates a
+   * throwaway simulated one. A real player gets a single scored hunt, so on a
+   * real link this is not offered at all; the way out is to sign out.
+   */
   async function playAgain() {
     starting = true
     try {
@@ -41,6 +47,12 @@
   const visited = $derived(new Set(splits.map((s) => s.locationId)))
   /** Rung 5: the half of campus a randomised route never sent you to. */
   const wrapped = $derived(game.complete)
+
+  /** A shared phone needs a way to hand the next player a clean slate. */
+  function signOut() {
+    game.reset()
+    nav.go('hero')
+  }
 </script>
 
 <main>
@@ -122,7 +134,11 @@
 
   <div class="actions">
     <Button variant="secondary" onclick={() => nav.open('standings')}>View standings</Button>
-    <Button disabled={starting} onclick={playAgain}>{starting ? 'Starting…' : 'Play again'}</Button>
+    {#if demoAllowed}
+      <Button disabled={starting} onclick={playAgain}>{starting ? 'Starting…' : 'Play again'}</Button>
+    {:else}
+      <Button variant="text" onclick={signOut}>Sign out</Button>
+    {/if}
     <Button variant="text" onclick={() => navigator.share?.({title: 'Campus Movie Hunt', text: `I finished ${formatScore(score)} vs par!`})}>
       Share result
     </Button>

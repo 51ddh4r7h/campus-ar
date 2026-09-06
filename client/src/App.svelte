@@ -131,7 +131,11 @@
 
   // GPS + camera lifecycle — run through the playing screens, stop elsewhere.
   $effect(() => {
-    if (playing && location.mode === 'off') location.start(game.demo ? 'sim' : 'real')
+    // `demoAllowed` is the last word on this, not the session flag. Whatever a
+    // stale flag or an unexpected code path claims, a URL without `?demo` gets
+    // the device's own GPS and no other source.
+    if (playing && location.mode === 'off')
+      location.start(game.demo && demoAllowed ? 'sim' : 'real')
     if (wantsCamera && !camera.active) void camera.start()
     if (IDLE.includes(nav.screen)) {
       location.stop()
