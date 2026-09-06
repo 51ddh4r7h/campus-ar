@@ -2,6 +2,7 @@ import {beforeEach, describe, expect, it} from 'vitest'
 import {VALIDATION} from './config'
 import {locationById} from './content'
 import {createEngine, type EngineDeps} from './engine'
+import {elapsedMsOf} from './scoring'
 import {InMemoryStore} from './store'
 import type {GameLocation, GeoSample} from './types'
 
@@ -415,5 +416,106 @@ describe('engine — content changed under a live batch', () => {
     const {player} = await engine.registerPlayer({batchId: batch.id, name: 'B', rosterId: 'r2'})
     const route = (await store.getRoute(player.id))!
     for (const id of route.stops) expect(locationById(id), id).toBeDefined()
+  })
+})
+
+describe('engine — pause, resume, abandon', () => {
+  async function playing() {
+    const batch = await engine.createBatch({name: 'P', eventCode: 'pause1'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    await engine.startHunt(player.sessionToken)
+    return player
+  }
+
+  it('does not count time spent paused', async () => {
+    const p = await playing()
+    deps.advance(60_000)
+    await engine.pause(p.sessionToken)
+    deps.advance(10 * 60_000) // ten minutes away
+    const s = await engine.resume(p.sessionToken)
+    // A minute of play, ten minutes of nothing.
+    expect(elapsedMsOf(s, deps.now())).toBe(60_000)
+    expect(s.pausedTotalMs).toBe(10 * 60_000)
+  })
+
+  it('holds the clock still while paused', async () => {
+    const p = await playing()
+    deps.advance(30_000)
+    const paused = await engine.pause(p.sessionToken)
+    const at = elapsedMsOf(paused, deps.now())
+    deps.advance(5 * 60_000)
+    expect(elapsedMsOf(paused, deps.now())).toBe(at)
+  })
+
+  it('refuses an arrival while paused', async () => {
+    const p = await playing()
+    await engine.pause(p.sessionToken)
+    const route = (await store.getRoute(p.id))!
+    const res = await engine.arrive(
+      p.sessionToken,
+      parkedAt(locationById(route.stops[0]!)!, deps.now()),
+    )
+    expect(res.ok).toBe(false)
+    expect(res.failure).toBe('not_in_progress')
+  })
+
+  it('accepts an arrival again after resuming', async () => {
+    const p = await playing()
+    await engine.pause(p.sessionToken)
+    deps.advance(60_000)
+    await engine.resume(p.sessionToken)
+    deps.advance(2 * 60_000)
+    const route = (await store.getRoute(p.id))!
+    const res = await engine.arrive(
+      p.sessionToken,
+      parkedAt(locationById(route.stops[0]!)!, deps.now()),
+    )
+    expect(res.ok).toBe(true)
+  })
+
+  it('survives several pauses, banking each one', async () => {
+    const p = await playing()
+    for (let i = 0; i < 3; i++) {
+      deps.advance(20_000)
+      await engine.pause(p.sessionToken)
+      deps.advance(60_000)
+      await engine.resume(p.sessionToken)
+    }
+    const s = (await store.getSession(p.id))!
+    expect(s.pausedTotalMs).toBe(3 * 60_000)
+    expect(elapsedMsOf(s, deps.now())).toBe(3 * 20_000)
+  })
+
+  it('pausing twice is not an error and does not lose the first pause', async () => {
+    const p = await playing()
+    deps.advance(10_000)
+    const a = await engine.pause(p.sessionToken)
+    deps.advance(60_000)
+    const b = await engine.pause(p.sessionToken)
+    expect(b.pausedAtMs).toBe(a.pausedAtMs)
+  })
+
+  it('abandoning ends the hunt with a score for what was reached', async () => {
+    const p = await playing()
+    deps.advance(4 * 60_000)
+    const s = await engine.abandon(p.sessionToken)
+    expect(s.status).toBe('abandoned')
+    expect(s.endTsMs).not.toBeNull()
+    expect(s.scoreMs).not.toBeNull()
+  })
+
+  it('cannot be resumed once abandoned', async () => {
+    const p = await playing()
+    await engine.abandon(p.sessionToken)
+    await expect(engine.resume(p.sessionToken)).rejects.toThrow()
+  })
+
+  it('abandons from paused too, and excludes the time away', async () => {
+    const p = await playing()
+    deps.advance(90_000)
+    await engine.pause(p.sessionToken)
+    deps.advance(30 * 60_000)
+    const s = await engine.abandon(p.sessionToken)
+    expect(elapsedMsOf(s, deps.now())).toBe(90_000)
   })
 })

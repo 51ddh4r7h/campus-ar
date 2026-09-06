@@ -78,7 +78,11 @@ export interface Route {
 export type SessionStatus =
   | 'not_started'
   | 'in_progress'
+  /** Clock stopped by the player. Nothing may be validated until they resume. */
+  | 'paused'
   | 'complete'
+  /** Given up on deliberately. Scored on what they did reach, and final. */
+  | 'abandoned'
   | 'flagged'
 
 export interface Session {
@@ -98,6 +102,10 @@ export interface Session {
   penaltyMs: number
   /** elapsed + penalties − par, in ms. Null until complete. Lower is better. */
   scoreMs: number | null
+  /** When the current pause began, or null when running. */
+  pausedAtMs: number | null
+  /** Time spent paused across the whole hunt, in ms — deducted from elapsed. */
+  pausedTotalMs: number
 }
 
 export type HintRung = 'warm' | 'close' | 'showLocation'
@@ -136,6 +144,9 @@ export type GameEventType =
   | 'speed_flag'
   | 'signal_lost'
   | 'route_reissued'
+  | 'hunt_paused'
+  | 'hunt_resumed'
+  | 'hunt_abandoned'
 
 export interface GameEvent {
   playerId: string

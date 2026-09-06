@@ -100,6 +100,30 @@ class Game {
     this.setCredentials(s.sessionToken, s.batchId, s.name, {demo: false})
   }
 
+  get paused(): boolean {
+    return this.session?.status === 'paused'
+  }
+  get abandoned(): boolean {
+    return this.session?.status === 'abandoned'
+  }
+  /** Finished either way — the wrap screen treats both the same. */
+  get finished(): boolean {
+    return this.complete || this.abandoned
+  }
+
+  async pause(): Promise<void> {
+    if (!this.token) return
+    this.session = (await api.pause(this.token)).session
+  }
+  async resume(): Promise<void> {
+    if (!this.token) return
+    this.session = (await api.resume(this.token)).session
+  }
+  async abandon(): Promise<void> {
+    if (!this.token) return
+    this.session = (await api.abandon(this.token)).session
+  }
+
   /** @returns true once a session snapshot was loaded. */
   async refresh(): Promise<boolean> {
     if (!this.token) return false

@@ -55,6 +55,8 @@ interface SessionRow {
   hint_credit_used: number
   penalty_ms: number
   score_ms: number | null
+  paused_at_ms: number | null
+  paused_total_ms: number
 }
 interface SplitRow {
   player_id: string
@@ -109,6 +111,8 @@ const toSession = (r: SessionRow): Session => ({
   hintCreditUsed: r.hint_credit_used === 1,
   penaltyMs: r.penalty_ms,
   scoreMs: r.score_ms,
+  pausedAtMs: r.paused_at_ms,
+  pausedTotalMs: r.paused_total_ms ?? 0,
 })
 
 const toSplit = (r: SplitRow): Split => ({
@@ -250,12 +254,13 @@ export class D1Store implements GameStore {
       .prepare(
         `INSERT INTO session
            (player_id, status, start_ts_ms, end_ts_ms, current_level, current_level_hints,
-            current_level_views, hint_credit_used, penalty_ms, score_ms)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            current_level_views, hint_credit_used, penalty_ms, score_ms,
+            paused_at_ms, paused_total_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
          ON CONFLICT(player_id) DO UPDATE SET
            status = ?2, start_ts_ms = ?3, end_ts_ms = ?4, current_level = ?5,
            current_level_hints = ?6, current_level_views = ?7, hint_credit_used = ?8,
-           penalty_ms = ?9, score_ms = ?10`,
+           penalty_ms = ?9, score_ms = ?10, paused_at_ms = ?11, paused_total_ms = ?12`,
       )
       .bind(
         s.playerId,
@@ -268,6 +273,8 @@ export class D1Store implements GameStore {
         s.hintCreditUsed ? 1 : 0,
         s.penaltyMs,
         s.scoreMs,
+        s.pausedAtMs,
+        s.pausedTotalMs,
       )
       .run()
   }

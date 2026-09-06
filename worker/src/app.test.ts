@@ -383,3 +383,71 @@ describe('app — password login', () => {
     expect(res.status).toBe(400)
   })
 })
+
+describe('app — pause, resume, abandon', () => {
+  const post = (path: string, token: string) =>
+    app.request(path, {method: 'POST', headers: {Authorization: `Bearer ${token}`}}, env)
+
+  async function started() {
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
+    await post('/session/start', p.sessionToken)
+    return p
+  }
+
+  it('pauses and resumes over HTTP', async () => {
+    const p = await started()
+    clock.advance(60_000)
+    const paused = (await (await post('/session/pause', p.sessionToken)).json()) as {
+      session: {status: string; pausedAtMs: number | null}
+    }
+    expect(paused.session.status).toBe('paused')
+    expect(paused.session.pausedAtMs).not.toBeNull()
+
+    clock.advance(10 * 60_000)
+    const back = (await (await post('/session/resume', p.sessionToken)).json()) as {
+      session: {status: string; pausedTotalMs: number}
+    }
+    expect(back.session.status).toBe('in_progress')
+    expect(back.session.pausedTotalMs).toBe(10 * 60_000)
+  })
+
+  it('refuses an arrival while paused, and takes it after resuming', async () => {
+    const p = await started()
+    await post('/session/pause', p.sessionToken)
+    const auth = {Authorization: `Bearer ${p.sessionToken}`}
+
+    const blocked = (await (
+      await json('/session/arrive', {samples: parkedAt('amphitheatre', clock.now())}, auth)
+    ).json()) as {ok: boolean; failure: string}
+    expect(blocked.ok).toBe(false)
+
+    await post('/session/resume', p.sessionToken)
+    clock.advance(3 * 60_000)
+    const ok = (await (
+      await json('/session/arrive', {samples: parkedAt('amphitheatre', clock.now())}, auth)
+    ).json()) as {ok: boolean}
+    expect(ok.ok).toBe(true)
+  })
+
+  it('abandons and stays abandoned', async () => {
+    const p = await started()
+    clock.advance(5 * 60_000)
+    const done = (await (await post('/session/abandon', p.sessionToken)).json()) as {
+      session: {status: string; scoreMs: number | null}
+    }
+    expect(done.session.status).toBe('abandoned')
+    expect(done.session.scoreMs).not.toBeNull()
+
+    expect((await post('/session/resume', p.sessionToken)).status).toBe(409)
+  })
+
+  it('leaves a hunt nobody paused unchanged, so old sessions still work', async () => {
+    const p = await started()
+    clock.advance(90_000)
+    const state = (await (await json('/session', undefined, {
+      Authorization: `Bearer ${p.sessionToken}`,
+    })).json()) as {session: {pausedTotalMs: number; pausedAtMs: number | null}}
+    expect(state.session.pausedTotalMs).toBe(0)
+    expect(state.session.pausedAtMs).toBeNull()
+  })
+})

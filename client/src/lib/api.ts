@@ -105,6 +105,13 @@ export const api = {
 
   getState: (token: string) => request<StateResponse>('/session', {headers: auth(token)}),
 
+  pause: (token: string) =>
+    request<{session: Session}>('/session/pause', {method: 'POST', headers: auth(token)}),
+  resume: (token: string) =>
+    request<{session: Session}>('/session/resume', {method: 'POST', headers: auth(token)}),
+  abandon: (token: string) =>
+    request<{session: Session}>('/session/abandon', {method: 'POST', headers: auth(token)}),
+
   nearby: (token: string, samples: GeoSample[]) =>
     request<NearbyResult>('/session/nearby', {
       method: 'POST',

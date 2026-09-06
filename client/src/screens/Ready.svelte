@@ -6,19 +6,53 @@
   import {toasts} from '../lib/stores/toast.svelte'
   import {ApiError} from '../lib/api'
   import {revealVideo} from '../lib/reveal-video'
+  import {camera} from '../lib/stores/camera.svelte'
+  import {ar} from '../lib/stores/ar.svelte'
 
-  const resuming = $derived(game.inProgress)
+  const resuming = $derived(game.inProgress || game.paused)
   let starting = $state(false)
+  let confirming = $state(false)
+  let ending = $state(false)
+
+  async function endNow() {
+    ending = true
+    try {
+      await game.abandon()
+      nav.go('finish')
+    } catch {
+      toasts.show('Could not end the hunt — try again', 'alert')
+      ending = false
+    }
+  }
 
   async function go() {
-    // This tap is the session's one guaranteed user gesture — spend it
-    // unblocking the shared <video> so no later scene needs a "tap to play".
+    /**
+     * This tap is the session's one guaranteed user gesture, so everything that
+     * needs one is spent here.
+     *
+     * The camera is why this matters. A resumed session used to route straight
+     * to the clue, and the camera was then started from a reactive effect on
+     * the search screen — not from a gesture. Safari refuses getUserMedia
+     * outside a gesture without even prompting, which is exactly the reported
+     * symptom: no camera, and no permission dialog either. Asking here, on a
+     * real tap, is the fix.
+     */
     const v = revealVideo()
     v.muted = true
     void v.play().catch(() => {})
+    void camera.start()
+    void ar.ensure()
 
     if (resuming) {
-      nav.go('clue')
+      starting = true
+      try {
+        // A paused session has to be un-paused before anything will validate.
+        if (game.paused) await game.resume()
+        nav.go('clue')
+      } catch {
+        toasts.show('Could not resume — try again', 'alert')
+        starting = false
+      }
       return
     }
     starting = true
@@ -45,9 +79,11 @@
 <main>
   {#if game.demo}<span class="chip">Demo</span>{/if}
   <div class="center">
-    <p class="label">{resuming ? `You're on level ${game.level}` : "When you're ready"}</p>
+    <p class="label">
+      {game.paused ? 'Paused' : resuming ? `You're on level ${game.level}` : "When you're ready"}
+    </p>
     <button class="start" class:busy={starting} onclick={go} disabled={starting}>
-      <span>{resuming ? 'RESUME' : 'START'}</span>
+      <span>{starting ? '…' : resuming ? 'RESUME' : 'START'}</span>
     </button>
     {#if resuming}
       <p class="sub mono">{formatMarquee(clock.elapsedMs)}</p>
@@ -55,6 +91,23 @@
       <p class="sub">Your timer starts the moment you tap.</p>
     {/if}
     <button class="rules" onclick={() => nav.open('howto')}>Read the rules again</button>
+
+    {#if resuming}
+      <!-- Deliberately plain and deliberately two taps. It is the only action
+           in the game that cannot be undone, and it is sitting next to the one
+           people press to carry on. -->
+      {#if confirming}
+        <p class="warn">Your hunt ends here and is scored on what you found.</p>
+        <div class="row">
+          <button class="danger" disabled={ending} onclick={() => void endNow()}>
+            {ending ? 'Ending…' : 'Yes, end it'}
+          </button>
+          <button class="rules" onclick={() => (confirming = false)}>Keep playing</button>
+        </div>
+      {:else}
+        <button class="rules quit" onclick={() => (confirming = true)}>End the hunt early</button>
+      {/if}
+    {/if}
   </div>
 </main>
 
@@ -64,6 +117,28 @@
     display: grid;
     place-items: center;
     padding: var(--edge);
+  }
+  .warn {
+    margin: var(--sp-5) 0 var(--sp-2);
+    color: var(--text-dim);
+    font-size: var(--step-13);
+    max-width: 30ch;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+  .danger {
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--alert) 55%, transparent);
+    background: color-mix(in srgb, var(--alert) 16%, transparent);
+    color: var(--text);
+    font-size: var(--step-13);
+  }
+  .quit {
+    color: var(--text-faint);
   }
   .rules {
     margin-top: var(--sp-6);

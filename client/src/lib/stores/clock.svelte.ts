@@ -1,8 +1,10 @@
 /**
- * The hunt clock. Wall-clock based off the server start timestamp, so it
- * survives reloads and backgrounding. Ticks the display ~4×/s.
+ * The hunt clock. Derived from the server's timestamps, so it survives reloads
+ * and backgrounding, and reads the same as the score the server will compute.
+ * Ticks the display ~4×/s.
  */
 
+import {elapsedMsOf} from '@cmh/shared'
 import {game} from './game.svelte'
 
 class Clock {
@@ -16,11 +18,10 @@ class Clock {
     document.addEventListener('visibilitychange', tick)
   }
 
+  /** Shared with the engine, so a paused clock reads the same on both sides. */
   get elapsedMs(): number {
-    const start = game.session?.startTsMs
-    if (!start) return 0
-    const end = game.session?.endTsMs ?? this.now
-    return Math.max(0, end - start)
+    const s = game.session
+    return s ? elapsedMsOf(s, this.now) : 0
   }
 }
 

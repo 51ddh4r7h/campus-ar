@@ -13,7 +13,7 @@ import {
 import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool, playableOrder, type RoutePool} from './routes'
 import {assignRoute} from './routes'
-import {routePar, sessionScoreMs} from './scoring'
+import {elapsedMsOf, routePar, sessionScoreMs} from './scoring'
 import {VALIDATION} from './config'
 import {haversineM} from './geo'
 import {bandFromHeat, heatFromDistance} from './heat'
@@ -50,6 +50,7 @@ export type EngineErrorCode =
   | 'bad_password'
   | 'signups_closed'
   | 'roster_taken'
+  | 'paused'
 
 export class EngineError extends Error {
   constructor(readonly code: EngineErrorCode, message?: string) {
@@ -94,7 +95,7 @@ const rejectArrival = (
 const advanceSession = (session: Session, route: Route, reachedTsMs: number): Session => {
   const nextLevel = session.currentLevel + 1
   const complete = nextLevel > LEVEL_COUNT
-  const elapsedMs = reachedTsMs - (session.startTsMs ?? reachedTsMs)
+  const elapsedMs = elapsedMsOf({...session, endTsMs: reachedTsMs}, reachedTsMs)
   return {
     ...session,
     currentLevel: nextLevel,
@@ -365,6 +366,8 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       hintCreditUsed: false,
       penaltyMs: 0,
       scoreMs: null,
+      pausedAtMs: null,
+      pausedTotalMs: 0,
     }
     await store.putPlayer(player)
     await store.putRoute({playerId: player.id, stops, parTotalMs, legParMs})
@@ -497,6 +500,81 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       const clue = clueView(route, started)
       await event(started.playerId, 'clue_served', {level: clue.level})
       return {session: started, clue}
+    },
+
+    /**
+     * Stop the clock.
+     *
+     * Every mutating call already refuses anything that is not `in_progress`,
+     * so pausing is enough on its own to stop arrivals, hints and viewings
+     * being accepted — there is no separate set of guards to keep in step.
+     */
+    async pause(token: string): Promise<Session> {
+      const {session} = await authed(token)
+      if (session.status === 'paused') return session
+      if (session.status !== 'in_progress') throw new EngineError('not_in_progress')
+
+      const paused: Session = {...session, status: 'paused', pausedAtMs: deps.now()}
+      await store.putSession(paused)
+      await event(session.playerId, 'hunt_paused', {level: session.currentLevel})
+      return paused
+    },
+
+    /** Restart the clock, banking however long they were away. */
+    async resume(token: string): Promise<Session> {
+      const {session} = await authed(token)
+      if (session.status === 'in_progress') return session
+      if (session.status !== 'paused') throw new EngineError('not_in_progress')
+
+      const awayMs = session.pausedAtMs === null ? 0 : Math.max(0, deps.now() - session.pausedAtMs)
+      const resumed: Session = {
+        ...session,
+        status: 'in_progress',
+        pausedAtMs: null,
+        pausedTotalMs: session.pausedTotalMs + awayMs,
+      }
+      await store.putSession(resumed)
+      await event(session.playerId, 'hunt_resumed', {awayMs, level: session.currentLevel})
+      return resumed
+    },
+
+    /**
+     * Give up, deliberately and for good.
+     *
+     * Scored on what they actually reached, so a walk that was cut short still
+     * ends with a number rather than a session that hangs open forever. There
+     * is no route back — that is the point of it, and the client asks twice.
+     */
+    async abandon(token: string): Promise<Session> {
+      const {session, route} = await authed(token)
+      if (session.status === 'abandoned') return session
+      if (session.status !== 'in_progress' && session.status !== 'paused') {
+        throw new EngineError('not_in_progress')
+      }
+
+      const endTsMs = deps.now()
+      const elapsedMs = elapsedMsOf({...session, endTsMs}, endTsMs)
+      // Close the open pause into the bank before clearing it. Scoring above
+      // reads the session as it stands and is fine either way, but the stored
+      // row is what the wrap screen re-derives from later — leaving the pause
+      // unbanked made a 90-second hunt abandoned after half an hour away read
+      // as half an hour of play.
+      const openPauseMs =
+        session.pausedAtMs === null ? 0 : Math.max(0, endTsMs - session.pausedAtMs)
+      const done: Session = {
+        ...session,
+        status: 'abandoned',
+        endTsMs,
+        pausedAtMs: null,
+        pausedTotalMs: session.pausedTotalMs + openPauseMs,
+        scoreMs: sessionScoreMs(elapsedMs, session.penaltyMs, route.parTotalMs),
+      }
+      await store.putSession(done)
+      await event(session.playerId, 'hunt_abandoned', {
+        level: session.currentLevel,
+        elapsedMs,
+      })
+      return done
     },
 
     async getState(token: string): Promise<{
@@ -682,7 +760,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       ])
       const nameById = new Map(players.map((p) => [p.id, p.name]))
       const sorted = sessions
-        .filter((s) => s.status === 'complete' || s.status === 'in_progress')
+        .filter((s) => s.status === 'complete' || s.status === 'in_progress' || s.status === 'paused')
         .sort((a, b) => {
           const aDone = a.status === 'complete'
           const bDone = b.status === 'complete'

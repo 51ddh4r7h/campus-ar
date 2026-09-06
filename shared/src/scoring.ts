@@ -5,7 +5,7 @@
  */
 
 import {haversineM, type LatLng} from './geo'
-import type {GameLocation, ParConstants} from './types'
+import type {GameLocation, ParConstants, Session} from './types'
 import {LEVEL_COUNT} from './config'
 
 /** Expected walking time between two points, ms. */
@@ -56,3 +56,22 @@ export const sessionScoreMs = (
   penaltyMs: number,
   routeParTotalMs: number,
 ): number => elapsedMs + penaltyMs - routeParTotalMs
+
+/**
+ * How long a hunt has actually been running.
+ *
+ * The one place this is worked out. It used to be plain wall-clock —
+ * `(endTsMs ?? now) - startTsMs` — computed separately in the client's clock and
+ * in the engine, which meant a session left open kept accruing time forever,
+ * and pausing could only ever have been cosmetic. Paused time is subtracted,
+ * including the pause currently in progress, so the two agree by construction.
+ */
+export const elapsedMsOf = (
+  session: Pick<Session, 'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs'>,
+  nowMs: number,
+): number => {
+  if (session.startTsMs === null) return 0
+  const end = session.endTsMs ?? nowMs
+  const openPause = session.pausedAtMs === null ? 0 : Math.max(0, end - session.pausedAtMs)
+  return Math.max(0, end - session.startTsMs - session.pausedTotalMs - openPause)
+}

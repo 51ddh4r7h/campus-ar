@@ -1,6 +1,6 @@
 <script lang="ts">
   import {onMount} from 'svelte'
-  import {formatMarquee, formatScore, locationById, perksEarned} from '@cmh/shared'
+  import {LEVEL_COUNT, formatMarquee, formatScore, locationById, perksEarned} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {standings} from '../lib/stores/standings.svelte'
@@ -45,15 +45,35 @@
 
 <main>
   <span class="eyebrow">Campus Movie Hunt</span>
-  <h1>That's a wrap.</h1>
+  <!-- An abandoned hunt is not a finished one, and saying so is kinder than a
+       congratulation nobody earned. The whole-campus map stays behind `wrapped`
+       for the same reason: it is the reward for going the distance. -->
+  <h1>{game.abandoned ? 'Called it a day.' : "That's a wrap."}</h1>
+  {#if game.abandoned}
+    <p class="stopped">
+      {splits.length === 0
+        ? `You stopped before finding a scene, at level 1 of ${LEVEL_COUNT}.`
+        : `You stopped at level ${splits.length + 1} of ${LEVEL_COUNT}, having found ${splits.length} of them.`}
+    </p>
+  {/if}
 
   <div class="hero">
-    <p class="label">{score <= 0 ? 'Under par by' : 'Over par by'}</p>
-    <p class="big">{formatMarquee(Math.abs(score))}</p>
-    <p class="raw">Total time {formatMarquee(clock.elapsedMs)}</p>
+    <!-- No par comparison for a hunt that was cut short. Par is the whole
+         route's, so ending early subtracts time for legs nobody walked and
+         reports a personal best — "under par by 18:01" for finding nothing.
+         Elapsed time is the only honest number here. -->
+    {#if game.abandoned}
+      <p class="label">Time played</p>
+      <p class="big">{formatMarquee(clock.elapsedMs)}</p>
+      <p class="raw">Not ranked — the board is for finished hunts.</p>
+    {:else}
+      <p class="label">{score <= 0 ? 'Under par by' : 'Over par by'}</p>
+      <p class="big">{formatMarquee(Math.abs(score))}</p>
+      <p class="raw">Total time {formatMarquee(clock.elapsedMs)}</p>
+    {/if}
   </div>
 
-  {#if self}
+  {#if self && !game.abandoned}
     <p class="rank">
       {#if self.rank <= 3}<Icon name="trophy" size={18} />{/if}
       {self.rank}{#if standings.rows.length} of {standings.rows.length}{/if}
@@ -210,6 +230,11 @@
   }
   .reel {
     margin: var(--sp-5) 0 var(--sp-4);
+  }
+  .stopped {
+    margin: 0 0 var(--sp-4);
+    color: var(--text-dim);
+    font-size: var(--step-15);
   }
   .splits {
     list-style: none;

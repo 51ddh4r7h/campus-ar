@@ -63,12 +63,18 @@
     }
   }
 
-  /** Drop the player back exactly where the server says they are. */
+  /**
+   * Drop the player back exactly where the server says they are.
+   *
+   * An in-progress hunt goes to `ready`, not straight to the clue. That screen
+   * shows RESUME, and its tap is a real user gesture — which is what the camera
+   * needs. Starting it from a reactive effect on the search screen meant Safari
+   * refused getUserMedia silently, with no prompt and no picture.
+   */
   function routeToSession(): void {
     if (!game.token) nav.go(entryScreen())
-    else if (game.complete) nav.go('finish')
-    else if (game.inProgress) nav.go('clue')
-    // Signed in but not started — the briefing, which owns the way forward.
+    else if (game.finished) nav.go('finish')
+    else if (game.inProgress || game.paused) nav.go('ready')
     else nav.go('briefing')
   }
 
@@ -96,7 +102,7 @@
   /** Screens shot through the live camera. */
   const THROUGH_LENS: readonly ScreenName[] = ['search', 'reveal']
   /** Screens where the hunt isn't running, so the sensors should be off. */
-  const IDLE: readonly ScreenName[] = ['finish', 'briefing']
+  const IDLE: readonly ScreenName[] = ['finish', 'briefing', 'hero', 'signin']
 
   const playing = $derived(game.inProgress && PLAYING.includes(nav.screen))
   const wantsCamera = $derived(playing && THROUGH_LENS.includes(nav.screen))

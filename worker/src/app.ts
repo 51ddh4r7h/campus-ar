@@ -240,6 +240,21 @@ export const createApp = (
     c.json(await engineFor(c.env).getState(bearer(c.req.header('Authorization')))),
   )
 
+  /** Stop the clock. Everything that mutates a hunt refuses a paused session. */
+  app.post('/session/pause', async (c) =>
+    c.json({session: await engineFor(c.env).pause(bearer(c.req.header('Authorization')))}),
+  )
+
+  /** Restart it, banking the time away. */
+  app.post('/session/resume', async (c) =>
+    c.json({session: await engineFor(c.env).resume(bearer(c.req.header('Authorization')))}),
+  )
+
+  /** Give up for good, scored on what was actually reached. */
+  app.post('/session/abandon', async (c) =>
+    c.json({session: await engineFor(c.env).abandon(bearer(c.req.header('Authorization')))}),
+  )
+
   app.post('/session/nearby', async (c) => {
     const token = bearer(c.req.header('Authorization'))
     const samples = parseSamples(await c.req.json())
