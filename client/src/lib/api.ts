@@ -95,6 +95,8 @@ export interface StateResponse {
   session: Session
   clue: ClueView | null
   splits: import('@cmh/shared').SplitView[]
+  /** Authoritative: the batch decides, not the client. */
+  isDemo: boolean
 }
 
 export const api = {

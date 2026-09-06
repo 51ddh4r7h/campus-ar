@@ -132,6 +132,12 @@ class Game {
       this.session = state.session
       this.clue = state.clue
       this.splits = state.splits
+      // The server is the authority on this. A practice run replaces the signed
+      // -in token with its own, and the flag it left behind in localStorage
+      // then kept later sessions simulated; asking every refresh means a stale
+      // flag cannot survive one.
+      this.demo = state.isDemo
+      save(LS_DEMO, state.isDemo ? '1' : null)
       this.loaded = true
       return true
     } catch (err) {

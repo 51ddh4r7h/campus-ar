@@ -643,12 +643,16 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       session: Session
       clue: ClueView | null
       splits: SplitView[]
+      isDemo: boolean
     }> {
-      const {session, route} = await authed(token)
+      const {session, route, batch} = await authed(token)
       const splits = await store.listSplits(session.playerId)
       const clue =
         session.status === 'in_progress' ? clueView(route, session) : null
-      return {session, clue, splits: splitViews(route, splits)}
+      // Whether this is a practice run belongs to the batch, not to the
+      // browser. It used to be read from localStorage and never re-checked, so
+      // a stale flag from an earlier practice run kept a session simulated.
+      return {session, clue, splits: splitViews(route, splits), isDemo: batch.isDemo}
     },
 
     async nearby(

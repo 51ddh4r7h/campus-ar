@@ -498,3 +498,27 @@ describe('app — closing a batch', () => {
     expect(res.status).toBe(403)
   })
 })
+
+describe('app — practice is decided by the batch, not the browser', () => {
+  it('reports isDemo false for a real batch', async () => {
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
+    const state = (await (
+      await json('/session', undefined, {Authorization: `Bearer ${p.sessionToken}`})
+    ).json()) as {isDemo: boolean}
+    expect(state.isDemo).toBe(false)
+  })
+
+  it('reports isDemo true for a practice session', async () => {
+    const demo = (await (
+      await app.request(
+        '/demo/session',
+        {method: 'POST', headers: {'content-type': 'application/json'}, body: '{}'},
+        env,
+      )
+    ).json()) as {sessionToken: string}
+    const state = (await (
+      await json('/session', undefined, {Authorization: `Bearer ${demo.sessionToken}`})
+    ).json()) as {isDemo: boolean}
+    expect(state.isDemo).toBe(true)
+  })
+})

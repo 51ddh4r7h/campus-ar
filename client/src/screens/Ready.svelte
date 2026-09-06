@@ -126,6 +126,11 @@
       <p class="sub">Your timer starts the moment you tap.</p>
     {/if}
     <button class="rules" onclick={() => nav.open('howto')}>Read the rules again</button>
+    <!-- Reachable without finishing: a browser can end up on the wrong session
+         entirely, and there was no way off it from here. -->
+    <button class="rules quit" onclick={() => (game.reset(), nav.go('hero'))}>
+      {game.demo ? 'Leave practice' : 'Sign out'}
+    </button>
 
     {#if resuming}
       <!-- Deliberately plain and deliberately two taps. It is the only action
