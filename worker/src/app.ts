@@ -193,6 +193,12 @@ export const createApp = (
     })
   })
 
+  /** Shut a batch down — stops signups and closes out any hunt still running. */
+  app.post('/admin/batches/:id/close', async (c) => {
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    return c.json(await engineFor(c.env).closeBatch(c.req.param('id')))
+  })
+
   /**
    * What a signup link points at. Public and deliberately thin: it exists so the
    * sign-in screen can say "Induction 2026" rather than leaving the player to

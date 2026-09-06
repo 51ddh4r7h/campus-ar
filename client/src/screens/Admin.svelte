@@ -29,6 +29,31 @@
   /** The one link an organiser shares with a whole cohort. */
   const signupLink = (code: string): string => `${window.location.origin}/?e=${encodeURIComponent(code)}`
 
+  let closing = $state<string | null>(null)
+
+  /**
+   * Ending an event properly. The per-session cap only fires when a player
+   * comes back, so everyone who simply walked away leaves a hunt open — this is
+   * what actually finishes them, and stops the signup link working.
+   */
+  async function closeBatch(b: BatchRow) {
+    if (closing) return
+    if (!confirm(`Close "${b.name}"? Signups stop and any hunt still running is ended.`)) return
+    closing = b.id
+    try {
+      const r = await api.closeBatch(b.id, adminKey)
+      toasts.show(
+        r.sessions > 0 ? `Closed — ended ${r.sessions} running hunt${r.sessions === 1 ? '' : 's'}` : 'Closed',
+        'success',
+      )
+      await refreshBatches()
+    } catch (err) {
+      toasts.show(err instanceof ApiError ? err.message : 'Could not close the batch', 'alert')
+    } finally {
+      closing = null
+    }
+  }
+
   async function copySignupLink(code: string) {
     try {
       await navigator.clipboard.writeText(signupLink(code))
@@ -225,6 +250,15 @@
                   {#if b.isDemo}· practice{/if}
                 </span>
               </button>
+              {#if b.status !== 'closed'}
+                <button
+                  class="close-batch"
+                  disabled={closing === b.id}
+                  onclick={() => void closeBatch(b)}
+                >
+                  {closing === b.id ? '…' : 'Close'}
+                </button>
+              {/if}
             </li>
           {/each}
         </ul>
@@ -466,6 +500,23 @@
   .bad {
     color: var(--alert, #e06c5a);
     font-size: var(--step-14);
+  }
+  .batches li {
+    display: flex;
+    align-items: stretch;
+    gap: var(--sp-2);
+  }
+  .batches li > button:first-child {
+    flex: 1;
+  }
+  .close-batch {
+    flex: none;
+    align-self: center;
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: 999px;
+    border: 1px solid var(--hairline);
+    color: var(--text-dim);
+    font-size: var(--step-13);
   }
   .code-in {
     width: 100%;

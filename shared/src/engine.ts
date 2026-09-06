@@ -14,7 +14,7 @@ import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool, playableOrder, type RoutePool} from './routes'
 import {assignRoute} from './routes'
 import {elapsedMsOf, routePar, sessionScoreMs} from './scoring'
-import {VALIDATION} from './config'
+import {SESSION_MAX_MS, VALIDATION} from './config'
 import {haversineM} from './geo'
 import {bandFromHeat, heatFromDistance} from './heat'
 import {bonusViews, hasHintCredit, perkForLevel} from './perks'
@@ -253,7 +253,9 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       store.getBatch(player.batchId),
     ])
     if (!session || !route || !batch) throw new EngineError('bad_token')
-    if (routeIsLive(route.stops)) return {player, session, route, batch}
+    if (routeIsLive(route.stops)) {
+      return {player, session: await closeIfStale(session, route), route, batch}
+    }
 
     /**
      * The route names a location the content no longer has.
@@ -273,6 +275,54 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     if (!reissued) throw new EngineError('pool_empty')
     return {player, session: fresh, route: reissued, batch}
   }
+
+  /**
+   * Close a hunt that has been open longer than any real one takes.
+   *
+   * Checked here because every entry point comes through, so a session left
+   * running is finished the moment its owner touches the app again rather than
+   * counting up forever. It does not reach sessions nobody returns to — that is
+   * what closing the batch is for.
+   */
+  const closeIfStale = async (
+    session: Session,
+    route: Route,
+  ): Promise<Session> => {
+    const now = deps.now()
+    if (!isStale(session, now)) return session
+    const done = await endSession(session, route, now)
+    await event(session.playerId, 'hunt_abandoned', {
+      level: session.currentLevel,
+      reason: 'stale',
+    })
+    return done
+  }
+
+  /** Close a hunt out, scored on whatever was actually reached. */
+  const endSession = async (
+    session: Session,
+    route: Route,
+    endTsMs: number,
+  ): Promise<Session> => {
+    const elapsedMs = elapsedMsOf({...session, endTsMs}, endTsMs)
+    const openPauseMs =
+      session.pausedAtMs === null ? 0 : Math.max(0, endTsMs - session.pausedAtMs)
+    const done: Session = {
+      ...session,
+      status: 'abandoned',
+      endTsMs,
+      pausedAtMs: null,
+      pausedTotalMs: session.pausedTotalMs + openPauseMs,
+      scoreMs: sessionScoreMs(elapsedMs, session.penaltyMs, route.parTotalMs),
+    }
+    await store.putSession(done)
+    return done
+  }
+
+  /** Still running, and running for longer than any real hunt takes. */
+  const isStale = (session: Session, nowMs: number): boolean =>
+    (session.status === 'in_progress' || session.status === 'paused') &&
+    elapsedMsOf(session, nowMs) > SESSION_MAX_MS
 
   /** A short, URL-safe signup code from a batch name, plus 3 hex for uniqueness. */
   const codeFromName = (name: string): string => {
@@ -553,28 +603,40 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       }
 
       const endTsMs = deps.now()
-      const elapsedMs = elapsedMsOf({...session, endTsMs}, endTsMs)
-      // Close the open pause into the bank before clearing it. Scoring above
-      // reads the session as it stands and is fine either way, but the stored
-      // row is what the wrap screen re-derives from later — leaving the pause
-      // unbanked made a 90-second hunt abandoned after half an hour away read
-      // as half an hour of play.
-      const openPauseMs =
-        session.pausedAtMs === null ? 0 : Math.max(0, endTsMs - session.pausedAtMs)
-      const done: Session = {
-        ...session,
-        status: 'abandoned',
-        endTsMs,
-        pausedAtMs: null,
-        pausedTotalMs: session.pausedTotalMs + openPauseMs,
-        scoreMs: sessionScoreMs(elapsedMs, session.penaltyMs, route.parTotalMs),
-      }
-      await store.putSession(done)
+      const done = await endSession(session, route, endTsMs)
       await event(session.playerId, 'hunt_abandoned', {
         level: session.currentLevel,
-        elapsedMs,
+        elapsedMs: elapsedMsOf(done, endTsMs),
       })
       return done
+    },
+
+    /**
+     * Shut a batch down: no more signups, and no hunts left running.
+     *
+     * The organiser's counterpart to the per-session cap. That cap only fires
+     * when a player comes back, so an event that has finished still leaves
+     * sessions open for everyone who simply walked away. This closes them out
+     * where they got to, and stops the signup code working, which is what makes
+     * an old event genuinely over rather than merely ignored.
+     */
+    async closeBatch(batchId: string): Promise<{closed: number; sessions: number}> {
+      const batch = await store.getBatch(batchId)
+      if (!batch) throw new EngineError('batch_not_found')
+
+      const sessions = await store.listSessions(batchId)
+      const now = deps.now()
+      let ended = 0
+      for (const session of sessions) {
+        if (session.status !== 'in_progress' && session.status !== 'paused') continue
+        const route = await store.getRoute(session.playerId)
+        if (!route) continue
+        await endSession(session, route, now)
+        await event(session.playerId, 'hunt_abandoned', {reason: 'batch_closed'})
+        ended++
+      }
+      await store.putBatch({...batch, status: 'closed'})
+      return {closed: 1, sessions: ended}
     },
 
     async getState(token: string): Promise<{

@@ -1,5 +1,5 @@
 import {beforeEach, describe, expect, it} from 'vitest'
-import {VALIDATION} from './config'
+import {SESSION_MAX_MS, VALIDATION} from './config'
 import {locationById} from './content'
 import {createEngine, type EngineDeps} from './engine'
 import {elapsedMsOf} from './scoring'
@@ -517,5 +517,62 @@ describe('engine — pause, resume, abandon', () => {
     deps.advance(30 * 60_000)
     const s = await engine.abandon(p.sessionToken)
     expect(elapsedMsOf(s, deps.now())).toBe(90_000)
+  })
+})
+
+describe('engine — sessions and batches that outlive their event', () => {
+  async function playing(code = 'stale-a') {
+    const batch = await engine.createBatch({name: 'S', eventCode: code})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    await engine.startHunt(player.sessionToken)
+    return {batch, player}
+  }
+
+  it('closes a hunt that has been open longer than any real one', async () => {
+    const {player} = await playing()
+    deps.advance(SESSION_MAX_MS + 60_000)
+    // Any call is enough — the check sits at the auth boundary.
+    const state = await engine.getState(player.sessionToken)
+    expect(state.session.status).toBe('abandoned')
+    expect(state.session.endTsMs).not.toBeNull()
+  })
+
+  it('leaves a hunt inside the cap alone', async () => {
+    const {player} = await playing('stale-b')
+    deps.advance(SESSION_MAX_MS - 60_000)
+    const state = await engine.getState(player.sessionToken)
+    expect(state.session.status).toBe('in_progress')
+  })
+
+  it('does not count paused time towards the cap', async () => {
+    const {player} = await playing('stale-c')
+    deps.advance(60_000)
+    await engine.pause(player.sessionToken)
+    deps.advance(SESSION_MAX_MS * 2) // a very long lunch
+    const s = await engine.resume(player.sessionToken)
+    expect(s.status).toBe('in_progress')
+  })
+
+  it('closing a batch ends the hunts still running in it', async () => {
+    const {batch, player} = await playing('stale-d')
+    const res = await engine.closeBatch(batch.id)
+    expect(res.sessions).toBe(1)
+    const state = await engine.getState(player.sessionToken)
+    expect(state.session.status).toBe('abandoned')
+  })
+
+  it('a closed batch takes no more signups', async () => {
+    const {batch} = await playing('stale-e')
+    await engine.closeBatch(batch.id)
+    await expect(
+      engine.signup({eventCode: 'stale-e', username: 'new', name: 'N', password: 'secret123'}),
+    ).rejects.toThrow(/closed/i)
+  })
+
+  it('closing twice is harmless', async () => {
+    const {batch} = await playing('stale-f')
+    await engine.closeBatch(batch.id)
+    const again = await engine.closeBatch(batch.id)
+    expect(again.sessions).toBe(0)
   })
 })

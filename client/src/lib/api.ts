@@ -201,6 +201,13 @@ export const api = {
     })
   },
 
+  /** Stop signups and close out any hunt still running in the batch. */
+  closeBatch: (batchId: string, adminKey?: string) =>
+    request<{closed: number; sessions: number}>(`/admin/batches/${batchId}/close`, {
+      method: 'POST',
+      headers: adminHeaders(adminKey),
+    }),
+
   registerPlayers: (
     batchId: string,
     players: Array<{name: string; rosterId: string; route?: string[]}>,

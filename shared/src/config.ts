@@ -75,6 +75,18 @@ export const POLLING = {
   crumbMinGapMs: 5_000,
 } as const
 
+/**
+ * How long a hunt may stay open before it closes itself.
+ *
+ * A run takes about forty-five minutes. Six hours is far past any honest
+ * variation and well inside "this person walked off and shut their phone",
+ * which is the case this exists for: without a cap those sessions stayed
+ * `in_progress` forever, their clocks counting for days, and the only way out
+ * was an organiser editing the database. A session past this is closed the next
+ * time it is touched, scored on whatever was actually reached.
+ */
+export const SESSION_MAX_MS = 6 * 60 * 60 * 1000
+
 /** How long a player must be stuck on a level before each hint rung unlocks. */
 export const HINT_GATES = {
   warmAfterMs: 4 * 60_000,

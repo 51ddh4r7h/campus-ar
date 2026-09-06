@@ -451,3 +451,50 @@ describe('app — pause, resume, abandon', () => {
     expect(state.session.pausedAtMs).toBeNull()
   })
 })
+
+describe('app — closing a batch', () => {
+  it('ends running hunts and refuses further signups', async () => {
+    const batch = (await (
+      await json('/admin/batches', {name: 'Old event', eventCode: 'oldev'})
+    ).json()) as {id: string}
+
+    const anon = (path: string, body: unknown) =>
+      app.request(
+        path,
+        {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)},
+        env,
+      )
+    const {sessionToken} = (await (
+      await anon('/session/signup', {
+        eventCode: 'oldev',
+        username: 'r1',
+        name: 'A',
+        password: 'secret123',
+      })
+    ).json()) as {sessionToken: string}
+    await app.request('/session/start', {method: 'POST', headers: {Authorization: `Bearer ${sessionToken}`}}, env)
+
+    const res = (await (await json(`/admin/batches/${batch.id}/close`, {})).json()) as {
+      sessions: number
+    }
+    expect(res.sessions).toBe(1)
+
+    const state = (await (
+      await json('/session', undefined, {Authorization: `Bearer ${sessionToken}`})
+    ).json()) as {session: {status: string}}
+    expect(state.session.status).toBe('abandoned')
+
+    const late = await anon('/session/signup', {
+      eventCode: 'oldev',
+      username: 'r2',
+      name: 'B',
+      password: 'secret123',
+    })
+    expect(late.status).toBe(409)
+  })
+
+  it('needs the admin key', async () => {
+    const res = await app.request('/admin/batches/whatever/close', {method: 'POST'}, env)
+    expect(res.status).toBe(403)
+  })
+})
