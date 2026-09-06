@@ -188,6 +188,13 @@ export const api = {
     ),
 
   // Organiser console — every one of these needs the admin key.
+  /** Organiser: hand one player a fresh route and an unstarted clock. */
+  resetPlayer: (batchId: string, playerId: string, adminKey: string) =>
+    request<{session: Session}>(
+      `/admin/batches/${encodeURIComponent(batchId)}/players/${encodeURIComponent(playerId)}/reset`,
+      {method: 'POST', headers: {'X-Admin-Key': adminKey}},
+    ),
+
   createBatch: (name: string, demo = false, adminKey?: string, eventCode?: string) => {
     const body = eventCode ? {name, demo, eventCode} : {name, demo}
     return request<{

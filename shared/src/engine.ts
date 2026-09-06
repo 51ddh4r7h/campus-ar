@@ -50,6 +50,7 @@ export type EngineErrorCode =
   | 'bad_password'
   | 'signups_closed'
   | 'roster_taken'
+  | 'player_not_found'
   | 'paused'
 
 export class EngineError extends Error {
@@ -469,6 +470,42 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       }
       const session = await seatPlayer(batch, player, input.pinnedRoute)
       return {player, session}
+    },
+
+    /**
+     * Give a player a fresh hunt — a new route, a new clock, the same account.
+     *
+     * A player gets one session, so a hunt that ends is the end of it. That is
+     * right for scoring and wrong for everything else: a phone that dies, a
+     * player who quits and comes back, an organiser testing the flow. Without
+     * this the only remedy was a new roll number, which is a second person in
+     * the standings for the same human.
+     *
+     * Organiser-only, deliberately. Self-serve replay would let a player walk
+     * the route once, learn the locations, and restart with that knowledge — a
+     * different problem from the one this solves.
+     *
+     * Their splits go with the old route: they describe a hunt that no longer
+     * exists, and leaving them would credit the new run with the old one's
+     * finds. Token and password are untouched, so whatever is signed in on
+     * their phone stays signed in and simply finds itself back at the start.
+     */
+    async resetPlayer(batchId: string, playerId: string): Promise<Session> {
+      const batch = await store.getBatch(batchId)
+      if (!batch) throw new EngineError('batch_not_found')
+      const player = await store.getPlayer(playerId)
+      if (!player || player.batchId !== batchId) {
+        throw new EngineError('player_not_found', 'No such player in this batch')
+      }
+
+      const had = await store.getRoute(playerId)
+      await store.clearSplits(playerId)
+      const session = await seatPlayer(batch, player, undefined)
+      await event(playerId, 'route_reissued', {
+        had: had?.stops.join('>') ?? '',
+        reason: 'organiser_reset',
+      })
+      return session
     },
 
     /**

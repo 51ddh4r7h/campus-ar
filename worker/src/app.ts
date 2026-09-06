@@ -165,6 +165,22 @@ export const createApp = (
   })
 
   /**
+   * Put one player back to the start line — organiser only.
+   *
+   * The remedy for a dead phone, a player who quit and came back, or a run
+   * that needs doing again. They keep their account and their sign-in; they
+   * get a new route and a clock that has not started.
+   */
+  app.post('/admin/batches/:id/players/:playerId/reset', async (c) => {
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    const session = await engineFor(c.env).resetPlayer(
+      c.req.param('id'),
+      c.req.param('playerId'),
+    )
+    return c.json({session})
+  })
+
+  /**
    * Practice run — no admin key. Creates a throwaway demo batch and one player
    * in a single call. `isDemo` keeps it out of every real batch's standings, so
    * this cannot be used to pollute a live event.
@@ -326,7 +342,7 @@ export const createApp = (
       const status =
         err.code === 'bad_token' || err.code === 'bad_password'
           ? 401
-          : err.code === 'batch_not_found'
+          : err.code === 'batch_not_found' || err.code === 'player_not_found'
             ? 404
             : 409
       return c.json({error: err.code, message: err.message}, status)

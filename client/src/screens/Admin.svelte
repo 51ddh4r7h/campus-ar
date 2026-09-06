@@ -54,6 +54,29 @@
     }
   }
 
+  /**
+   * Put one player back to the start line.
+   *
+   * Destructive in a way the roster table does not show — the splits go, and
+   * so does whatever they had walked — so it asks first, by name.
+   */
+  let resetting = $state<string | null>(null)
+  async function resetPlayer(r: RosterEntry) {
+    if (resetting || !selected) return
+    if (!confirm(`Reset ${r.name}? Their progress is discarded and they get a new route.`)) return
+    resetting = r.playerId
+    try {
+      await api.resetPlayer(selected.id, r.playerId, adminKey)
+      toasts.show(`${r.name} is back at the start`, 'success')
+      await loadRoster()
+      await loadBoard()
+    } catch (err) {
+      toasts.show(err instanceof ApiError ? err.message : 'Could not reset that player', 'alert')
+    } finally {
+      resetting = null
+    }
+  }
+
   async function copySignupLink(code: string) {
     try {
       await navigator.clipboard.writeText(signupLink(code))
@@ -310,7 +333,7 @@
         {#if roster.length > 0}
           <table>
             <thead>
-              <tr><th>Player</th><th>Roll</th><th>Personal link</th></tr>
+              <tr><th>Player</th><th>Roll</th><th>Personal link</th><th></th></tr>
             </thead>
             <tbody>
               {#each roster as r (r.playerId)}
@@ -318,6 +341,11 @@
                   <td>{r.name}</td>
                   <td class="mono">{r.rosterId}</td>
                   <td class="link"><input readonly value={playerLink(r)} onfocus={(e) => e.currentTarget.select()} /></td>
+                  <td>
+                    <button class="ghost" disabled={resetting !== null} onclick={() => void resetPlayer(r)}>
+                      {resetting === r.playerId ? 'Resetting…' : 'Reset'}
+                    </button>
+                  </td>
                 </tr>
               {/each}
             </tbody>

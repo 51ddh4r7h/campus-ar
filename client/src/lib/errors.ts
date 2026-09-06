@@ -14,6 +14,7 @@ export const SESSION_ERRORS = {
   batch_not_found: "That event doesn't exist any more.",
   signups_closed: 'This event has closed.',
   roster_taken: 'That roll number is already registered — sign in instead.',
+  player_not_found: "That player isn't in this batch.",
   bad_password: 'Wrong roll number or password.',
   pool_empty: 'No route could be assigned. Tell an organiser.',
   hint_locked: "That hint isn't available yet.",

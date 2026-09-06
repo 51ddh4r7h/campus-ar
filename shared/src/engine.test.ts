@@ -576,3 +576,73 @@ describe('engine — sessions and batches that outlive their event', () => {
     expect(again.sessions).toBe(0)
   })
 })
+
+describe('engine — organiser reset', () => {
+  it('puts a finished player back at the start with a clean slate', async () => {
+    const batch = await engine.createBatch({name: 'Batch R'})
+    const {player} = await engine.registerPlayer({
+      batchId: batch.id,
+      name: 'Maya R.',
+      rosterId: 'S-001',
+    })
+    await playThrough(player.sessionToken)
+
+    const before = (await store.getRoute(player.id))!
+    expect((await engine.getState(player.sessionToken)).session.status).toBe('complete')
+
+    const session = await engine.resetPlayer(batch.id, player.id)
+
+    // A hunt that has not started: no clock, no score, back on level one.
+    expect(session.status).toBe('not_started')
+    expect(session.startTsMs).toBeNull()
+    expect(session.scoreMs).toBeNull()
+    expect(session.currentLevel).toBe(1)
+    expect(session.penaltyMs).toBe(0)
+
+    // The old run's finds do not count towards the new one.
+    expect(await store.listSplits(player.id)).toHaveLength(0)
+
+    // A route they can actually play, and the account is untouched — whatever
+    // is signed in on their phone stays signed in.
+    const after = (await store.getRoute(player.id))!
+    expect(after.stops).toHaveLength(5)
+    expect(after.parTotalMs).toBeGreaterThan(0)
+    const same = await store.getPlayer(player.id)
+    expect(same!.sessionToken).toBe(player.sessionToken)
+    expect(same!.rosterId).toBe('S-001')
+
+    // And it is playable again from the token they already hold.
+    const started = await engine.startHunt(player.sessionToken)
+    expect(started.clue.level).toBe(1)
+    expect(before.stops.length).toBe(5)
+  })
+
+  it('resets a hunt that is still running', async () => {
+    const batch = await engine.createBatch({name: 'Batch R2'})
+    const {player} = await engine.registerPlayer({
+      batchId: batch.id,
+      name: 'Rohan M.',
+      rosterId: 'S-002',
+    })
+    await engine.startHunt(player.sessionToken)
+    deps.advance(20 * 60_000)
+
+    const session = await engine.resetPlayer(batch.id, player.id)
+
+    expect(session.status).toBe('not_started')
+    expect(session.startTsMs).toBeNull()
+  })
+
+  it('refuses a player who is not in that batch', async () => {
+    const a = await engine.createBatch({name: 'Batch A'})
+    const b = await engine.createBatch({name: 'Batch B'})
+    const {player} = await engine.registerPlayer({
+      batchId: a.id,
+      name: 'Maya R.',
+      rosterId: 'S-001',
+    })
+
+    await expect(engine.resetPlayer(b.id, player.id)).rejects.toThrow(/player_not_found|No such player/)
+    await expect(engine.resetPlayer(a.id, 'nobody')).rejects.toThrow(/player_not_found|No such player/)
+  })
+})
