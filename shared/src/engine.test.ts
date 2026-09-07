@@ -255,6 +255,52 @@ describe('engine — standings', () => {
     expect(rows[1]!.playerName).toBe('Slow')
     expect(rows[0]!.scoreMs!).toBeLessThan(rows[1]!.scoreMs!)
   })
+
+  /**
+   * Everyone's clock has to be runnable by everyone else's device.
+   *
+   * The board carries absolute timestamps rather than a computed duration
+   * because the response is cached for ten seconds — a duration would arrive
+   * already stale, and a rival's timer would sit ten seconds behind their own.
+   * Timestamps do not go stale, so this pins them.
+   */
+  it('carries enough timing for a viewer to run every clock on the board', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const running = await engine.registerPlayer({batchId: batch.id, name: 'Walking', rosterId: 'r1'})
+    const resting = await engine.registerPlayer({batchId: batch.id, name: 'Paused', rosterId: 'r2'})
+
+    await engine.startHunt(running.player.sessionToken)
+    await engine.startHunt(resting.player.sessionToken)
+    deps.advance(4 * 60_000)
+    await engine.pause(resting.player.sessionToken)
+    deps.advance(6 * 60_000)
+
+    const rows = await engine.standings(batch.id)
+    const walking = rows.find((r) => r.playerName === 'Walking')!
+    const paused = rows.find((r) => r.playerName === 'Paused')!
+
+    expect(walking.scoreMs).toBeNull()
+    expect(walking.paused).toBe(false)
+    expect(elapsedMsOf(walking.timing, deps.now())).toBe(10 * 60_000)
+
+    // A paused clock is stopped, and stays stopped as the viewer's own ticks on.
+    expect(paused.paused).toBe(true)
+    expect(elapsedMsOf(paused.timing, deps.now())).toBe(4 * 60_000)
+    expect(elapsedMsOf(paused.timing, deps.now() + 60_000)).toBe(4 * 60_000)
+  })
+
+  it('puts the quicker player first when two are on the same level', async () => {
+    const batch = await engine.createBatch({name: 'B'})
+    const quick = await engine.registerPlayer({batchId: batch.id, name: 'Quick', rosterId: 'r1'})
+    const slow = await engine.registerPlayer({batchId: batch.id, name: 'Slow', rosterId: 'r2'})
+
+    await engine.startHunt(slow.player.sessionToken)
+    deps.advance(5 * 60_000)
+    await engine.startHunt(quick.player.sessionToken)
+
+    const rows = await engine.standings(batch.id)
+    expect(rows.map((r) => r.playerName)).toEqual(['Quick', 'Slow'])
+  })
 })
 
 describe('engine — password signup and login', () => {

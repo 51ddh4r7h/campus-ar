@@ -269,7 +269,26 @@ export interface StandingRow {
   scoreMs: number | null
   /** Current level for players in progress; null once complete. */
   level: number | null
+  /**
+   * Enough to run this player's clock on the viewer's device.
+   *
+   * Absolute server timestamps rather than a computed duration, deliberately:
+   * the standings response is cached for ten seconds, and a duration would be
+   * up to ten seconds stale the moment it arrived. Timestamps are not — the
+   * viewer derives the elapsed time with the same `elapsedMsOf` the player's
+   * own clock uses, so every timer on the board reads like the one on their
+   * own screen, pauses included.
+   */
+  timing: SessionTiming
+  /** Their clock is stopped right now. */
+  paused: boolean
 }
+
+/** The fields `elapsedMsOf` needs, and nothing else about a session. */
+export type SessionTiming = Pick<
+  Session,
+  'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs'
+>
 
 /**
  * A board row before it is addressed to anyone.

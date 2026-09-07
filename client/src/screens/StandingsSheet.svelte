@@ -1,6 +1,7 @@
 <script lang="ts">
-  import {formatScore} from '@cmh/shared'
+  import {elapsedMsOf, formatMarquee, formatScore, type StandingRow} from '@cmh/shared'
   import {standings} from '../lib/stores/standings.svelte'
+  import {clock} from '../lib/stores/clock.svelte'
   import Sheet from '../lib/components/Sheet.svelte'
 
   function ordinal(n: number): string {
@@ -9,6 +10,20 @@
     const ones = n % 10
     return `${n}${ones === 1 ? 'st' : ones === 2 ? 'nd' : ones === 3 ? 'rd' : 'th'}`
   }
+
+  /**
+   * Everyone's clock, running.
+   *
+   * The board used to say only "Level 3" for anyone still out there, so you
+   * could see who was ahead of you but not by how much — and on a course this
+   * short, the gap is the whole race. `clock.now` ticks four times a second and
+   * every row derives from it, so this needs no timer of its own.
+   *
+   * `elapsedMsOf` is the same function the player's own clock and the server's
+   * scoring use, which is why a paused rival's time visibly stops rather than
+   * drifting away from what they see on their phone.
+   */
+  const runningMs = (r: StandingRow): number => elapsedMsOf(r.timing, clock.now)
 
   let tab = $state<'overall' | 'level'>('overall')
   const self = $derived(standings.self)
@@ -24,24 +39,33 @@
     <button class:on={tab === 'overall'} onclick={() => (tab = 'overall')}>Overall</button>
     <button class:on={tab === 'level'} onclick={() => (tab = 'level')}>Your level</button>
   </div>
-  <p class="cap">vs par — lower is better</p>
+  <p class="cap">Finished: vs par, lower is better · Still out: time on the clock</p>
 
   {#if self}
     <div class="you">
       <span>You're <b>{ordinal(self.rank)}</b></span>
-      <span class="score">{self.scoreMs === null ? `Level ${self.level}` : formatScore(self.scoreMs)}</span>
+      <span class="score">{self.scoreMs === null ? formatMarquee(runningMs(self)) : formatScore(self.scoreMs)}</span>
     </div>
   {/if}
 
   {#if rows.length === 0}
-    <p class="empty">Standings open once players start finishing.</p>
+    <p class="empty">Standings open once the first player starts.</p>
   {:else}
     <ol>
       {#each rows as r (r.rank)}
         <li class:me={r.isSelf}>
           <span class="rank">{r.rank}</span>
-          <span class="name">{r.playerName}</span>
-          <span class="val">{r.scoreMs === null ? `Level ${r.level}` : formatScore(r.scoreMs)}</span>
+          <span class="name">
+            {r.playerName}
+            {#if r.scoreMs === null}
+              <small class:paused={r.paused}>
+                {r.paused ? 'Paused' : `Level ${r.level}`}
+              </small>
+            {/if}
+          </span>
+          <span class="val" class:live={r.scoreMs === null && !r.paused}>
+            {r.scoreMs === null ? formatMarquee(runningMs(r)) : formatScore(r.scoreMs)}
+          </span>
         </li>
       {/each}
     </ol>
@@ -74,6 +98,23 @@
     font-size: var(--step-13);
     color: var(--text-faint);
     margin: var(--sp-3) 0 var(--sp-4);
+  }
+  .name small {
+    display: block;
+    font-size: var(--step-13);
+    font-weight: 400;
+    color: var(--text-faint);
+  }
+  .name small.paused {
+    color: var(--amber);
+  }
+  /* A running clock reads as the live thing on the row; a finished score is
+     settled, and shouldn't compete with it for attention. */
+  .val.live {
+    color: var(--text);
+  }
+  li.me .val.live {
+    color: var(--amber);
   }
   .you {
     display: flex;

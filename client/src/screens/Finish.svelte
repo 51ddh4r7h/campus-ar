@@ -14,6 +14,7 @@
   import {rungIcon} from '../lib/rung-icons'
   import CampusMap from '../lib/components/CampusMap.svelte'
   import FilmStrip from '../lib/components/FilmStrip.svelte'
+  import Confetti from '../lib/components/Confetti.svelte'
 
   onMount(() => haptics.fanfare())
 
@@ -80,6 +81,10 @@
     }
   }
 </script>
+
+<!-- Only for a hunt that was actually finished. On an abandoned one this
+     would be a taunt, and `game.complete` is the difference. -->
+{#if game.complete}<Confetti />{/if}
 
 <main>
   <span class="eyebrow">Campus Movie Hunt</span>

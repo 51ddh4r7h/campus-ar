@@ -879,6 +879,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         store.listSessions(batchId),
       ])
       const nameById = new Map(players.map((p) => [p.id, p.name]))
+      const now = deps.now()
       const sorted = sessions
         .filter((s) => s.status === 'complete' || s.status === 'in_progress' || s.status === 'paused')
         .sort((a, b) => {
@@ -887,7 +888,11 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
           if (aDone && bDone) return (a.scoreMs ?? 0) - (b.scoreMs ?? 0)
           if (aDone) return -1
           if (bDone) return 1
-          return b.currentLevel - a.currentLevel
+          // Same level: whoever got there quicker is ahead. Without this the
+          // order among everyone still walking was arbitrary, which now shows,
+          // because their times are on screen next to each other.
+          if (b.currentLevel !== a.currentLevel) return b.currentLevel - a.currentLevel
+          return elapsedMsOf(a, now) - elapsedMsOf(b, now)
         })
       return sorted.map((s, i) => ({
         rank: i + 1,
@@ -895,6 +900,13 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         playerName: nameById.get(s.playerId) ?? '—',
         scoreMs: s.status === 'complete' ? s.scoreMs : null,
         level: s.status === 'complete' ? null : s.currentLevel,
+        timing: {
+          startTsMs: s.startTsMs,
+          endTsMs: s.endTsMs,
+          pausedAtMs: s.pausedAtMs,
+          pausedTotalMs: s.pausedTotalMs,
+        },
+        paused: s.status === 'paused',
       }))
     },
   }
