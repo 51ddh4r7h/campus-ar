@@ -9,7 +9,7 @@
   import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
   import {haptics} from './lib/haptics'
-  import {playerLink, adminRequested, demoAllowed} from './lib/mode'
+  import {playerLink, adminRequested, dashboardRequested, demoAllowed} from './lib/mode'
   import {POLLING} from '@cmh/shared'
 
   import Splash from './screens/Splash.svelte'
@@ -23,6 +23,7 @@
   import Reveal from './screens/Reveal.svelte'
   import Finish from './screens/Finish.svelte'
   import Admin from './screens/Admin.svelte'
+  import Dashboard from './screens/Dashboard.svelte'
 
   import HowToSheet from './screens/HowToSheet.svelte'
   import HintSheet from './screens/HintSheet.svelte'
@@ -80,7 +81,7 @@
 
   onMount(async () => {
     // The organiser console is a separate surface — no session, no sensors.
-    if (adminRequested) return
+    if (adminRequested || dashboardRequested) return
 
     // A pre-registered player's personal link.
     if (playerLink && !game.token) {
@@ -208,7 +209,9 @@
   })
 </script>
 
-{#if adminRequested}
+{#if dashboardRequested}
+  <Dashboard />
+{:else if adminRequested}
   <Admin />
 {:else}
   <!-- Keyed so a screen change is a real swap Svelte can transition. Only the

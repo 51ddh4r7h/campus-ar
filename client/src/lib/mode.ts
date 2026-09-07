@@ -35,6 +35,14 @@ export const debugMode = params.has('debug')
 export const adminRequested = params.has('admin')
 
 /**
+ * `?dashboard` — the organiser's reporting view. A mock for now: it renders
+ * generated sample data and touches nothing real, which is why it needs no key.
+ * When it is wired to live figures it must move behind the admin key like every
+ * other route that shows a cohort's numbers.
+ */
+export const dashboardRequested = params.has('dashboard')
+
+/**
  * Practice runs live on `?demo` and nowhere else.
  *
  * This used to be `demoRequested || import.meta.env.DEV`, so a development
