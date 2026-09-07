@@ -829,7 +829,12 @@
   }
   button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--amber) 50%, var(--hairline)); }
   button:active:not(:disabled) { transform: translateY(1px); }
-  button:disabled { cursor: wait; opacity: 0.52; }
+  /* `not-allowed`, never `wait`: macOS draws `wait` as the spinning beachball,
+     which reads as "the app has hung". Most disabled buttons here are not busy
+     at all — Create Event is disabled until the name field has something in it,
+     so a freshly opened console beachballed on hover. The ones that really are
+     mid-request already say so in their own label. */
+  button:disabled { cursor: not-allowed; opacity: 0.52; }
   .primary {
     color: var(--amber-ink);
     background: var(--amber);
