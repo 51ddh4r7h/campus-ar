@@ -146,8 +146,6 @@ export type GameEventType =
   | 'route_reissued'
   | 'hunt_paused'
   | 'hunt_resumed'
-  | 'replay_requested'
-  | 'replay_denied'
   | 'hunt_abandoned'
 
 export interface GameEvent {
@@ -261,34 +259,6 @@ export interface NearbyResult {
   band: import('./heat').HeatBand
   /** Present when the probe would fail for a reason worth surfacing. */
   failure: ValidationFailure | null
-}
-
-/**
- * A player asking to run the hunt again.
- *
- * Replaying is not self-serve: it discards a result that is already on the
- * board, and the player has walked the campus once, so the second run starts
- * with knowledge the first did not have. An organiser decides. The request is
- * the record of that decision, kept per player — one outstanding ask at a
- * time, replaced by the next one.
- */
-export interface ReplayRequest {
-  playerId: string
-  batchId: string
-  status: ReplayStatus
-  requestedAtMs: number
-  /** When an organiser answered; null while pending. */
-  decidedAtMs: number | null
-}
-
-export type ReplayStatus = 'pending' | 'approved' | 'denied'
-
-/** What a player's own screen shows about their ask. */
-export interface ReplayView {
-  /** null when they have never asked. */
-  status: ReplayStatus | null
-  /** Earliest they may ask (again); compare against the clock. */
-  readyAtMs: number
 }
 
 export interface StandingRow {

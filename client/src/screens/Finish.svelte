@@ -2,7 +2,6 @@
   import {onMount} from 'svelte'
   import {
     LEVEL_COUNT,
-    POLLING,
     formatMarquee,
     formatScore,
     locationById,
@@ -30,64 +29,31 @@
   let starting = $state(false)
 
   /**
-   * Playing again is a request, not a button that does the thing.
+   * Practice gets another throwaway simulated session. A signed-in player keeps
+   * their account and swaps the ended run for a clean route, then returns to
+   * the start line — its START tap gives Safari the gesture the camera needs,
+   * and makes the moment the new clock begins unambiguous.
    *
-   * A real run is scored and already on the board, and the player has walked
-   * the campus once — a second go starts with knowledge the first did not
-   * have. So an organiser decides, and the cooldown stops the ask arriving the
-   * instant a hunt ends or the moment after a refusal.
-   *
-   * Practice is exempt: nothing there is scored, and there is nobody to ask.
+   * The new route avoids the stops they already walked as far as the pool
+   * allows, so a second run is not a re-walk of the first.
    */
-  const replay = $derived(game.replay)
-  const coolingUntil = $derived(replay?.readyAtMs ?? 0)
-  const cooling = $derived(!demoAllowed && clock.now < coolingUntil)
-  const waiting = $derived(!demoAllowed && replay?.status === 'pending')
-  const denied = $derived(!demoAllowed && replay?.status === 'denied' && !cooling)
-
-  const coolingLabel = $derived(
-    `Available in ${Math.max(1, Math.ceil((coolingUntil - clock.now) / 60_000))} min`,
-  )
-
-  /**
-   * Keep asking the server while an organiser has the decision.
-   *
-   * The answer arrives from a console the player cannot see, so nothing on
-   * this screen would otherwise ever change. An approval reseats them
-   * server-side, which `game.refresh` picks up as an unstarted hunt.
-   */
-  $effect(() => {
-    if (demoAllowed || !game.token) return
-    void game.refreshReplay()
-    if (!waiting) return
-    const id = setInterval(() => {
-      void game.refreshReplay()
-      void game.refresh().then(() => {
-        if (game.session?.status === 'not_started') nav.go('ready')
-      })
-    }, POLLING.replayMs)
-    return () => clearInterval(id)
-  })
-
   async function playAgain() {
     starting = true
     try {
       if (demoAllowed) {
         game.reset()
         await startDemo()
-        nav.go('ready')
       } else {
-        await game.requestReplay()
-        toasts.show('Sent — an organiser will decide', 'success')
+        await game.replay()
       }
+      nav.go('ready')
     } catch (err) {
       toasts.show(
         err instanceof ApiError
-          ? readableError(err.code, 'Could not ask for another hunt — try again')
+          ? readableError(err.code, 'Could not prepare a new hunt — try again')
           : "Can't reach the server — check your connection",
         'alert',
       )
-    } finally {
       starting = false
     }
   }
@@ -211,21 +177,13 @@
 
   <div class="actions">
     <Button variant="secondary" onclick={() => nav.open('standings')}>View standings</Button>
-    <Button disabled={starting || waiting || cooling} onclick={playAgain}>
-      {#if starting}Sending…{:else if waiting}Waiting for an organiser{:else if cooling}{coolingLabel}{:else}Play again{/if}
+    <Button disabled={starting} onclick={playAgain}>
+      {starting ? 'Preparing…' : 'Play again'}
     </Button>
     {#if !demoAllowed}
       <p class="replay-note">
-        {#if waiting}
-          An organiser has your request. This screen updates when they answer.
-        {:else if denied}
-          An organiser declined this one. You can ask again later.
-        {:else if cooling}
-          There's a short wait before you can ask again.
-        {:else}
-          An organiser approves replays. A new route replaces this result in the
-          standings, and it won't send you to the same places.
-        {/if}
+        A new route replaces this result in the standings, and it won't send you
+        to the same places.
       </p>
     {/if}
     <Button variant="text" onclick={signOut}>{demoAllowed ? 'Leave practice' : 'Sign out'}</Button>

@@ -9,7 +9,6 @@ import type {
   Breadcrumb,
   GameEvent,
   Player,
-  ReplayRequest,
   Route,
   Session,
   Split,
@@ -46,12 +45,6 @@ export interface GameStore {
   /** Drop a player's history — only when their route is being reissued. */
   clearSplits(playerId: string): Promise<void>
 
-  /** One row per player, replaced each time they ask again. */
-  putReplayRequest(request: ReplayRequest): Promise<void>
-  getReplayRequest(playerId: string): Promise<ReplayRequest | null>
-  /** Newest first. Organiser console only. */
-  listReplayRequests(batchId: string): Promise<ReplayRequest[]>
-
   appendEvent(event: GameEvent): Promise<void>
   addBreadcrumbs(crumbs: readonly Breadcrumb[]): Promise<void>
 }
@@ -64,7 +57,6 @@ export class InMemoryStore implements GameStore {
   private routes = new Map<string, Route>()
   private sessions = new Map<string, Session>()
   private splits: Split[] = []
-  private replays = new Map<string, ReplayRequest>()
   private events: GameEvent[] = []
   private crumbs: Breadcrumb[] = []
 
@@ -145,18 +137,6 @@ export class InMemoryStore implements GameStore {
   }
   async clearSplits(playerId: string): Promise<void> {
     this.splits = this.splits.filter((s) => s.playerId !== playerId)
-  }
-
-  async putReplayRequest(request: ReplayRequest): Promise<void> {
-    this.replays.set(request.playerId, request)
-  }
-  async getReplayRequest(playerId: string): Promise<ReplayRequest | null> {
-    return this.replays.get(playerId) ?? null
-  }
-  async listReplayRequests(batchId: string): Promise<ReplayRequest[]> {
-    return [...this.replays.values()]
-      .filter((r) => r.batchId === batchId)
-      .sort((a, b) => b.requestedAtMs - a.requestedAtMs)
   }
 
   async appendEvent(event: GameEvent): Promise<void> {

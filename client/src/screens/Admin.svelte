@@ -9,7 +9,7 @@
   import {onMount} from 'svelte'
   import {LEVEL_COUNT, LOCATIONS, formatMarquee} from '@cmh/shared'
   import type {StandingRow} from '@cmh/shared'
-  import {api, ApiError, type BatchRow, type ReplayQueueRow, type RosterEntry} from '../lib/api'
+  import {api, ApiError, type BatchRow, type RosterEntry} from '../lib/api'
   import {toasts} from '../lib/stores/toast.svelte'
 
   const KEY_STORE = 'cmh.adminKey'
@@ -127,59 +127,11 @@
     }
   }
 
-  /**
-   * Players asking to run the hunt again.
-   *
-   * Kept in front of the organiser rather than behind a tab: a request that
-   * nobody sees is a player standing at the finish screen waiting for an
-   * answer that never comes. Polled while a batch is open, because the asks
-   * arrive from phones, not from anything happening in this console.
-   */
-  let replays = $state<ReplayQueueRow[]>([])
-  let deciding = $state<string | null>(null)
-  const pending = $derived(replays.filter((r) => r.status === 'pending'))
-
-  async function loadReplays() {
-    if (!selected) return
-    try {
-      replays = (await api.replayRequests(selected.id, adminKey)).requests
-    } catch {
-      /* keep last-known; the poll comes round again */
-    }
-  }
-
-  $effect(() => {
-    if (!selected || !unlocked) return
-    const id = setInterval(() => void loadReplays(), 8_000)
-    return () => clearInterval(id)
-  })
-
-  async function decide(r: ReplayQueueRow, approve: boolean) {
-    if (deciding || !selected) return
-    if (
-      approve &&
-      !confirm(`Give ${r.playerName} a new hunt? Their current result is discarded.`)
-    ) {
-      return
-    }
-    deciding = r.playerId
-    try {
-      await api.decideReplay(selected.id, r.playerId, approve, adminKey)
-      toasts.show(approve ? `${r.playerName} is back at the start` : 'Declined', 'success')
-      await Promise.all([loadReplays(), loadRoster(), loadBoard()])
-    } catch (err) {
-      toasts.show(err instanceof ApiError ? err.message : 'Could not answer that', 'alert')
-    } finally {
-      deciding = null
-    }
-  }
-
   async function open(b: BatchRow) {
     selected = b
     roster = []
     board = []
-    replays = []
-    await Promise.all([loadRoster(), loadBoard(), loadReplays()])
+    await Promise.all([loadRoster(), loadBoard()])
   }
 
   async function loadRoster() {
@@ -401,43 +353,6 @@
         {/if}
       </section>
 
-      <section class:alerting={pending.length > 0}>
-        <h2>
-          Replay requests
-          {#if pending.length > 0}<span class="badge">{pending.length}</span>{/if}
-        </h2>
-        {#if pending.length === 0}
-          <p class="dim">Nobody is waiting. Requests appear here as players ask.</p>
-        {:else}
-          <table>
-            <thead>
-              <tr><th>Player</th><th>Roll</th><th>Asked</th><th></th></tr>
-            </thead>
-            <tbody>
-              {#each pending as r (r.playerId)}
-                <tr>
-                  <td>{r.playerName}</td>
-                  <td class="mono">{r.rosterId}</td>
-                  <td class="mono">{new Date(r.requestedAtMs).toLocaleTimeString()}</td>
-                  <td class="verdict">
-                    <button
-                      class="primary"
-                      disabled={deciding !== null}
-                      onclick={() => void decide(r, true)}
-                    >
-                      {deciding === r.playerId ? '…' : 'Approve'}
-                    </button>
-                    <button class="ghost" disabled={deciding !== null} onclick={() => void decide(r, false)}>
-                      Deny
-                    </button>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        {/if}
-      </section>
-
       <section>
         <h2>Live board</h2>
         {#if board.length === 0}
@@ -533,28 +448,6 @@
     margin-bottom: var(--sp-3);
     resize: vertical;
   }
-  .badge {
-    display: inline-grid;
-    place-items: center;
-    min-width: 22px;
-    height: 22px;
-    margin-left: 8px;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--amber);
-    color: #1a1206;
-    font-size: var(--step-13);
-    font-weight: 700;
-  }
-  section.alerting {
-    border-color: var(--amber);
-  }
-  .verdict {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
-  }
-
   button {
     padding: 10px 18px;
     border-radius: var(--radius-button);

@@ -5,14 +5,7 @@
  */
 
 import {beforeEach, describe, expect, it} from 'vitest'
-import {
-  InMemoryStore,
-  LAYOUT,
-  REPLAY,
-  VALIDATION,
-  locationById,
-  type GeoSample,
-} from '@cmh/shared'
+import {InMemoryStore, LAYOUT, VALIDATION, locationById, type GeoSample} from '@cmh/shared'
 import {createApp} from './app'
 import type {Env} from './env'
 
@@ -448,48 +441,16 @@ describe('app — pause, resume, abandon', () => {
     expect((await post('/session/resume', p.sessionToken)).status).toBe(409)
   })
 
-  it('runs a replay from request to approval over HTTP', async () => {
+  it('prepares an ended hunt for replay over HTTP', async () => {
     const p = await started()
     await post('/session/abandon', p.sessionToken)
 
-    // The cooldown answers 409, not 200 — asking is not yet allowed.
-    expect((await post('/session/replay', p.sessionToken)).status).toBe(409)
-
-    clock.advance(REPLAY.cooldownMs)
-    const asked = (await (await post('/session/replay', p.sessionToken)).json()) as {
-      request: {status: string}
+    const replay = (await (await post('/session/replay', p.sessionToken)).json()) as {
+      session: {status: string; startTsMs: number | null}
     }
-    expect(asked.request.status).toBe('pending')
 
-    // It shows in the organiser's queue, with a name attached.
-    const queue = (await (await json(`/admin/batches/${p.batchId}/replays`)).json()) as {
-      requests: Array<{playerId: string; playerName: string; status: string}>
-    }
-    expect(queue.requests).toHaveLength(1)
-    expect(queue.requests[0]!.playerName).toBe('A')
-
-    // Still nothing has happened to the hunt until it is answered.
-    expect((await post('/session/start', p.sessionToken)).status).toBe(409)
-
-    const decided = (await (
-      await json(`/admin/batches/${p.batchId}/replays/${queue.requests[0]!.playerId}/approve`, {})
-    ).json()) as {session: {status: string; startTsMs: number | null}}
-    expect(decided.session).toMatchObject({status: 'not_started', startTsMs: null})
+    expect(replay.session).toMatchObject({status: 'not_started', startTsMs: null})
     expect((await post('/session/start', p.sessionToken)).status).toBe(200)
-  })
-
-  it('needs the admin key to answer a replay request', async () => {
-    const p = await started()
-    await post('/session/abandon', p.sessionToken)
-    clock.advance(REPLAY.cooldownMs)
-    await post('/session/replay', p.sessionToken)
-
-    const noKey = await app.request(
-      `/admin/batches/${p.batchId}/replays`,
-      {method: 'GET'},
-      env,
-    )
-    expect(noKey.status).toBe(403)
   })
 
   it('leaves a hunt nobody paused unchanged, so old sessions still work', async () => {

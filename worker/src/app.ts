@@ -180,31 +180,6 @@ export const createApp = (
     return c.json({session})
   })
 
-  /** The organiser's replay queue for a batch, newest first. */
-  app.get('/admin/batches/:id/replays', async (c) => {
-    requireAdmin(c.env, c.req.header('X-Admin-Key'))
-    return c.json({requests: await engineFor(c.env).replayRequests(c.req.param('id'))})
-  })
-
-  /**
-   * Answer one. Approving reseats the player on a route that avoids the stops
-   * they already walked; denying only records the refusal and restarts their
-   * cooldown from now.
-   */
-  app.post('/admin/batches/:id/replays/:playerId/:verdict', async (c) => {
-    requireAdmin(c.env, c.req.header('X-Admin-Key'))
-    const verdict = c.req.param('verdict')
-    if (verdict !== 'approve' && verdict !== 'deny') {
-      return c.json({error: 'bad_input', message: 'verdict must be approve or deny'}, 400)
-    }
-    const out = await engineFor(c.env).decideReplay(
-      c.req.param('id'),
-      c.req.param('playerId'),
-      verdict === 'approve',
-    )
-    return c.json(out)
-  })
-
   /**
    * Practice run — no admin key. Creates a throwaway demo batch and one player
    * in a single call. `isDemo` keeps it out of every real batch's standings, so
@@ -302,18 +277,9 @@ export const createApp = (
     c.json({session: await engineFor(c.env).abandon(bearer(c.req.header('Authorization')))}),
   )
 
-  /**
-   * Ask to play again. An organiser decides; this only lodges the request.
-   */
+  /** Start over after an ended hunt, keeping the same account and sign-in. */
   app.post('/session/replay', async (c) =>
-    c.json({
-      request: await engineFor(c.env).requestReplay(bearer(c.req.header('Authorization'))),
-    }),
-  )
-
-  /** Where that ask has got to, for the screen that is waiting on it. */
-  app.get('/session/replay', async (c) =>
-    c.json(await engineFor(c.env).replayState(bearer(c.req.header('Authorization')))),
+    c.json({session: await engineFor(c.env).replay(bearer(c.req.header('Authorization')))}),
   )
 
   app.post('/session/nearby', async (c) => {
