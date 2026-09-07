@@ -1,5 +1,5 @@
 import {beforeEach, describe, expect, it} from 'vitest'
-import {SESSION_MAX_MS, VALIDATION} from './config'
+import {REPLAY, SESSION_MAX_MS, VALIDATION} from './config'
 import {locationById} from './content'
 import {createEngine, type EngineDeps} from './engine'
 import {elapsedMsOf} from './scoring'
@@ -693,53 +693,127 @@ describe('engine — organiser reset', () => {
   })
 })
 
-describe('engine — player replay', () => {
-  it('lets a finished player replace their result with a fresh playable route', async () => {
-    const batch = await engine.createBatch({name: 'Replayable'})
-    const {player} = await engine.registerPlayer({
-      batchId: batch.id,
-      name: 'Dev P.',
-      rosterId: 'S-003',
-    })
+describe('engine — replay requests', () => {
+  const seat = async (batchId: string, rosterId: string) =>
+    (await engine.registerPlayer({batchId, name: `P-${rosterId}`, rosterId})).player
+
+  /** Get a player to an ended hunt and past the cooldown, ready to ask. */
+  async function finishedAndCooled(batchId: string, rosterId: string) {
+    const player = await seat(batchId, rosterId)
+    await engine.startHunt(player.sessionToken)
+    await engine.abandon(player.sessionToken)
+    deps.advance(REPLAY.cooldownMs)
+    return player
+  }
+
+  it('holds the ask behind a cooldown, then lodges it as pending', async () => {
+    const batch = await engine.createBatch({name: 'R'})
+    const player = await seat(batch.id, 'S-001')
+    await engine.startHunt(player.sessionToken)
+    await engine.abandon(player.sessionToken)
+
+    // Straight after the hunt ends, the button does nothing.
+    await expect(engine.requestReplay(player.sessionToken)).rejects.toThrow(/ask again in/)
+
+    deps.advance(REPLAY.cooldownMs)
+    const req = await engine.requestReplay(player.sessionToken)
+    expect(req.status).toBe('pending')
+    expect(req.decidedAtMs).toBeNull()
+
+    // And they cannot queue twice.
+    await expect(engine.requestReplay(player.sessionToken)).rejects.toThrow(/already looking/)
+  })
+
+  it('refuses while the hunt is still running, and after the event closes', async () => {
+    const batch = await engine.createBatch({name: 'R2'})
+    const player = await seat(batch.id, 'S-002')
+    await expect(engine.requestReplay(player.sessionToken)).rejects.toThrow(/Finish or end/)
+    await engine.startHunt(player.sessionToken)
+    await expect(engine.requestReplay(player.sessionToken)).rejects.toThrow(/Finish or end/)
+
+    await engine.abandon(player.sessionToken)
+    deps.advance(REPLAY.cooldownMs)
+    await engine.closeBatch(batch.id)
+    await expect(engine.requestReplay(player.sessionToken)).rejects.toThrow(/signups_closed/)
+  })
+
+  it('does nothing to the hunt until an organiser approves', async () => {
+    const batch = await engine.createBatch({name: 'R3'})
+    const player = await finishedAndCooled(batch.id, 'S-003')
+    const before = (await store.getRoute(player.id))!
+
+    await engine.requestReplay(player.sessionToken)
+
+    // Asking is not playing: the ended session is untouched.
+    const {session} = await engine.getState(player.sessionToken)
+    expect(session.status).toBe('abandoned')
+    expect((await store.getRoute(player.id))!.stops).toEqual(before.stops)
+  })
+
+  it('reseats the player on approval, avoiding the stops they already walked', async () => {
+    const batch = await engine.createBatch({name: 'R4'})
+    const player = await seat(batch.id, 'S-004')
     await playThrough(player.sessionToken)
-    expect(await store.listSplits(player.id)).toHaveLength(5)
+    const walked = (await store.getRoute(player.id))!.stops
+    deps.advance(REPLAY.cooldownMs)
+    await engine.requestReplay(player.sessionToken)
 
-    const replay = await engine.replay(player.sessionToken)
+    const {request, session} = await engine.decideReplay(batch.id, player.id, true)
 
-    expect(replay.status).toBe('not_started')
-    expect(replay.startTsMs).toBeNull()
-    expect(replay.scoreMs).toBeNull()
+    expect(request.status).toBe('approved')
+    expect(session!.status).toBe('not_started')
     expect(await store.listSplits(player.id)).toHaveLength(0)
+
+    // Five stops drawn twice from nine must share at least one, so a clean
+    // sheet is impossible — but it must not be the same walk again.
+    const next = (await store.getRoute(player.id))!.stops
+    const repeats = next.filter((id) => walked.includes(id))
+    expect(next).not.toEqual(walked)
+    expect(repeats.length).toBeLessThanOrEqual(2)
     await expect(engine.startHunt(player.sessionToken)).resolves.toMatchObject({
-      session: {status: 'in_progress'},
       clue: {level: 1},
     })
   })
 
-  it('refuses replay while the current hunt has not ended', async () => {
-    const batch = await engine.createBatch({name: 'Still playing'})
-    const {player} = await engine.registerPlayer({
-      batchId: batch.id,
-      name: 'Dev P.',
-      rosterId: 'S-004',
-    })
+  it('restarts the cooldown when an organiser says no', async () => {
+    const batch = await engine.createBatch({name: 'R5'})
+    const player = await finishedAndCooled(batch.id, 'S-005')
+    await engine.requestReplay(player.sessionToken)
 
-    await expect(engine.replay(player.sessionToken)).rejects.toThrow(/Finish or end/)
-    await engine.startHunt(player.sessionToken)
-    await expect(engine.replay(player.sessionToken)).rejects.toThrow(/Finish or end/)
+    const {request, session} = await engine.decideReplay(batch.id, player.id, false)
+    expect(request.status).toBe('denied')
+    expect(session).toBeNull()
+
+    // A no is not an invitation to ask again straight away.
+    await expect(engine.requestReplay(player.sessionToken)).rejects.toThrow(/ask again in/)
+    const state = await engine.replayState(player.sessionToken)
+    expect(state.status).toBe('denied')
+    expect(state.readyAtMs).toBe(deps.now() + REPLAY.cooldownMs)
+
+    deps.advance(REPLAY.cooldownMs)
+    await expect(engine.requestReplay(player.sessionToken)).resolves.toMatchObject({
+      status: 'pending',
+    })
   })
 
-  it('does not reopen a closed event', async () => {
-    const batch = await engine.createBatch({name: 'Closed replay'})
-    const {player} = await engine.registerPlayer({
-      batchId: batch.id,
-      name: 'Dev P.',
-      rosterId: 'S-005',
-    })
-    await engine.startHunt(player.sessionToken)
-    await engine.abandon(player.sessionToken)
-    await engine.closeBatch(batch.id)
+  it('lists the queue with names for the organiser', async () => {
+    const batch = await engine.createBatch({name: 'R6'})
+    const a = await finishedAndCooled(batch.id, 'S-006')
+    const b = await finishedAndCooled(batch.id, 'S-007')
+    await engine.requestReplay(a.sessionToken)
+    await engine.requestReplay(b.sessionToken)
 
-    await expect(engine.replay(player.sessionToken)).rejects.toThrow(/signups_closed/)
+    const queue = await engine.replayRequests(batch.id)
+    expect(queue).toHaveLength(2)
+    expect(queue.map((r) => r.rosterId).sort()).toEqual(['S-006', 'S-007'])
+    expect(queue.every((r) => r.playerName !== '—')).toBe(true)
+  })
+
+  it('will not answer a request that was never made', async () => {
+    const batch = await engine.createBatch({name: 'R7'})
+    const player = await finishedAndCooled(batch.id, 'S-008')
+    await expect(engine.decideReplay(batch.id, player.id, true)).rejects.toThrow(
+      /No replay request/,
+    )
   })
 })

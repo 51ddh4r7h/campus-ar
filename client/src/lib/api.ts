@@ -8,6 +8,8 @@ import type {
   GeoSample,
   HintRung,
   NearbyResult,
+  ReplayRequest,
+  ReplayView,
   Session,
   StandingRow,
   StartHuntResponse,
@@ -99,6 +101,12 @@ export interface StateResponse {
   isDemo: boolean
 }
 
+/** A queue row: the request, plus who it is from. */
+export interface ReplayQueueRow extends ReplayRequest {
+  playerName: string
+  rosterId: string
+}
+
 export const api = {
   health: () => request<{ok: boolean}>('/health'),
 
@@ -113,8 +121,11 @@ export const api = {
     request<{session: Session}>('/session/resume', {method: 'POST', headers: auth(token)}),
   abandon: (token: string) =>
     request<{session: Session}>('/session/abandon', {method: 'POST', headers: auth(token)}),
-  replay: (token: string) =>
-    request<{session: Session}>('/session/replay', {method: 'POST', headers: auth(token)}),
+  /** Ask an organiser for another run. Returns the lodged request, not a session. */
+  requestReplay: (token: string) =>
+    request<{request: ReplayRequest}>('/session/replay', {method: 'POST', headers: auth(token)}),
+  /** Where that ask has got to. Polled by the screen that is waiting on it. */
+  replayState: (token: string) => request<ReplayView>('/session/replay', {headers: auth(token)}),
 
   nearby: (token: string, samples: GeoSample[]) =>
     request<NearbyResult>('/session/nearby', {
@@ -190,6 +201,20 @@ export const api = {
     ),
 
   // Organiser console — every one of these needs the admin key.
+  /** Organiser: the replay queue for a batch, newest first. */
+  replayRequests: (batchId: string, adminKey: string) =>
+    request<{requests: ReplayQueueRow[]}>(
+      `/admin/batches/${encodeURIComponent(batchId)}/replays`,
+      {headers: {'X-Admin-Key': adminKey}},
+    ),
+
+  /** Organiser: answer one. Approving reseats the player straight away. */
+  decideReplay: (batchId: string, playerId: string, approve: boolean, adminKey: string) =>
+    request<{request: ReplayRequest; session: Session | null}>(
+      `/admin/batches/${encodeURIComponent(batchId)}/replays/${encodeURIComponent(playerId)}/${approve ? 'approve' : 'deny'}`,
+      {method: 'POST', headers: {'X-Admin-Key': adminKey}},
+    ),
+
   /** Organiser: hand one player a fresh route and an unstarted clock. */
   resetPlayer: (batchId: string, playerId: string, adminKey: string) =>
     request<{session: Session}>(

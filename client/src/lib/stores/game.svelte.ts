@@ -3,7 +3,15 @@
  * client mirrors what the Worker returns and never advances a level itself.
  */
 
-import type {ClueView, GeoSample, HintRung, RevealView, Session, SplitView} from '@cmh/shared'
+import type {
+  ClueView,
+  GeoSample,
+  HintRung,
+  ReplayView,
+  RevealView,
+  Session,
+  SplitView,
+} from '@cmh/shared'
 import {DEFAULT_PAR_CONSTANTS} from '@cmh/shared'
 
 const FREE_VIEWS = DEFAULT_PAR_CONSTANTS.freeViews
@@ -123,13 +131,29 @@ class Game {
     if (!this.token) return
     this.session = (await api.abandon(this.token)).session
   }
-  /** Replace an ended run with a fresh, unstarted route; keep this account signed in. */
-  async replay(): Promise<void> {
+  /**
+   * Where this player's request to play again has got to.
+   *
+   * Held here rather than on the finish screen because the answer arrives from
+   * an organiser's console, not from anything the player did — the screen has
+   * to keep asking, and it has to survive a reload while it waits.
+   */
+  replay = $state<ReplayView | null>(null)
+
+  /** Ask an organiser for another run. */
+  async requestReplay(): Promise<void> {
     if (!this.token) throw new Error('no token')
-    this.session = (await api.replay(this.token)).session
-    this.clue = null
-    this.splits = []
-    this.lastReveal = null
+    await api.requestReplay(this.token)
+    await this.refreshReplay()
+  }
+
+  async refreshReplay(): Promise<void> {
+    if (!this.token) return
+    try {
+      this.replay = await api.replayState(this.token)
+    } catch {
+      /* keep last-known; the poll comes round again */
+    }
   }
 
   /** @returns true once a session snapshot was loaded. */
@@ -144,6 +168,13 @@ class Game {
       // -in token with its own, and the flag it left behind in localStorage
       // then kept later sessions simulated; asking every refresh means a stale
       // flag cannot survive one.
+      // An approved replay reseats the player server-side, so a hunt that is
+      // suddenly unstarted again means the old run's clue and splits are gone.
+      if (state.session.status === 'not_started') {
+        this.clue = state.clue
+        this.splits = []
+        this.lastReveal = null
+      }
       this.demo = state.isDemo
       save(LS_DEMO, state.isDemo ? '1' : null)
       this.loaded = true
@@ -214,6 +245,7 @@ class Game {
     this.splits = []
     this.playerName = ''
     this.demoStops = []
+    this.replay = null
     this.loaded = false
     save(LS_TOKEN, null)
     save(LS_BATCH, null)

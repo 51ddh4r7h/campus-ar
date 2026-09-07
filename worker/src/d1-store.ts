@@ -9,6 +9,8 @@ import type {
   GameEvent,
   GameStore,
   Player,
+  ReplayRequest,
+  ReplayStatus,
   Route,
   Session,
   Split,
@@ -30,6 +32,22 @@ interface BatchRow {
   pool: string
   event_code: string | null
 }
+interface ReplayRow {
+  player_id: string
+  batch_id: string
+  status: string
+  requested_at_ms: number
+  decided_at_ms: number | null
+}
+const toReplay = (r: ReplayRow): ReplayRequest => ({
+  playerId: r.player_id,
+  batchId: r.batch_id,
+  // SAFETY: written by putReplayRequest below from the same union.
+  status: r.status as ReplayStatus,
+  requestedAtMs: r.requested_at_ms,
+  decidedAtMs: r.decided_at_ms,
+})
+
 interface PlayerRow {
   id: string
   batch_id: string
@@ -322,6 +340,40 @@ export class D1Store implements GameStore {
       .bind(playerId)
       .all<SplitRow>()
     return results.map(toSplit)
+  }
+
+  async putReplayRequest(r: ReplayRequest): Promise<void> {
+    await this.db
+      .prepare(
+        `INSERT INTO replay_request
+           (player_id, batch_id, status, requested_at_ms, decided_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(player_id) DO UPDATE SET
+           batch_id = excluded.batch_id,
+           status = excluded.status,
+           requested_at_ms = excluded.requested_at_ms,
+           decided_at_ms = excluded.decided_at_ms`,
+      )
+      .bind(r.playerId, r.batchId, r.status, r.requestedAtMs, r.decidedAtMs)
+      .run()
+  }
+
+  async getReplayRequest(playerId: string): Promise<ReplayRequest | null> {
+    const row = await this.db
+      .prepare('SELECT * FROM replay_request WHERE player_id = ?1')
+      .bind(playerId)
+      .first<ReplayRow>()
+    return row ? toReplay(row) : null
+  }
+
+  async listReplayRequests(batchId: string): Promise<ReplayRequest[]> {
+    const {results} = await this.db
+      .prepare(
+        'SELECT * FROM replay_request WHERE batch_id = ?1 ORDER BY requested_at_ms DESC',
+      )
+      .bind(batchId)
+      .all<ReplayRow>()
+    return results.map(toReplay)
   }
 
   async appendEvent(e: GameEvent): Promise<void> {

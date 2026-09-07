@@ -54,6 +54,12 @@ export const DEFAULT_PAR_CONSTANTS: ParConstants = {
  * `__load.test.ts` pins the arithmetic.
  */
 export const POLLING = {
+  /**
+   * How often the wrap screen asks whether an organiser has answered a replay
+   * request. Slow on purpose: one player waiting is one request every few
+   * seconds, and nobody is walking anywhere while they wait.
+   */
+  replayMs: 5_000,
   /** "Am I there yet?" — read-only, a handful of indexed rows per call. */
   nearbyMs: 5_000,
   /** Faster while the reveal is being waited on, where latency is felt. */
@@ -126,4 +132,21 @@ export const ROUTE_POOL = {
   difficultyRamp: true,
   /** A single leg may not exceed this share of the route's total walk distance. */
   maxLegShareOfRoute: 0.42,
+} as const
+
+/**
+ * Playing again.
+ *
+ * Two gates, because they stop different things. The cooldown stops a player
+ * tapping the button the instant a hunt ends and re-rolling until the route
+ * looks easy; the organiser's approval is what actually decides. The clock
+ * runs from whichever came last, the hunt ending or the previous refusal, so a
+ * declined player cannot ask again straight away.
+ *
+ * Fifteen minutes is a first guess sized to an induction morning — long enough
+ * that replaying is a decision, short enough that someone whose phone died is
+ * not out of the game. Adjust once a real cohort has run.
+ */
+export const REPLAY = {
+  cooldownMs: 15 * 60 * 1000,
 } as const

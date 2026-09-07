@@ -9,6 +9,7 @@ import {
   DEFAULT_PAR_CONSTANTS,
   HINT_GATES,
   LEVEL_COUNT,
+  REPLAY,
 } from './config'
 import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool, playableOrder, type RoutePool} from './routes'
@@ -30,6 +31,8 @@ import type {
   HintRung,
   ParConstants,
   Player,
+  ReplayRequest,
+  ReplayView,
   Route,
   Session,
   Split,
@@ -52,6 +55,9 @@ export type EngineErrorCode =
   | 'roster_taken'
   | 'player_not_found'
   | 'not_finished'
+  | 'replay_cooling_down'
+  | 'replay_pending'
+  | 'replay_not_approved'
   | 'paused'
 
 export class EngineError extends Error {
@@ -373,11 +379,47 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     return pool
   }
 
+  /**
+   * When this player may next ask to replay.
+   *
+   * Measured from whichever came last: the hunt ending, or the organiser's
+   * refusal. A denied player who could ask again immediately would simply keep
+   * asking, and the queue would be the same three names all morning.
+   */
+  const replayReadyAtMs = (
+    session: Pick<Session, 'endTsMs'>,
+    request: ReplayRequest | null,
+  ): number => {
+    const denied = request?.status === 'denied' ? (request.decidedAtMs ?? 0) : 0
+    return Math.max(session.endTsMs ?? 0, denied) + REPLAY.cooldownMs
+  }
+
+  /**
+   * The approval half of a replay: a clean route that avoids what they walked.
+   *
+   * Their splits go with the old route — they describe a hunt that no longer
+   * exists, and leaving them would credit the new run with the old one's finds.
+   */
+  const reseatForReplay = async (batch: StoredBatch, playerId: string): Promise<Session> => {
+    const player = await store.getPlayer(playerId)
+    if (!player) throw new EngineError('player_not_found')
+    const had = await store.getRoute(playerId)
+    await store.clearSplits(playerId)
+    const session = await seatPlayer(batch, player, undefined, had?.stops ?? [])
+    await event(playerId, 'route_reissued', {
+      had: had?.stops.join('>') ?? '',
+      reason: 'replay_approved',
+    })
+    return session
+  }
+
   /** Build the route + session for a new player and persist all three rows. */
   const seatPlayer = async (
     batch: StoredBatch,
     player: Player,
     pinnedRoute?: readonly string[],
+    /** Stops this player has already walked — kept out of the new route. */
+    avoid: readonly string[] = [],
   ): Promise<Session> => {
     let stops: Route['stops']
     let parTotalMs: number
@@ -402,7 +444,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         store.assignedRouteKeys(batch.id),
         livePool(batch),
       ])
-      const tmpl = assignRoute(pool, assigned)
+      const tmpl = assignRoute(pool, assigned, avoid)
       stops = tmpl.stops
       parTotalMs = tmpl.parTotalMs
       legParMs = tmpl.legParMs
@@ -503,26 +545,107 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     },
 
     /**
-     * Let a signed-in player start over after finishing or abandoning a hunt.
+     * Ask an organiser for another run.
      *
-     * Replaying replaces the previous result because this data model has one
-     * session and one set of splits per player. A fresh route prevents the new
-     * clock from being paired with locations the player has already learned.
+     * Not self-serve, and not instant. Replaying discards a result already on
+     * the board, and the player has walked the campus once, so a second run
+     * starts with knowledge the first did not have — that is a decision for
+     * whoever is running the event, not for the player who wants another go.
+     *
+     * The cooldown is the other half. Without it the button can be tapped the
+     * moment a hunt ends, and again after every refusal; with it, asking is a
+     * deliberate act and the organiser's queue stays readable.
      */
-    async replay(token: string): Promise<Session> {
-      const {batch, player, session, route} = await authed(token)
+    async requestReplay(token: string): Promise<ReplayRequest> {
+      const {batch, player, session} = await authed(token)
       if (batch.status !== 'open') throw new EngineError('signups_closed')
       if (session.status !== 'complete' && session.status !== 'abandoned') {
         throw new EngineError('not_finished', 'Finish or end this hunt before playing again')
       }
 
-      await store.clearSplits(player.id)
-      const fresh = await seatPlayer(batch, player, undefined)
-      await event(player.id, 'route_reissued', {
-        had: route.stops.join('>'),
-        reason: 'player_replay',
-      })
-      return fresh
+      const existing = await store.getReplayRequest(player.id)
+      if (existing?.status === 'pending') {
+        throw new EngineError('replay_pending', 'An organiser is already looking at this')
+      }
+
+      const readyAt = replayReadyAtMs(session, existing)
+      const now = deps.now()
+      if (now < readyAt) {
+        throw new EngineError(
+          'replay_cooling_down',
+          `You can ask again in ${Math.ceil((readyAt - now) / 60_000)} min`,
+        )
+      }
+
+      const request: ReplayRequest = {
+        playerId: player.id,
+        batchId: batch.id,
+        status: 'pending',
+        requestedAtMs: now,
+        decidedAtMs: null,
+      }
+      await store.putReplayRequest(request)
+      await event(player.id, 'replay_requested', {level: session.currentLevel})
+      return request
+    },
+
+    /** What the player's own screen needs to know about their ask. */
+    async replayState(token: string): Promise<ReplayView> {
+      const {player, session} = await authed(token)
+      const request = await store.getReplayRequest(player.id)
+      return {
+        status: request?.status ?? null,
+        readyAtMs: replayReadyAtMs(session, request),
+      }
+    },
+
+    /**
+     * The organiser's answer.
+     *
+     * Approving reseats the player then and there: their splits go with the
+     * old route, and the new one avoids the stops they already know as far as
+     * the pool allows. Denying only records the refusal — the cooldown then
+     * runs from that moment, so a no is not an invitation to ask again now.
+     */
+    async decideReplay(
+      batchId: string,
+      playerId: string,
+      approve: boolean,
+    ): Promise<{request: ReplayRequest; session: Session | null}> {
+      const batch = await store.getBatch(batchId)
+      if (!batch) throw new EngineError('batch_not_found')
+      const request = await store.getReplayRequest(playerId)
+      if (!request || request.batchId !== batchId) {
+        throw new EngineError('player_not_found', 'No replay request from that player')
+      }
+
+      const decided: ReplayRequest = {
+        ...request,
+        status: approve ? 'approved' : 'denied',
+        decidedAtMs: deps.now(),
+      }
+      await store.putReplayRequest(decided)
+      if (!approve) {
+        await event(playerId, 'replay_denied', {})
+        return {request: decided, session: null}
+      }
+      return {request: decided, session: await reseatForReplay(batch, playerId)}
+    },
+
+    /** Every ask in a batch, newest first — the organiser console's queue. */
+    async replayRequests(
+      batchId: string,
+    ): Promise<Array<ReplayRequest & {playerName: string; rosterId: string}>> {
+      const [requests, players] = await Promise.all([
+        store.listReplayRequests(batchId),
+        store.listPlayers(batchId),
+      ])
+      const byId = new Map(players.map((p) => [p.id, p]))
+      return requests.map((r) => ({
+        ...r,
+        playerName: byId.get(r.playerId)?.name ?? '—',
+        rosterId: byId.get(r.playerId)?.rosterId ?? '—',
+      }))
     },
 
     /**

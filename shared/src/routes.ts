@@ -215,18 +215,35 @@ export const generateRoutePool = (
   }
 }
 
+const overlapWith = (avoid: ReadonlySet<string>) => (r: RouteTemplate): number =>
+  r.stops.reduce((n, id) => n + (avoid.has(id) ? 1 : 0), 0)
+
 /**
  * Pick the next route for a player: the first pool route not already assigned.
  * When the pool is exhausted (more players than routes) it wraps, so late
  * players still get a balanced route — just not a unique one.
+ *
+ * `avoid` names stops the player has already walked, and is what stops a
+ * second run being a re-walk of the first. It cannot promise a clean sheet:
+ * five stops drawn twice from nine locations must share at least one, so the
+ * best available is one repeat, and this takes the least-overlapping route the
+ * pool offers rather than pretending otherwise.
  */
 export const assignRoute = (
   pool: RoutePool,
   assignedKeys: ReadonlySet<string>,
+  avoid: readonly string[] = [],
 ): RouteTemplate => {
   if (pool.routes.length === 0) throw new Error('assignRoute: empty pool')
-  const free = pool.routes.find((r) => !assignedKeys.has(key(r.stops)))
-  return free ?? pool.routes[assignedKeys.size % pool.routes.length]!
+  const free = pool.routes.filter((r) => !assignedKeys.has(key(r.stops)))
+  if (avoid.length === 0) {
+    return free[0] ?? pool.routes[assignedKeys.size % pool.routes.length]!
+  }
+  // A repeat route is worse than a shared one: prefer unassigned, but never at
+  // the cost of sending someone round the same five places again.
+  const overlap = overlapWith(new Set(avoid))
+  const from = free.length > 0 ? free : pool.routes
+  return from.reduce((best, r) => (overlap(r) < overlap(best) ? r : best), from[0]!)
 }
 
 export const routeKey = key
