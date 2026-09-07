@@ -101,19 +101,22 @@ export const createApp = (
     requireAdmin(c.env, c.req.header('X-Admin-Key'))
     const store = makeStore(c.env)
     const batches = await store.listBatches()
-    const rows = []
-    for (const b of batches) {
-      const players = await store.listPlayers(b.id)
-      rows.push({
-        id: b.id,
-        name: b.name,
-        status: b.status,
-        isDemo: b.isDemo,
-        eventCode: b.eventCode,
-        createdAtMs: b.createdAtMs,
-        playerCount: players.length,
-      })
-    }
+    // Counts are independent. Waiting for each D1 read in series made the
+    // console slower in direct proportion to the number of past events.
+    const rows = await Promise.all(
+      batches.map(async (b) => {
+        const players = await store.listPlayers(b.id)
+        return {
+          id: b.id,
+          name: b.name,
+          status: b.status,
+          isDemo: b.isDemo,
+          eventCode: b.eventCode,
+          createdAtMs: b.createdAtMs,
+          playerCount: players.length,
+        }
+      }),
+    )
     return c.json({batches: rows})
   })
 
@@ -123,17 +126,26 @@ export const createApp = (
     const store = makeStore(c.env)
     const batchId = c.req.param('id')
     const players = await store.listPlayers(batchId)
-    const rows = []
-    for (const p of players) {
-      const route = await store.getRoute(p.id)
-      rows.push({
-        playerId: p.id,
-        name: p.name,
-        rosterId: p.rosterId,
-        sessionToken: p.sessionToken,
-        stops: route?.stops ?? [],
-      })
-    }
+    // Every row is independent; fetch route/session pairs concurrently so a
+    // large cohort does not turn this endpoint into a serial D1 waterfall.
+    const rows = await Promise.all(
+      players.map(async (p) => {
+        const [route, session] = await Promise.all([
+          store.getRoute(p.id),
+          store.getSession(p.id),
+        ])
+        return {
+          playerId: p.id,
+          name: p.name,
+          rosterId: p.rosterId,
+          sessionToken: p.sessionToken,
+          stops: route?.stops ?? [],
+          status: session?.status ?? 'not_started',
+          currentLevel: session?.currentLevel ?? 1,
+          scoreMs: session?.scoreMs ?? null,
+        }
+      }),
+    )
     return c.json({players: rows})
   })
 
@@ -151,7 +163,7 @@ export const createApp = (
         rosterId: p.rosterId,
       }
       if (p.route) reg.pinnedRoute = p.route
-      const {player} = await engine.registerPlayer(reg)
+      const {player, session} = await engine.registerPlayer(reg)
       const route = await store.getRoute(player.id)
       players.push({
         playerId: player.id,
@@ -159,6 +171,9 @@ export const createApp = (
         rosterId: player.rosterId,
         sessionToken: player.sessionToken,
         stops: route?.stops ?? [],
+        status: session.status,
+        currentLevel: session.currentLevel,
+        scoreMs: session.scoreMs,
       })
     }
     return c.json({players})

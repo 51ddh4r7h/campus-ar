@@ -171,12 +171,20 @@ describe('admin console reads', () => {
     const b = await bootPlayer()
     const res = await json(`/admin/batches/${b.batchId}/players`)
     const {players} = (await res.json()) as {
-      players: Array<{name: string; sessionToken: string; stops: string[]}>
+      players: Array<{
+        name: string
+        sessionToken: string
+        stops: string[]
+        status: string
+        currentLevel: number
+        scoreMs: number | null
+      }>
     }
     expect(players).toHaveLength(1)
     expect(players[0]!.name).toBe('A')
     expect(players[0]!.sessionToken).toBe(b.sessionToken)
     expect(players[0]!.stops).toHaveLength(5)
+    expect(players[0]).toMatchObject({status: 'not_started', currentLevel: 1, scoreMs: null})
   })
 
   it('refuses the reads without a matching admin key', async () => {

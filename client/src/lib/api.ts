@@ -81,6 +81,9 @@ export interface RosterEntry {
   rosterId: string
   sessionToken: string
   stops: string[]
+  status: Session['status']
+  currentLevel: number
+  scoreMs: number | null
 }
 
 const auth = (token: string): HeadersInit => ({Authorization: `Bearer ${token}`})
