@@ -4,7 +4,7 @@
    * roll back on failure; background refreshes reconcile it with the server.
    */
   import {onMount} from 'svelte'
-  import {LEVEL_COUNT, LOCATIONS, formatMarquee} from '@cmh/shared'
+  import {LEVEL_COUNT, LOCATIONS, formatScore} from '@cmh/shared'
   import type {Session, StandingRow} from '@cmh/shared'
   import {api, ApiError, type BatchRow, type RosterEntry} from '../lib/api'
   import {toasts} from '../lib/stores/toast.svelte'
@@ -67,6 +67,14 @@
         new Set(pinned).size === LEVEL_COUNT &&
         pinned.every((id) => LOCATIONS.some((location) => location.id === id))),
   )
+  /**
+   * Every registered player lands in exactly one bucket.
+   *
+   * `abandoned` had no tile, so a cohort of seven showed as 3 playing + 2
+   * finished + 1 waiting and the organiser was left to wonder about the
+   * seventh. The roster already calls that state "Ended early"; the summary
+   * now says it too, and the four counts sum to the total.
+   */
   const counts = $derived({
     registered: roster.length,
     playing: roster.filter((player) =>
@@ -74,6 +82,7 @@
     ).length,
     finished: roster.filter((player) => player.status === 'complete').length,
     waiting: roster.filter((player) => player.status === 'not_started').length,
+    stopped: roster.filter((player) => player.status === 'abandoned').length,
   })
   const filteredRoster = $derived.by(() => {
     const query = playerQuery.trim().toLocaleLowerCase()
@@ -514,6 +523,7 @@
             <article class="card"><span>Playing</span><strong>{counts.playing}</strong></article>
             <article class="card"><span>Finished</span><strong>{counts.finished}</strong></article>
             <article class="card"><span>Waiting</span><strong>{counts.waiting}</strong></article>
+            <article class="card"><span>Ended early</span><strong>{counts.stopped}</strong></article>
           </section>
 
           {#if loadError}
@@ -655,7 +665,10 @@
                         <td class="rank mono">#{row.rank}</td>
                         <td><strong>{row.playerName}</strong></td>
                         <td>{row.level === null ? 'Finished' : `Level ${row.level} of ${LEVEL_COUNT}`}</td>
-                        <td class="mono score">{row.scoreMs === null ? '—' : formatMarquee(row.scoreMs)}</td>
+                        <!-- `formatScore`, not `formatMarquee`: this column is signed, and
+                             marquee clamps below zero — so every under-par finisher, which
+                             is most of them, printed 0:00 and the board read as a tie. -->
+                        <td class="mono score">{row.scoreMs === null ? '—' : formatScore(row.scoreMs)}</td>
                       </tr>
                     {/each}
                   </tbody>
@@ -749,13 +762,22 @@
     position: sticky;
     top: 106px;
     display: grid;
+    /* A bare `auto` track cannot go narrower than its content's min-content, so
+       one long event name pushed this column to 790px inside a 320px sidebar —
+       the Create Event button and every name were cut off. `minmax(0, 1fr)`
+       lets the track shrink to the column it was given. */
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-4);
     max-height: calc(100dvh - 126px);
     overflow-y: auto;
+    /* `overflow-y: auto` alone computes overflow-x to `auto` too, which is what
+       turned that overflow into a sideways scrollbar rather than a visible bug. */
+    overflow-x: clip;
     scrollbar-width: thin;
   }
   .detail {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-4);
     min-width: 0;
   }
@@ -853,6 +875,10 @@
   }
   .events ul {
     display: grid;
+    /* Grid items default to `min-width: auto`, so a row will not shrink below
+       its longest word — and the row is what the name's ellipsis is measured
+       against. Without this the truncation never triggers. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 5px;
     margin: 0;
     padding: 0;
@@ -912,7 +938,7 @@
   }
   .metrics {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
     gap: var(--sp-3);
   }
   .metrics article { padding: var(--sp-3) var(--sp-4); }
@@ -938,6 +964,12 @@
   .field-error { color: var(--alert); font-size: var(--step-13); }
   .search { margin-bottom: var(--sp-3); }
   .table-wrap {
+    /* Positioned so the `.sr-only` label in the table header resolves against
+       this box. Absolutely positioned with no positioned ancestor it resolved
+       against the page instead, sat at x=406 on a 375px screen, and scrolled
+       the whole console sideways — while the table it belongs to was already
+       scrolling correctly inside here. */
+    position: relative;
     width: 100%;
     overflow-x: auto;
     border-radius: 10px;
@@ -1041,9 +1073,8 @@
       padding-inline: var(--edge);
     }
     .updated { display: none; }
-    .workspace { grid-template-columns: 1fr; }
+    .workspace { grid-template-columns: minmax(0, 1fr); }
     aside { position: static; max-height: none; overflow: visible; }
-    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 520px) {
     .header-actions { gap: 2px; }
