@@ -48,9 +48,9 @@
         {@const bw = Math.max(2, (n / max) * half * 0.94)}
         {@const y = i * BAND + 4}
         {@const under = r.side === 'under'}
-        {@const over = r.side === 'over'}
         <rect
           class="hit"
+          role="presentation"
           x="0"
           {y}
           width={Math.max(w, 1)}

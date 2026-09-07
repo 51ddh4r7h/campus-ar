@@ -56,6 +56,7 @@
         <!-- Hit target spans the whole band, well past the 24px minimum. -->
         <rect
           class="hit"
+          role="presentation"
           x="0"
           {y}
           width={Math.max(w, 1)}
