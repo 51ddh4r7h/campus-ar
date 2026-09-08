@@ -17,6 +17,8 @@
   import HeatMeter from '../lib/components/HeatMeter.svelte'
   import ProximityRing from '../lib/components/ProximityRing.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import CompanionCat from '../lib/components/CompanionCat.svelte'
+  import {demoAllowed} from '../lib/mode'
 
   const clue = $derived(game.clue)
 
@@ -95,6 +97,12 @@
      target: a ring centred on you cannot be misplaced by your own position
      error, and a circle cannot accidentally point anywhere. -->
 <ProximityRing heat={probe.last?.heat ?? 0} />
+
+<!-- Practice only, for now: it is a toy being tried out, and a real hunt is
+     not where an untested piece of chrome belongs. -->
+{#if demoAllowed}
+  <CompanionCat band={probe.last?.band ?? 0} />
+{/if}
 
 {#if clue}
   <!-- The frame you are hunting, laid over the world at whatever strength
