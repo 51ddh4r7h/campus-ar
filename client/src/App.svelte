@@ -24,7 +24,6 @@
   import Reveal from './screens/Reveal.svelte'
   import Finish from './screens/Finish.svelte'
   import Admin from './screens/Admin.svelte'
-  import Dashboard from './screens/Dashboard.svelte'
 
   import HowToSheet from './screens/HowToSheet.svelte'
   import HintSheet from './screens/HintSheet.svelte'
@@ -236,7 +235,15 @@
 </script>
 
 {#if dashboardRequested}
-  <Dashboard />
+  <!-- Loaded on demand, and this is not a nicety.
+       The reporting screen pulls Vega in to draw its charts — several hundred
+       kilobytes that exist to serve about six organisers on laptops. Bundling
+       it statically would put every byte of that on the phone of a first-year
+       standing in a field trying to load a film clip. `{#await}` on a dynamic
+       import is what keeps the two apart. -->
+  {#await import('./screens/Dashboard.svelte') then Loaded}
+    <Loaded.default />
+  {/await}
 {:else if adminRequested}
   <Admin />
 {:else}

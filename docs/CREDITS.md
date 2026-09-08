@@ -160,3 +160,24 @@ The pack ships more than these (`Surprised`, `Waiting`, `Cry`, `Sad`,
 The download carries no licence file — the terms above are the ones stated on
 the itch.io page at the time of purchase. Worth keeping the receipt with the
 project.
+
+## Charting — flint-chart and Vega
+
+The reporting screen's charts are specified with **flint-chart** (Microsoft,
+MIT) and drawn by **Vega-Lite / Vega** (BSD-3-Clause), via `vega-embed`. flint
+takes a high-level description — this is a Bar Chart, this field is a Quantity —
+and decides the encodings and layout; Vega renders the result.
+
+The app's palette is handed to Vega as a theme in `FlintChart.svelte`, so a
+flint chart and the rest of the console agree on colour and type.
+
+Vega is large: the reporting bundle is about 1.2 MB against 250 KB for the
+whole rest of the app. That is acceptable only because the dashboard is loaded
+on demand — `App.svelte` imports it dynamically, so none of it reaches the
+phone of anyone playing. If that import is ever made static, every player pays
+for a chart library they will never see.
+
+Not every chart type flint names is available here. The Vega-Lite backend
+carries a different set from the ECharts one — there is no Funnel Chart, for
+instance — and asking for one it does not have throws. `FlintChart` treats that
+as an empty panel rather than letting it unmount the screen.
