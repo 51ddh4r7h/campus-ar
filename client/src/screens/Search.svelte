@@ -18,7 +18,6 @@
   import ProximityRing from '../lib/components/ProximityRing.svelte'
   import Icon from '../lib/components/Icon.svelte'
   import CompanionCat from '../lib/components/CompanionCat.svelte'
-  import {demoAllowed} from '../lib/mode'
 
   const clue = $derived(game.clue)
 
@@ -98,11 +97,10 @@
      error, and a circle cannot accidentally point anywhere. -->
 <ProximityRing heat={probe.last?.heat ?? 0} />
 
-<!-- Practice only, for now: it is a toy being tried out, and a real hunt is
-     not where an untested piece of chrome belongs. -->
-{#if demoAllowed}
-  <CompanionCat band={probe.last?.band ?? 0} />
-{/if}
+<!-- Reads the same band the meter does, so it says "warmer" in a second way:
+     one for people who are reading an instrument, one for people who are
+     glancing at a screen while walking. -->
+<CompanionCat band={probe.last?.band ?? 0} />
 
 {#if clue}
   <!-- The frame you are hunting, laid over the world at whatever strength

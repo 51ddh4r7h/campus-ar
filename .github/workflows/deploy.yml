@@ -1,5 +1,8 @@
 name: Deploy
 
+# `v2-movie-hunt` is the source of truth and the only branch Cloudflare serves.
+# Other branches are still built and tested on push — see the `deploy` job's
+# condition for why they stop there.
 on:
   push:
     branches: [v2-movie-hunt, main]
@@ -25,6 +28,18 @@ jobs:
 
   deploy:
     needs: verify
+    # Production deploys come from one branch and one branch only.
+    #
+    # Pages keeps branches apart on its own — a push to another branch would
+    # land as a preview. The Worker does not: `wrangler deploy` is not
+    # branch-aware, so it always replaces the live `campus-movie-hunt-api`, and
+    # the migration step above it runs `--remote` against the one production
+    # database. Any branch reaching this job could therefore overwrite the API
+    # and migrate the real data while Pages looked reassuringly separate.
+    #
+    # Everything above still runs everywhere: another branch gets lint,
+    # typecheck and the full test suite, and simply stops here.
+    if: github.ref == 'refs/heads/v2-movie-hunt'
     runs-on: ubuntu-latest
     permissions:
       contents: read
