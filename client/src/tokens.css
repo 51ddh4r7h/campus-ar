@@ -25,21 +25,19 @@
   --signal-hot: #e8a54c;
 
   /**
-   * Two faces doing different jobs.
+   * Two faces, both classical, doing different jobs.
    *
-   * Bagnard is the voice: a garalde serif with one weight, used large, for the
-   * lines that carry the game's character. Inter is the workhorse behind it —
-   * drawn for interfaces at small sizes, which is what a 13px label on a phone
-   * held up outdoors actually needs, and it has the 400-700 range the UI uses
-   * where Bagnard has none.
+   * Cinzel Decorative is the voice: Roman inscriptional capitals, used large,
+   * on the lines that carry the game's character. Cormorant Garamond is
+   * everything else — a Garamond with the 300-700 range the interface asks
+   * for, where the display face has one weight.
    *
-   * The fallbacks matter more than usual here: Bagnard is 149 glyphs, so
-   * anything outside basic Latin (an em dash in an event's name, say) is drawn
-   * by Georgia instead. Keeping a real serif behind it makes that substitution
-   * quiet rather than jarring.
+   * Both cover full Latin, so unlike a 149-glyph display face there is no
+   * character in the copy either of them cannot draw. The fallbacks are still
+   * real serifs so a substitution outside that range stays quiet.
    */
-  --font-ui: 'Inter Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
-  --font-display: 'Bagnard', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Cormorant Garamond Variable', Georgia, 'Times New Roman', serif;
+  --font-display: 'Cinzel Decorative', Georgia, 'Times New Roman', serif;
   --font-mono: ui-monospace, "SF Mono", "Roboto Mono", "Courier New", monospace;
 
   --step-13: 0.8125rem;
@@ -104,6 +102,17 @@ body {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--step-17);
+  /**
+   * 500, not 400.
+   *
+   * Cormorant Garamond is a display Garamond — its strokes are drawn to be
+   * seen large, and at 13-15px on a dark screen its regular weight goes thin
+   * enough to be work to read. This app is used outdoors on a phone, in
+   * daylight, by someone walking. One step up costs nothing (the variable
+   * file carries 300-700 already) and gives the copy back its presence
+   * without taking the Garamond out of it.
+   */
+  font-weight: 500;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;

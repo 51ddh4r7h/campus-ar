@@ -93,30 +93,32 @@ entry screen is the worst place to pay for another one.
 
 ## Typefaces
 
-**Bagnard** — the display face, on every heading. Drawn by Sébastien Sanfilippo
-from graffiti cut by an anonymous prisoner of the Napoleonic wars, which is
-also why it suits a game about a campus with a history under it.
+Both are served from the app's own origin via `@fontsource`, latin subset only —
+declared by hand in `client/src/fonts.css` rather than through each package's
+entrypoint, which would pull six more subsets into the build for no one.
 
-- Source: <https://github.com/sebsan/Bagnard>
-- Licence: SIL Open Font License 1.1 — full text in
-  `docs/licences/Bagnard-OFL.txt`, which the OFL requires to travel with the
-  font wherever it goes.
-- No Reserved Font Name is declared, so converting the shipped `Bagnard.otf`
-  to WOFF2 (`client/src/assets/fonts/Bagnard.woff2`, done with `wawoff2`, no
-  change to the outlines) keeps the original name legitimately.
-- One weight, no italic, 149 glyphs. That is the whole family. Anything
-  outside basic Latin — an em dash in an organiser's event name, say — is
-  drawn by the Georgia fallback instead, which is why the display stack keeps
-  a real serif behind it.
+**Cinzel Decorative** — the display face, on every heading. Roman inscriptional
+capitals with a little ornament, which is where the epic feel comes from.
 
-**Inter Variable** — the interface face, everywhere else. Installed from
-`@fontsource-variable/inter`; only the Latin subset is declared, in
-`client/src/fonts.css`, so the six other subsets the package ships never reach
-the build.
+- Package: `@fontsource/cinzel-decorative` · Licence: SIL Open Font License 1.1
+- One weight is loaded (400); every display heading is set at 400, so nothing
+  asks the browser to fake a bold.
 
-- Licence: SIL Open Font License 1.1 (bundled in the npm package as
-  `node_modules/@fontsource-variable/inter/LICENSE`).
+**Cormorant Garamond** — the interface face, everywhere else. One variable file
+covering 300-700, which is the range the interface uses.
+
+- Package: `@fontsource-variable/cormorant-garamond` · Licence: SIL Open Font
+  License 1.1
 
 The monospace role — timers, scores, roll numbers, the uppercase kickers — is
 still the platform's own (`ui-monospace` → SF Mono on iOS, Roboto Mono on
 Android). It costs nothing to download and both are good.
+
+### Not used: Ringbearer
+
+Ringbearer (Pete Klassen, 2002) was asked for and is not here. It is licensed
+for personal use only, so embedding it as a webfont in a deployed app needs a
+commercial licence bought from the designer; and it is a replication of the
+lettering in the Peter Jackson films' logo, which is a trademark question on
+top of the licence one. Cinzel Decorative is the nearest face that is free to
+use here without either problem.
