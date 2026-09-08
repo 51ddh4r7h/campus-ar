@@ -24,6 +24,7 @@
     "layout": "tsx scripts/layout-report.ts",
     "map": "tsx scripts/build-campus-map.ts",
     "clips": "tsx scripts/check-clips.ts",
+    "load": "node scripts/load-test.mjs",
     "clips:build": "node scripts/build-clips.mjs"
   },
   "devDependencies": {
