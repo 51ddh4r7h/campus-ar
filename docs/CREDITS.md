@@ -104,11 +104,10 @@ capitals with a little ornament, which is where the epic feel comes from.
 - One weight is loaded (400); every display heading is set at 400, so nothing
   asks the browser to fake a bold.
 
-**Cormorant Garamond** — the interface face, everywhere else. One variable file
-covering 300-700, which is the range the interface uses.
+**Geist** — the interface face, everywhere else. Vercel's grotesque, drawn for
+interfaces; one variable file covering 100-900, of which the app uses 400-700.
 
-- Package: `@fontsource-variable/cormorant-garamond` · Licence: SIL Open Font
-  License 1.1
+- Package: `@fontsource-variable/geist` · Licence: SIL Open Font License 1.1
 
 The monospace role — timers, scores, roll numbers, the uppercase kickers — is
 still the platform's own (`ui-monospace` → SF Mono on iOS, Roboto Mono on

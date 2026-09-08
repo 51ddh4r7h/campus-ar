@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@cmh/shared": "*",
-    "@fontsource-variable/cormorant-garamond": "^5.3.0",
+    "@fontsource-variable/geist": "^5.3.0",
     "@fontsource/cinzel-decorative": "^5.3.0",
     "motion": "^13.2.0",
     "postprocessing": "^6.39.4",
