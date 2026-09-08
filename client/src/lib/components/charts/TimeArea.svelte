@@ -173,13 +173,11 @@
   .tick {
     fill: var(--text-faint);
     font-size: 11px;
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
   .endlabel {
     fill: var(--text-dim);
     font-size: 11px;
-    font-family: var(--font-mono);
   }
   .tip {
     position: absolute;
@@ -200,7 +198,6 @@
   }
   .tip strong {
     color: var(--text);
-    font-family: var(--font-mono);
   }
   .tip span {
     display: flex;
@@ -214,6 +211,5 @@
   }
   .tip b {
     color: var(--text);
-    font-family: var(--font-mono);
   }
 </style>

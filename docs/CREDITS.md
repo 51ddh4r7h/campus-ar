@@ -97,8 +97,11 @@ Both are served from the app's own origin via `@fontsource`, latin subset only �
 declared by hand in `client/src/fonts.css` rather than through each package's
 entrypoint, which would pull six more subsets into the build for no one.
 
-**Cinzel Decorative** — the display face, on every heading. Roman inscriptional
-capitals with a little ornament, which is where the epic feel comes from.
+**Cinzel Decorative** — the display face, on the player-facing headings. Roman
+inscriptional capitals with a little ornament, which is where the epic feel
+comes from. The organiser console and the reporting dashboard are deliberately
+set in Geist alone: they are working tools, and a decorative face on a roster
+is decoration on a spreadsheet.
 
 - Package: `@fontsource/cinzel-decorative` · Licence: SIL Open Font License 1.1
 - One weight is loaded (400); every display heading is set at 400, so nothing
@@ -109,9 +112,12 @@ interfaces; one variable file covering 100-900, of which the app uses 400-700.
 
 - Package: `@fontsource-variable/geist` · Licence: SIL Open Font License 1.1
 
-The monospace role — timers, scores, roll numbers, the uppercase kickers — is
-still the platform's own (`ui-monospace` → SF Mono on iOS, Roboto Mono on
-Android). It costs nothing to download and both are good.
+The monospace role — the player's timers and scores, and the uppercase kickers
+on the player screens — is still the platform's own (`ui-monospace` → SF Mono
+on iOS, Roboto Mono on Android). It costs nothing to download and both are
+good. The organiser surfaces use none of it: their figures are Geist with
+`font-variant-numeric: tabular-nums`, which is what actually keeps a column of
+roll numbers and times in line.
 
 ### Not used: Ringbearer
 

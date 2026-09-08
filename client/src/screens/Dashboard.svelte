@@ -363,16 +363,16 @@
   }
   .eyebrow {
     display: block;
-    font-family: var(--font-mono);
     font-size: var(--step-13);
+    font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--amber);
   }
+  /* Geist alone here too: this is a reporting tool, not a title card. */
   h1 {
     margin: var(--sp-1) 0 0;
-    font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 600;
     font-size: clamp(1.8rem, 6vw, 2.4rem);
     line-height: 1;
   }

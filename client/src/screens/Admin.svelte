@@ -827,11 +827,14 @@
     backdrop-filter: blur(18px);
   }
   h1, h2, p { margin-top: 0; }
+  /* The organiser surfaces are set in Geist alone — they are working tools,
+     and a decorative face on a roster is decoration on a spreadsheet. Weight
+     600 because Geist has weights; the 400 here was only ever a consequence
+     of the display face having exactly one. */
   h1 {
     margin-bottom: 0;
-    font-family: var(--font-display);
     font-size: var(--step-28);
-    font-weight: 400;
+    font-weight: 600;
     text-wrap: balance;
   }
   h2 {
@@ -843,8 +846,8 @@
     display: block;
     margin-bottom: 4px;
     color: var(--amber);
-    font-family: var(--font-mono);
     font-size: var(--step-13);
+    font-weight: 500;
     letter-spacing: 0.11em;
     text-transform: uppercase;
   }
@@ -972,7 +975,8 @@
     border-radius: 999px;
     background: var(--surface-raised);
     color: var(--text-dim);
-    font: 500 var(--step-13) var(--font-mono);
+    font: 500 var(--step-13) var(--font-ui);
+    font-variant-numeric: tabular-nums;
   }
   .events li {
     display: grid;
@@ -1072,11 +1076,12 @@
   .metrics strong {
     display: block;
     margin-top: 3px;
-    font: 500 var(--step-28) var(--font-mono);
+    font: 600 var(--step-28) var(--font-ui);
     font-variant-numeric: tabular-nums;
   }
+  /* Still tabular, so roll numbers and times line up down a column — Geist
+     carries the figures, the monospace face was only ever how they aligned. */
   code, .mono, .ids {
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
   details {

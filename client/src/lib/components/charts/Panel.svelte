@@ -123,7 +123,6 @@
     color: var(--text-dim);
   }
   td.num {
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 </style>

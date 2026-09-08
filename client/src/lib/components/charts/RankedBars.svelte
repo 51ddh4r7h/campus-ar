@@ -106,7 +106,6 @@
   .value {
     fill: var(--text-faint);
     font-size: 11px;
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
   .note {
