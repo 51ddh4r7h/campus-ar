@@ -40,12 +40,25 @@ export interface GameStore {
   getSession(playerId: string): Promise<Session | null>
   listSessions(batchId: string): Promise<Session[]>
 
+  /** Every route in a batch. Reporting only. */
+  listRoutes(batchId: string): Promise<Route[]>
+
   putSplit(split: Split): Promise<void>
   listSplits(playerId: string): Promise<Split[]>
+  /** Every split in a batch. Reporting only. */
+  listBatchSplits(batchId: string): Promise<Split[]>
   /** Drop a player's history — only when their route is being reissued. */
   clearSplits(playerId: string): Promise<void>
 
   appendEvent(event: GameEvent): Promise<void>
+  /**
+   * Every event in a batch, oldest first, capped. Reporting only.
+   *
+   * Capped because this is the one table with no natural ceiling — a long
+   * event writes tens of thousands of rows, and a report is not worth an
+   * unbounded read.
+   */
+  listEvents(batchId: string, limit: number): Promise<GameEvent[]>
   addBreadcrumbs(crumbs: readonly Breadcrumb[]): Promise<void>
 }
 
@@ -130,6 +143,18 @@ export class InMemoryStore implements GameStore {
     )
     this.splits.push(split)
   }
+  async listRoutes(batchId: string): Promise<Route[]> {
+    const ids = new Set(
+      [...this.players.values()].filter((p) => p.batchId === batchId).map((p) => p.id),
+    )
+    return [...this.routes.values()].filter((r) => ids.has(r.playerId))
+  }
+  async listBatchSplits(batchId: string): Promise<Split[]> {
+    const ids = new Set(
+      [...this.players.values()].filter((p) => p.batchId === batchId).map((p) => p.id),
+    )
+    return this.splits.filter((s) => ids.has(s.playerId))
+  }
   async listSplits(playerId: string): Promise<Split[]> {
     return this.splits
       .filter((s) => s.playerId === playerId)
@@ -141,6 +166,15 @@ export class InMemoryStore implements GameStore {
 
   async appendEvent(event: GameEvent): Promise<void> {
     this.events.push(event)
+  }
+  async listEvents(batchId: string, limit: number): Promise<GameEvent[]> {
+    const ids = new Set(
+      [...this.players.values()].filter((p) => p.batchId === batchId).map((p) => p.id),
+    )
+    return this.events
+      .filter((e) => ids.has(e.playerId))
+      .sort((a, b) => a.tsMs - b.tsMs)
+      .slice(0, limit)
   }
   async addBreadcrumbs(crumbs: readonly Breadcrumb[]): Promise<void> {
     this.crumbs.push(...crumbs)

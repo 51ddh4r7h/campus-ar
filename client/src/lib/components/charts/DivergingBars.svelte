@@ -7,7 +7,7 @@
    * it never carries the meaning alone — the side of the axis and a signed
    * label both say it too.
    */
-  import type {Row} from '../../dashboard-mock'
+  import type {Row} from './types'
   import {barPath} from './geometry'
 
   interface Props {
@@ -43,7 +43,10 @@
   {#if w > 0}
     <svg {height} width={w} role="img" aria-label="Finishers by margin against par">
       <line class="zero" x1={zero} x2={zero} y1="0" y2={height} />
-      {#each rows as r, i (r.label)}
+      <!-- Keyed by position: two rows sharing a label is a thrown
+           `each_key_duplicate` that blanks the whole screen, and these lists are
+           rebuilt wholesale on each refresh so identity buys nothing. -->
+      {#each rows as r, i (i)}
         {@const n = r.value}
         {@const bw = Math.max(2, (n / max) * half * 0.94)}
         {@const y = i * BAND + 4}

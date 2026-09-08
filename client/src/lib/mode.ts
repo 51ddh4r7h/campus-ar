@@ -35,10 +35,9 @@ export const debugMode = params.has('debug')
 export const adminRequested = params.has('admin')
 
 /**
- * `?dashboard` — the organiser's reporting view. A mock for now: it renders
- * generated sample data and touches nothing real, which is why it needs no key.
- * When it is wired to live figures it must move behind the admin key like every
- * other route that shows a cohort's numbers.
+ * `?dashboard` — the organiser's reporting view. Behind the deployment key,
+ * like every other route that reads a whole cohort: it describes how each
+ * person played, where they stuck and who gave up.
  */
 export const dashboardRequested = params.has('dashboard')
 

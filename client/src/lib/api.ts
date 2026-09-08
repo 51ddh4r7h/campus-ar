@@ -4,6 +4,7 @@
  */
 
 import type {
+  Analytics,
   ClueView,
   GeoSample,
   HintRung,
@@ -232,6 +233,12 @@ export const api = {
       method: 'POST',
       headers: adminJson(adminKey),
       body: JSON.stringify({players}),
+    }),
+
+  /** Organiser: the whole reporting picture for one cohort. */
+  analytics: (batchId: string, adminKey: string) =>
+    request<Analytics>(`/admin/batches/${encodeURIComponent(batchId)}/analytics`, {
+      headers: adminHeaders(adminKey),
     }),
 
   listBatches: (adminKey: string) =>

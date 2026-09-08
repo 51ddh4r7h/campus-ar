@@ -3,6 +3,7 @@ import {cors} from 'hono/cors'
 import {HTTPException} from 'hono/http-exception'
 import {
   EngineError,
+  computeAnalytics,
   LEVEL_COUNT,
   LOCATION_POOL_SIZE,
   createEngine,
@@ -23,6 +24,15 @@ import {
   parseSignup,
   parseLogin,
 } from './guards'
+
+/**
+ * How many events one report will read.
+ *
+ * Two hundred players generate on the order of thirty events each, so this
+ * clears a full induction several times over. It exists so a batch that ran
+ * for a week cannot turn a dashboard refresh into an unbounded scan.
+ */
+const ANALYTICS_EVENT_LIMIT = 20_000
 
 const realDeps: EngineDeps = {
   now: () => Date.now(),
@@ -193,6 +203,33 @@ export const createApp = (
       c.req.param('playerId'),
     )
     return c.json({session})
+  })
+
+  /**
+   * The reporting view for one cohort.
+   *
+   * Admin-gated, like everything else that reads a whole batch: it describes
+   * every player's behaviour — where they got stuck, who gave up and where —
+   * which is nobody's business but the organisers'.
+   *
+   * The aggregation is `computeAnalytics` in @cmh/shared, tested there against
+   * a known cohort. This route only fetches the rows and hands them over, so
+   * the figures cannot drift between what is tested and what is served.
+   */
+  app.get('/admin/batches/:id/analytics', async (c) => {
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    const store = makeStore(c.env)
+    const batchId = c.req.param('id')
+    const [players, sessions, routes, splits, events] = await Promise.all([
+      store.listPlayers(batchId),
+      store.listSessions(batchId),
+      store.listRoutes(batchId),
+      store.listBatchSplits(batchId),
+      store.listEvents(batchId, ANALYTICS_EVENT_LIMIT),
+    ])
+    return c.json(
+      computeAnalytics({players, sessions, routes, splits, events, nowMs: Date.now()}),
+    )
   })
 
   /**

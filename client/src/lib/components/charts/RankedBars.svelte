@@ -6,7 +6,7 @@
    * its side is unreadable. The value rides the tip of its own bar, so the
    * tooltip enhances rather than gates.
    */
-  import type {Row} from '../../dashboard-mock'
+  import type {Row} from './types'
   import {barPath} from './geometry'
 
   interface Props {
@@ -50,7 +50,10 @@
 <div class="wrap" bind:clientWidth={w}>
   {#if w > 0}
     <svg {height} width={w} role="img" aria-label="Ranked values by name">
-      {#each rows as r, i (r.label)}
+      <!-- Keyed by position: two rows sharing a label is a thrown
+           `each_key_duplicate` that blanks the whole screen, and these lists are
+           rebuilt wholesale on each refresh so identity buys nothing. -->
+      {#each rows as r, i (i)}
         {@const bw = (r.value / max) * plotW}
         {@const y = i * BAND + 4}
         <!-- Hit target spans the whole band, well past the 24px minimum. -->

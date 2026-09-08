@@ -58,6 +58,12 @@ interface SessionRow {
   paused_at_ms: number | null
   paused_total_ms: number
 }
+interface EventRow {
+  player_id: string
+  type: string
+  ts_ms: number
+  payload: string
+}
 interface SplitRow {
   player_id: string
   level: number
@@ -322,6 +328,50 @@ export class D1Store implements GameStore {
       .bind(playerId)
       .all<SplitRow>()
     return results.map(toSplit)
+  }
+
+  async listRoutes(batchId: string): Promise<Route[]> {
+    const {results} = await this.db
+      .prepare(
+        `SELECT r.* FROM route r
+           JOIN player p ON p.id = r.player_id
+          WHERE p.batch_id = ?1`,
+      )
+      .bind(batchId)
+      .all<RouteRow>()
+    return results.map(toRoute)
+  }
+
+  async listBatchSplits(batchId: string): Promise<Split[]> {
+    const {results} = await this.db
+      .prepare(
+        `SELECT s.* FROM split s
+           JOIN player p ON p.id = s.player_id
+          WHERE p.batch_id = ?1`,
+      )
+      .bind(batchId)
+      .all<SplitRow>()
+    return results.map(toSplit)
+  }
+
+  async listEvents(batchId: string, limit: number): Promise<GameEvent[]> {
+    const {results} = await this.db
+      .prepare(
+        `SELECT e.player_id, e.type, e.ts_ms, e.payload FROM game_event e
+           JOIN player p ON p.id = e.player_id
+          WHERE p.batch_id = ?1
+          ORDER BY e.ts_ms ASC
+          LIMIT ?2`,
+      )
+      .bind(batchId, limit)
+      .all<EventRow>()
+    return results.map((r) => ({
+      playerId: r.player_id,
+      // SAFETY: written by appendEvent from GameEventType.
+      type: r.type as GameEvent['type'],
+      tsMs: r.ts_ms,
+      payload: json<GameEvent['payload']>(r.payload),
+    }))
   }
 
   async appendEvent(e: GameEvent): Promise<void> {

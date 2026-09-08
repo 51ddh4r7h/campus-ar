@@ -6,15 +6,23 @@
    * saturated block. Both series are on the same scale (people), which is what
    * lets them share one axis; a second y-scale is never the answer here.
    */
-  import type {Series} from '../../dashboard-mock'
-  import {clockLabel} from '../../dashboard-mock'
+  import type {Series} from './types'
   import {areaPath, linePath, niceTicks} from './geometry'
 
   interface Props {
     series: readonly Series[]
     height?: number
+    /** How an x value reads on the axis and in the tooltip. */
+    labelFor?: (x: number) => string
+    /** Named for the screen reader, since the marks carry the meaning. */
+    label?: string
   }
-  const {series, height = 220}: Props = $props()
+  const {
+    series,
+    height = 220,
+    labelFor = (x: number) => String(x),
+    label = 'Time series',
+  }: Props = $props()
 
   const PAD = {top: 12, right: 46, bottom: 26, left: 34}
   let w = $state(0)
@@ -30,6 +38,21 @@
 
   const sx = (x: number): number => PAD.left + (x / maxX) * plotW
   const sy = (y: number): number => PAD.top + plotH - (y / top) * plotH
+
+  /**
+   * First, middle and last — deduplicated.
+   *
+   * A short event has two or three points, where those three positions
+   * collide. A keyed `{#each}` over the raw list then throws
+   * `each_key_duplicate`, which takes down not just the axis but every panel
+   * rendered after this one. A twenty-minute event is exactly the case a
+   * reporting screen has to survive.
+   */
+  const tickIndexes = $derived(
+    [...new Set([0, Math.floor((xs.length - 1) / 2), xs.length - 1])].filter(
+      (i) => i >= 0 && xs[i] !== undefined,
+    ),
+  )
 
   const placed = $derived(
     series.map((s) => ({
@@ -65,7 +88,7 @@
       {height}
       width={w}
       role="img"
-      aria-label="Players on course and players finished, through the morning"
+      aria-label={label}
       onpointermove={track}
       onpointerleave={() => (hover = null)}
     >
@@ -74,12 +97,10 @@
         <text class="tick" x={PAD.left - 8} y={sy(t) + 4} text-anchor="end">{t}</text>
       {/each}
 
-      {#each [0, Math.floor(xs.length / 2), xs.length - 1] as i (i)}
-        {#if xs[i] !== undefined}
-          <text class="tick" x={sx(xs[i]!)} y={height - 8} text-anchor="middle">
-            {clockLabel(xs[i]!)}
-          </text>
-        {/if}
+      {#each tickIndexes as i (i)}
+        <text class="tick" x={sx(xs[i]!)} y={height - 8} text-anchor="middle">
+          {labelFor(xs[i]!)}
+        </text>
       {/each}
 
       {#each placed as s (s.name)}
@@ -104,7 +125,7 @@
 
     {#if hover !== null}
       <div class="tip" style="left: {Math.min(Math.max(sx(xs[hover]!), 70), w - 70)}px">
-        <strong>{clockLabel(xs[hover]!)}</strong>
+        <strong>{labelFor(xs[hover]!)}</strong>
         {#each series as s (s.name)}
           <span><i style="background: {s.colour}"></i>{s.name} <b>{s.points[hover]!.y}</b></span>
         {/each}

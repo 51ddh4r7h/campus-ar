@@ -74,6 +74,35 @@ const parkedAt = (id: string, endTsMs: number): GeoSample[] => {
   return out
 }
 
+describe('app — analytics', () => {
+  it('fails closed without the admin key, and reports a played batch with it', async () => {
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
+    await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
+    clock.advance(4 * 60_000)
+    await json('/session/arrive', {samples: parkedAt('amphitheatre', clock.now())}, {
+      Authorization: `Bearer ${p.sessionToken}`,
+    })
+
+    const open = await app.request(`/admin/batches/${p.batchId}/analytics`, {method: 'GET'}, env)
+    expect(open.status).toBe(403)
+
+    const res = await json(`/admin/batches/${p.batchId}/analytics`)
+    expect(res.status).toBe(200)
+    const a = (await res.json()) as {
+      registered: number
+      started: number
+      activation: {count: number; of: number}
+      funnel: Array<{label: string; count: number}>
+      locations: Array<{locationId: string; found: number}>
+    }
+    expect(a.registered).toBe(1)
+    expect(a.started).toBe(1)
+    expect(a.activation).toEqual({count: 1, of: 1})
+    expect(a.funnel.find((f) => f.label === 'Found 1')!.count).toBe(1)
+    expect(a.locations.find((l) => l.locationId === 'amphitheatre')!.found).toBe(1)
+  })
+})
+
 describe('app', () => {
   it('serves health', async () => {
     const res = await json('/health')
