@@ -6,17 +6,18 @@
    * splits, sessions and events the game already writes. Nothing here computes
    * a statistic; the client's job is to choose the form and say what it means.
    *
-   * The screen is arranged by the decision it supports, not by what is easy to
-   * chart. Did they finish (funnel) · was it the right length (par index) · is
-   * anyone stuck (hints and skips) · did we staff it right (concurrency) · did
-   * anything go wrong (abandonment, speed flags).
+   * Written to be read by someone who has never seen it before. Every panel
+   * is a plain question with the answer underneath — how many played, how far
+   * they got, where they actually walked, which clues slowed them down, who
+   * needs a hand, what went wrong. No statistic appears without a sentence
+   * saying what it means, and nothing is called a median or an index.
    *
    * It is behind the admin key. It shows a whole cohort's behaviour — where
    * each person got stuck, who gave up and where — which is the organisers'
    * business and nobody else's.
    */
   import {onMount} from 'svelte'
-  import {formatMarquee, formatScore, type Analytics} from '@cmh/shared'
+  import {formatMarquee, type Analytics} from '@cmh/shared'
   import {api, ApiError, type BatchRow} from '../lib/api'
   import {toasts} from '../lib/stores/toast.svelte'
   import StatTile from '../lib/components/charts/StatTile.svelte'
@@ -81,6 +82,18 @@
     r.of === 0 ? '—' : `${Math.round((r.count / r.of) * 100)}%`
   const outOf = (r: {count: number; of: number}): string => `${r.count} of ${r.of}`
   const mins = (ms: number | null): string => (ms === null ? '—' : `${(ms / 60_000).toFixed(1)} min`)
+  const phone = (d: string): string =>
+    d === 'ios' ? 'iPhone / iPad' : d === 'android' ? 'Android' : 'Not recorded'
+  const statusWord = (s: string): string =>
+    s === 'complete'
+      ? 'Finished'
+      : s === 'in_progress'
+        ? 'Playing'
+        : s === 'paused'
+          ? 'Paused'
+          : s === 'abandoned'
+            ? 'Stopped'
+            : 'Not started'
 
   const funnelRows = $derived(
     (data?.funnel ?? []).map((f) => ({
@@ -98,21 +111,41 @@
    * is not the ratio but which way and by how much — a leg 40% over is a clue
    * to rewrite, one 40% under is par set too generously.
    */
-  const parRows = $derived(
+  /**
+   * How much longer or shorter each leg took than the game expected, in
+   * minutes. The underlying figure is a ratio; nobody reads a ratio. A bar
+   * that says "2 minutes slower than expected" needs no explaining.
+   */
+  const paceRows = $derived(
     (data?.locations ?? [])
-      .filter((l) => l.parIndex !== null)
+      .filter((l) => l.medianSplitMs !== null && l.medianParMs !== null)
       .map((l) => {
-        const off = Math.round((l.parIndex! - 1) * 100)
-        // SAFETY: the three branches below produce exactly the three members
-        // of the union, so the assertion narrows rather than widens.
-        const side = (off > 4 ? 'over' : off < -4 ? 'under' : 'level') as 'over' | 'under' | 'level'
+        const offMs = l.medianSplitMs! - l.medianParMs!
+        const offMin = offMs / 60_000
+        // SAFETY: the three branches produce exactly the three union members.
+        const side = (offMin > 0.5 ? 'over' : offMin < -0.5 ? 'under' : 'level') as
+          | 'over'
+          | 'under'
+          | 'level'
         return {
           label: l.name,
-          value: Math.abs(off),
+          value: Math.abs(+offMin.toFixed(1)),
           side,
-          sub: `${off > 0 ? '+' : ''}${off}% against par · ${l.found} of ${l.assigned} found it`,
+          sub: `${offMin > 0 ? 'took' : 'saved'} ${Math.abs(offMin).toFixed(1)} min · ${l.found} of ${l.assigned} got there`,
         }
       }),
+  )
+
+  const visitRows = $derived(
+    (data?.visits ?? []).map((v) => ({
+      label: v.name,
+      value: v.visits,
+      sub: v.missed > 0 ? `${v.missed} sent there never arrived` : 'everyone sent there arrived',
+    })),
+  )
+
+  const deviceRows = $derived(
+    (data?.devices ?? []).map((d) => ({label: phone(d.device), value: d.count})),
   )
 
   const stuckRows = $derived(
@@ -190,37 +223,45 @@
       </p>
     {:else}
       <div class="tiles" class:stale={loading}>
-        <StatTile label="Started" value={pct(data.activation)} sub="{outOf(data.activation)} registered" />
         <StatTile
-          label="Finished all five"
+          label="Signed up"
+          value={String(data.registered)}
+          sub="people who made an account"
+        />
+        <StatTile
+          label="Actually played"
+          value={pct(data.activation)}
+          sub="{outOf(data.activation)} pressed START"
+        />
+        <StatTile
+          label="Found all five"
           value={pct(data.completion)}
           sub="{outOf(data.completion)} who started"
           tone={data.completion.of > 0 && data.completion.count / data.completion.of >= 0.7 ? 'good' : 'neutral'}
         />
         <StatTile
-          label="Median vs par"
-          value={data.medianScoreMs === null ? '—' : formatScore(data.medianScoreMs)}
-          sub={data.medianFinishMs === null ? 'no finishers yet' : `median run ${formatMarquee(data.medianFinishMs)}`}
-          tone={data.medianScoreMs !== null && data.medianScoreMs <= 0 ? 'good' : 'bad'}
+          label="Typical run"
+          value={data.medianFinishMs === null ? '—' : formatMarquee(data.medianFinishMs)}
+          sub="middle of the pack, start to finish"
         />
         <StatTile
-          label="Time to first find"
+          label="First find"
           value={mins(data.medianTimeToFirstFindMs)}
-          sub="median, from the start line"
+          sub="typical time to reach location one"
         />
         <StatTile
-          label="Finished hint-free"
+          label="Needed no hints"
           value={pct(data.hintFree)}
-          sub="{outOf(data.hintFree)} finishers"
+          sub="{outOf(data.hintFree)} who finished"
         />
       </div>
 
       <div class="grid" class:stale={loading}>
         <Panel
           wide
-          title="Where the cohort got to"
-          subtitle="Each step as a share of the one before — the drop names where they were lost"
-          columns={['Step', 'Players', 'Of previous step']}
+          title="How far people got"
+          subtitle="Each bar is how many people reached that point. Where the bars suddenly get shorter is where you lost people."
+          columns={['Step', 'People', 'Kept from the step before']}
           rows={data.funnel.map((f) => [f.label, String(f.count), `${Math.round(f.retentionOfPrevious * 100)}%`])}
         >
           <RankedBars rows={funnelRows} colour="#3987e5" labelWidth={92} />
@@ -228,28 +269,52 @@
 
         <Panel
           wide
-          title="Each leg against its par"
-          subtitle="Median time to reach a place, against the time it was budgeted. Over means the clue is playing hard."
-          columns={['Location', 'Median', 'Par', 'Against par', 'Found']}
+          title="Which locations took longer than expected"
+          subtitle="The game budgets a time for each walk. Red means people took longer than that — the clue is probably too hard, or the walk is longer than it looks."
+          columns={['Location', 'Typical time', 'Expected', 'Difference', 'Reached it']}
           rows={data.locations.map((l) => [
             l.name,
             mins(l.medianSplitMs),
             mins(l.medianParMs),
-            l.parIndex === null ? '—' : `${l.parIndex > 1 ? '+' : ''}${Math.round((l.parIndex - 1) * 100)}%`,
+            l.medianSplitMs === null || l.medianParMs === null
+              ? '—'
+              : `${l.medianSplitMs - l.medianParMs > 0 ? '+' : ''}${((l.medianSplitMs - l.medianParMs) / 60_000).toFixed(1)} min`,
             `${l.found} of ${l.assigned}`,
           ])}
         >
-          {#if parRows.length === 0}
+          {#if paceRows.length === 0}
             <p class="empty">Nobody has reached a location yet.</p>
           {:else}
-            <DivergingBars rows={parRows} labelWidth={152} />
+            <DivergingBars
+              rows={paceRows}
+              labelWidth={152}
+              legend={{
+                under: 'Quicker than expected',
+                level: 'About right',
+                over: 'Slower than expected',
+              }}
+            />
           {/if}
         </Panel>
 
         <Panel
-          title="Where players get stuck"
-          subtitle="Hints taken and skips attempted, by place"
-          columns={['Location', 'Hints', 'Skip attempts', 'Gave up here']}
+          wide
+          title="Where people actually went"
+          subtitle="How many people stood at each location. A place nobody reached is either too hard to find or too far to walk to."
+          columns={['Location', 'People who got there', 'Sent but never arrived']}
+          rows={data.visits.map((v) => [v.name, String(v.visits), String(v.missed)])}
+        >
+          {#if visitRows.length === 0}
+            <p class="empty">Nobody has reached a location yet.</p>
+          {:else}
+            <RankedBars rows={visitRows} colour="#199e70" labelWidth={152} />
+          {/if}
+        </Panel>
+
+        <Panel
+          title="Where people got stuck"
+          subtitle="Hints asked for, and attempts to move on without finding the place"
+          columns={['Location', 'Asked for a hint', 'Tried to skip', 'Gave up here']}
           rows={data.locations.map((l) => [
             l.name,
             `${l.hinted.count} of ${l.hinted.of}`,
@@ -265,9 +330,9 @@
         </Panel>
 
         <Panel
-          title="Which rung of the ladder"
-          subtitle="Hints are progressive; a jump to the last rung means the clue did not land"
-          columns={['Rung', 'Times taken']}
+          title="How much help people needed"
+          subtitle="Hints get more revealing in order. A lot of the last kind means a clue is not landing."
+          columns={['Kind of hint', 'Times used']}
           rows={data.hints.map((h) => [h.rung, String(h.count)])}
         >
           {#if hintRows.length === 0}
@@ -278,10 +343,56 @@
         </Panel>
 
         <Panel
+          title="What people played on"
+          subtitle="Recorded once when they sign in. Useful for knowing which phone to test on next time."
+          columns={['Phone', 'People']}
+          rows={data.devices.map((d) => [phone(d.device), String(d.count)])}
+        >
+          {#if deviceRows.length === 0}
+            <p class="empty">Nothing recorded yet.</p>
+          {:else}
+            <RankedBars rows={deviceRows} colour="#3987e5" labelWidth={132} />
+          {/if}
+        </Panel>
+
+        <Panel
           wide
-          title="Through the event"
-          subtitle="How many were out walking, and how many had finished"
-          columns={['Minutes in', 'On course', 'Finished']}
+          plain
+          title="Everyone, one row each"
+          subtitle="The whole cohort, furthest along first. This is the panel to open when somebody puts their hand up."
+          columns={[]}
+          rows={[]}
+        >
+          <div class="roster">
+            <table>
+              <thead>
+                <tr>
+                  <th>Player</th><th>Roll</th><th>Phone</th><th>Status</th>
+                  <th class="num">Found</th><th class="num">Time</th><th class="num">Hints</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each data.players as p (p.playerId)}
+                  <tr>
+                    <td>{p.name}</td>
+                    <td class="num">{p.rosterId}</td>
+                    <td>{phone(p.device)}</td>
+                    <td>{statusWord(p.status)}</td>
+                    <td class="num">{p.found} of 5</td>
+                    <td class="num">{p.elapsedMs === 0 ? '—' : formatMarquee(p.elapsedMs)}</td>
+                    <td class="num">{p.hintsTaken}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+
+        <Panel
+          wide
+          title="How busy it was, minute by minute"
+          subtitle="Blue is people still out walking; orange is people who had finished. The peak is when you need the most staff."
+          columns={['Minutes in', 'Still playing', 'Finished']}
           rows={data.timeline.map((b) => [`+${b.minute}`, String(b.onCourse), String(b.finished)])}
         >
           <TimeArea
@@ -294,8 +405,8 @@
         {#if troubles.length > 0}
           <Panel
             wide
-            title="What went wrong"
-            subtitle="Hunts that ended early, arrivals the server refused, and replays that cost time"
+            title="Problems worth knowing about"
+            subtitle="Runs that ended early, arrivals the server would not accept, and replays that cost people time"
             columns={['Kind', 'Count']}
             rows={troubles.map((t) => [t.label, String(t.value)])}
           >
@@ -415,6 +526,31 @@
     padding: var(--sp-6) 0;
     text-align: center;
     color: var(--text-dim);
+  }
+  .roster {
+    overflow-x: auto;
+  }
+  .roster table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--step-13);
+  }
+  .roster th,
+  .roster td {
+    padding: 7px 12px 7px 0;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .roster th {
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .roster td {
+    color: var(--text-dim);
+  }
+  .roster .num {
+    font-variant-numeric: tabular-nums;
   }
   .footnote {
     margin: 0;

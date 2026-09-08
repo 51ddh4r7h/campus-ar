@@ -20,7 +20,7 @@
 import {LEVEL_COUNT} from './config'
 import {locationById} from './content'
 import {elapsedMsOf} from './scoring'
-import type {GameEvent, Player, Route, Session, Split} from './types'
+import type {DeviceKind, GameEvent, Player, Route, Session, Split} from './types'
 
 export interface AnalyticsInput {
   players: readonly Player[]
@@ -79,6 +79,36 @@ export interface AbandonReason {
   count: number
 }
 
+/** One row per registered player — the granular view. */
+export interface PlayerRow {
+  playerId: string
+  name: string
+  rosterId: string
+  device: DeviceKind | 'unknown'
+  status: Session['status']
+  /** Locations reached, out of five. */
+  found: number
+  /** Time on the clock, ms. */
+  elapsedMs: number
+  /** Against par, once finished. Null while playing or if they ran out. */
+  scoreMs: number | null
+  hintsTaken: number
+}
+
+export interface DeviceSplit {
+  device: DeviceKind | 'unknown'
+  count: number
+}
+
+/** How many player-visits a place received. The honest footfall figure. */
+export interface LocationVisits {
+  locationId: string
+  name: string
+  visits: number
+  /** Players sent there who never arrived. */
+  missed: number
+}
+
 export interface Analytics {
   generatedAtMs: number
   registered: number
@@ -103,6 +133,12 @@ export interface Analytics {
   abandonReasons: AbandonReason[]
   /** Arrivals the server judged impossibly fast — GPS spoofing or a bad fix. */
   speedFlags: number
+  /** Which phones the cohort played on. */
+  devices: DeviceSplit[]
+  /** Visits per place, most-visited first. */
+  visits: LocationVisits[]
+  /** Everyone, one row each. */
+  players: PlayerRow[]
 }
 
 // ------------------------------------------------------------------ helpers
@@ -319,6 +355,66 @@ function buildTimeline(sessions: readonly Session[], nowMs: number): TimeBucket[
   return out
 }
 
+/**
+ * One row per player, which is the view an organiser actually wants when
+ * somebody puts their hand up. Everything here is already on screen somewhere
+ * as an aggregate; this is the same data with the averaging taken off.
+ */
+function buildPlayers(
+  players: readonly Player[],
+  sessions: readonly Session[],
+  splits: readonly Split[],
+  nowMs: number,
+): PlayerRow[] {
+  const sessionOf = new Map(sessions.map((s) => [s.playerId, s]))
+  const splitsOf = new Map<string, Split[]>()
+  for (const sp of splits) splitsOf.set(sp.playerId, [...(splitsOf.get(sp.playerId) ?? []), sp])
+
+  return players
+    .map((p) => {
+      const session = sessionOf.get(p.id)
+      const mine = splitsOf.get(p.id) ?? []
+      return {
+        playerId: p.id,
+        name: p.name,
+        rosterId: p.rosterId,
+        device: p.device ?? ('unknown' as const),
+        status: session?.status ?? ('not_started' as const),
+        found: mine.length,
+        elapsedMs: session ? elapsedMsOf(session, nowMs) : 0,
+        scoreMs: session?.status === 'complete' ? session.scoreMs : null,
+        hintsTaken: mine.reduce((n, sp) => n + sp.hintsUsed, 0),
+      }
+    })
+    .sort((a, b) => b.found - a.found || a.elapsedMs - b.elapsedMs)
+}
+
+/**
+ * Footfall: how many people actually stood at each place.
+ *
+ * Not an uplift against a baseline — there is no before to compare with — but
+ * a real count of visits to a real location, which is the thing that question
+ * is usually reaching for.
+ */
+function buildVisits(routes: readonly Route[], splits: readonly Split[]): LocationVisits[] {
+  const assigned = new Map<string, number>()
+  for (const r of routes) for (const id of r.stops) assigned.set(id, (assigned.get(id) ?? 0) + 1)
+  const reached = new Map<string, number>()
+  for (const s of splits) reached.set(s.locationId, (reached.get(s.locationId) ?? 0) + 1)
+
+  return [...assigned.entries()]
+    .map(([locationId, sent]) => {
+      const visits = reached.get(locationId) ?? 0
+      return {
+        locationId,
+        name: locationById(locationId)?.name ?? locationId,
+        visits,
+        missed: Math.max(0, sent - visits),
+      }
+    })
+    .sort((a, b) => b.visits - a.visits)
+}
+
 // ------------------------------------------------------------------- public
 
 export function computeAnalytics(input: AnalyticsInput): Analytics {
@@ -366,5 +462,13 @@ export function computeAnalytics(input: AnalyticsInput): Analytics {
         .map((e) => (hasReason(e.payload) ? e.payload.reason : 'player')),
     ).map(({key, count}) => ({reason: key, count})),
     speedFlags: events.filter((e) => e.type === 'speed_flag').length,
+    devices: tally(players.map((p) => p.device ?? 'unknown')).map(({key, count}) => ({
+      // SAFETY: sourced from Player.device, which is one of the three kinds or
+      // null, and null was mapped to 'unknown' above.
+      device: key as DeviceKind | 'unknown',
+      count,
+    })),
+    visits: buildVisits(routes, splits),
+    players: buildPlayers(players, sessions, splits, nowMs),
   }
 }

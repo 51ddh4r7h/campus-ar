@@ -29,6 +29,7 @@ import type {
   GeoSample,
   HintRung,
   ParConstants,
+  DeviceKind,
   Player,
   Route,
   Session,
@@ -132,6 +133,8 @@ export interface CreateBatchInput {
 }
 
 export interface SignupInput {
+  /** The phone they are signing in on, if the browser said. */
+  device?: DeviceKind | null | undefined
   eventCode: string
   /** Roll number — the username. */
   username: string
@@ -140,6 +143,7 @@ export interface SignupInput {
 }
 
 export interface LoginInput {
+  device?: DeviceKind | null | undefined
   eventCode: string
   username: string
   password: string
@@ -513,6 +517,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         rosterId: input.rosterId,
         sessionToken: deps.randomToken(),
         passwordHash: null,
+        device: null,
       }
       const session = await seatPlayer(batch, player, input.pinnedRoute)
       return {player, session}
@@ -601,7 +606,12 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
           throw new EngineError('roster_taken', 'That roll number is already registered — sign in')
         }
         await store.setPlayerPassword(existing.id, hash)
-        await store.putPlayer({...existing, name: input.name.trim(), passwordHash: hash})
+        await store.putPlayer({
+          ...existing,
+          name: input.name.trim(),
+          passwordHash: hash,
+          device: input.device ?? existing.device,
+        })
         const session =
           (await store.getSession(existing.id)) ??
           (await seatPlayer(batch, {...existing, passwordHash: hash}, undefined))
@@ -615,6 +625,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         rosterId: username,
         sessionToken: deps.randomToken(),
         passwordHash: hash,
+        device: input.device ?? null,
       }
       const session = await seatPlayer(batch, player, undefined)
       return {player, session}
@@ -632,8 +643,12 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       if (!(await deps.verifyPassword(input.password, player.passwordHash))) {
         throw new EngineError('bad_password', 'Wrong roll number or password')
       }
+      // Recorded on the way in, not just at signup: someone who signs up on a
+      // laptop and plays on their phone should count as the phone.
+      const seen = input.device ?? player.device
+      if (seen !== player.device) await store.putPlayer({...player, device: seen})
       const session = (await store.getSession(player.id)) ?? (await seatPlayer(batch, player, undefined))
-      return {player, session}
+      return {player: {...player, device: seen}, session}
     },
 
     async startHunt(token: string): Promise<StartHuntResponse> {

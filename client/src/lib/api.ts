@@ -6,6 +6,7 @@
 import type {
   Analytics,
   ClueView,
+  DeviceKind,
   GeoSample,
   HintRung,
   NearbyResult,
@@ -169,14 +170,14 @@ export const api = {
     request<{name: string; status: string; isDemo: boolean}>(`/event/${encodeURIComponent(code)}`),
 
   /** Self-serve signup against a cohort's event code. No admin key. */
-  signup: (body: {eventCode: string; username: string; name: string; password: string}) =>
+  signup: (body: {eventCode: string; username: string; name: string; password: string; device?: DeviceKind}) =>
     request<{batchId: string; sessionToken: string; name: string; stops: string[]}>(
       '/session/signup',
       {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)},
     ),
 
   /** Return visit — roll number + password back for the session token. */
-  login: (body: {eventCode: string; username: string; password: string}) =>
+  login: (body: {eventCode: string; username: string; password: string; device?: DeviceKind}) =>
     request<{batchId: string; sessionToken: string; name: string}>('/session/login', {
       method: 'POST',
       headers: {'content-type': 'application/json'},

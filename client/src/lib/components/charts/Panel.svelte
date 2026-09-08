@@ -15,10 +15,15 @@
     columns: readonly string[]
     rows: ReadonlyArray<readonly string[]>
     wide?: boolean
+    /**
+     * The content is already a table, so the chart/table toggle would offer a
+     * choice between a table and the same table.
+     */
+    plain?: boolean
     children: Snippet
   }
 
-  const {title, subtitle, columns, rows, wide = false, children}: Props = $props()
+  const {title, subtitle, columns, rows, wide = false, plain = false, children}: Props = $props()
 
   let showTable = $state(false)
   const id = `panel-${Math.random().toString(36).slice(2, 8)}`
@@ -30,14 +35,16 @@
       <h2>{title}</h2>
       {#if subtitle}<p>{subtitle}</p>{/if}
     </div>
-    <button
-      class="toggle"
-      aria-expanded={showTable}
-      aria-controls={id}
-      onclick={() => (showTable = !showTable)}
-    >
-      {showTable ? 'Chart' : 'Table'}
-    </button>
+    {#if !plain}
+      <button
+        class="toggle"
+        aria-expanded={showTable}
+        aria-controls={id}
+        onclick={() => (showTable = !showTable)}
+      >
+        {showTable ? 'Chart' : 'Table'}
+      </button>
+    {/if}
   </header>
 
   {#if showTable}

@@ -13,8 +13,18 @@
   interface Props {
     rows: readonly Row[]
     labelWidth?: number
+    /**
+     * What the two sides mean, in the reader's words. Defaulted to par
+     * language because that is where this started, but the dashboard says
+     * "slower than expected" — a legend is no place to teach vocabulary.
+     */
+    legend?: {under: string; level: string; over: string}
   }
-  const {rows, labelWidth = 132}: Props = $props()
+  const {
+    rows,
+    labelWidth = 132,
+    legend = {under: 'Under par', level: 'Level', over: 'Over par'},
+  }: Props = $props()
 
   const UNDER = '#199e70'
   const OVER = '#e66767'
@@ -35,9 +45,9 @@
 
 <div class="wrap" bind:clientWidth={w}>
   <ul class="legend">
-    <li><span class="key" style="background: {UNDER}"></span>Under par</li>
-    <li><span class="key" style="background: {NEUTRAL}"></span>Level</li>
-    <li><span class="key" style="background: {OVER}"></span>Over par</li>
+    <li><span class="key" style="background: {UNDER}"></span>{legend.under}</li>
+    <li><span class="key" style="background: {NEUTRAL}"></span>{legend.level}</li>
+    <li><span class="key" style="background: {OVER}"></span>{legend.over}</li>
   </ul>
 
   {#if w > 0}

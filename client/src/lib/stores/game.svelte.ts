@@ -15,6 +15,7 @@ import {DEFAULT_PAR_CONSTANTS} from '@cmh/shared'
 
 const FREE_VIEWS = DEFAULT_PAR_CONSTANTS.freeViews
 import {api, ApiError} from '../api'
+import {deviceKind} from '../device'
 import {net} from './net.svelte'
 
 const LS_TOKEN = 'cmh.token'
@@ -95,15 +96,20 @@ class Game {
     save(LS_DEMO_STOPS, opts.demoStops ? JSON.stringify(opts.demoStops) : null)
   }
 
-  /** Create an account against a cohort's event code, then hold the session. */
+  /**
+   * Create an account against a cohort's event code, then hold the session.
+   *
+   * The device is attached here rather than by every caller, so there is one
+   * place it can be forgotten and it is not a screen.
+   */
   async signUp(input: {eventCode: string; username: string; name: string; password: string}): Promise<void> {
-    const s = await api.signup(input)
+    const s = await api.signup({...input, device: deviceKind()})
     this.setCredentials(s.sessionToken, s.batchId, s.name, {demo: false})
   }
 
   /** Return visit — roll number + password back for the session. */
   async logIn(input: {eventCode: string; username: string; password: string}): Promise<void> {
-    const s = await api.login(input)
+    const s = await api.login({...input, device: deviceKind()})
     this.setCredentials(s.sessionToken, s.batchId, s.name, {demo: false})
   }
 

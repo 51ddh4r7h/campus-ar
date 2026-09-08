@@ -6,6 +6,7 @@
 
 import type {
   Breadcrumb,
+  DeviceKind,
   GameEvent,
   GameStore,
   Player,
@@ -37,6 +38,7 @@ interface PlayerRow {
   roster_id: string
   session_token: string
   password_hash: string | null
+  device: string | null
 }
 interface RouteRow {
   player_id: string
@@ -88,6 +90,9 @@ const toBatch = (r: BatchRow): StoredBatch => ({
   eventCode: r.event_code,
 })
 
+const isDevice = (v: string | null): v is DeviceKind =>
+  v === 'ios' || v === 'android' || v === 'other'
+
 const toPlayer = (r: PlayerRow): Player => ({
   id: r.id,
   batchId: r.batch_id,
@@ -95,6 +100,10 @@ const toPlayer = (r: PlayerRow): Player => ({
   rosterId: r.roster_id,
   sessionToken: r.session_token,
   passwordHash: r.password_hash,
+  // Anything the column holds that is not one of the three is treated as
+  // unknown rather than trusted — the guard at the boundary only ever writes
+  // those three, but the column predates it.
+  device: isDevice(r.device) ? r.device : null,
 })
 
 const toRoute = (r: RouteRow): Route => ({
@@ -180,11 +189,11 @@ export class D1Store implements GameStore {
   async putPlayer(p: Player): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO player (id, batch_id, name, roster_id, session_token, password_hash)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-         ON CONFLICT(id) DO UPDATE SET name = ?3`,
+        `INSERT INTO player (id, batch_id, name, roster_id, session_token, password_hash, device)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET name = ?3, device = COALESCE(?7, device)`,
       )
-      .bind(p.id, p.batchId, p.name, p.rosterId, p.sessionToken, p.passwordHash)
+      .bind(p.id, p.batchId, p.name, p.rosterId, p.sessionToken, p.passwordHash, p.device)
       .run()
   }
 

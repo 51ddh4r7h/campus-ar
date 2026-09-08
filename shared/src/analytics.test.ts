@@ -19,6 +19,7 @@ const player = (id: string): Player => ({
   rosterId: id,
   sessionToken: `tok-${id}`,
   passwordHash: null,
+  device: null,
 })
 
 const route = (playerId: string, stops: string[]): Route => ({
@@ -202,6 +203,46 @@ describe('analytics — behaviour counts', () => {
 
   it('surfaces arrivals the server thought impossible', () => {
     expect(computeAnalytics(input).speedFlags).toBe(1)
+  })
+})
+
+describe('analytics — the granular view', () => {
+  it('gives one row per player, furthest first', () => {
+    const a = computeAnalytics(input)
+    expect(a.players).toHaveLength(6)
+    expect(a.players[0]!.found).toBeGreaterThanOrEqual(a.players.at(-1)!.found)
+    const never = a.players.find((p) => p.name === 'never')!
+    expect(never.status).toBe('not_started')
+    expect(never.found).toBe(0)
+    expect(never.elapsedMs).toBe(0)
+    // Hints are counted per person, not just in the cohort total.
+    expect(a.players.find((p) => p.name === 'slow')!.hintsTaken).toBe(2)
+  })
+
+  it('reports the device split, with unknown for anyone who never said', () => {
+    const withPhones = {
+      ...input,
+      players: input.players.map((p, i) => ({
+        ...p,
+        device: (i < 3 ? 'android' : i < 5 ? 'ios' : null) as 'android' | 'ios' | null,
+      })),
+    }
+    const a = computeAnalytics(withPhones)
+    expect(a.devices).toEqual([
+      {device: 'android', count: 3},
+      {device: 'ios', count: 2},
+      {device: 'unknown', count: 1},
+    ])
+  })
+
+  it('counts visits to a place, and the people sent who never arrived', () => {
+    const a = computeAnalytics(input)
+    const first = a.visits.find((v) => v.locationId === STOPS[0])!
+    // Everyone was routed through it; five of the six reached it.
+    expect(first.visits).toBe(5)
+    expect(first.missed).toBe(1)
+    // Ordered by how busy the place was.
+    expect(a.visits[0]!.visits).toBeGreaterThanOrEqual(a.visits.at(-1)!.visits)
   })
 })
 

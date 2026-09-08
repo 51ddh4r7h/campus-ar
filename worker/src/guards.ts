@@ -26,17 +26,22 @@ const CreateBatchSchema = v.object({
   eventCode: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(40))),
 })
 
+/** One of three words, or absent. Anything else is simply not recorded. */
+const Device = v.optional(v.picklist(['ios', 'android', 'other'] as const))
+
 const SignupSchema = v.object({
   eventCode: Handle,
   username: Handle,
   name: DisplayName,
   password: Password,
+  device: Device,
 })
 
 const LoginSchema = v.object({
   eventCode: Handle,
   username: Handle,
   password: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+  device: Device,
 })
 
 /** A practice run may pin its route; everything else is server-chosen. */

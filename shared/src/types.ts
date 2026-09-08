@@ -65,9 +65,20 @@ export interface Player {
   /** PBKDF2 string, or null for a player who has not set a password (a
    *  magic-link registration that was never claimed). Never sent to a client. */
   passwordHash: string | null
+  /**
+   * Which kind of phone they played on, as reported once at sign-in.
+   *
+   * Deliberately one of three words rather than a user-agent string: the
+   * question worth answering is "which platform do we test next time", and
+   * everything finer than that is a fingerprint we have no use for. Null for
+   * players who predate this, or whose browser did not say.
+   */
+  device: DeviceKind | null
 }
 
 /** A player's assigned path: five location ids in play order, with par split out. */
+export type DeviceKind = 'ios' | 'android' | 'other'
+
 export interface Route {
   playerId: string
   stops: [string, string, string, string, string]
