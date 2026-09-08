@@ -24,8 +24,22 @@
   --signal-cold: #6fa8c7;
   --signal-hot: #e8a54c;
 
-  --font-ui: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
-  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  /**
+   * Two faces doing different jobs.
+   *
+   * Bagnard is the voice: a garalde serif with one weight, used large, for the
+   * lines that carry the game's character. Inter is the workhorse behind it —
+   * drawn for interfaces at small sizes, which is what a 13px label on a phone
+   * held up outdoors actually needs, and it has the 400-700 range the UI uses
+   * where Bagnard has none.
+   *
+   * The fallbacks matter more than usual here: Bagnard is 149 glyphs, so
+   * anything outside basic Latin (an em dash in an event's name, say) is drawn
+   * by Georgia instead. Keeping a real serif behind it makes that substitution
+   * quiet rather than jarring.
+   */
+  --font-ui: 'Inter Variable', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Bagnard', Georgia, 'Times New Roman', serif;
   --font-mono: ui-monospace, "SF Mono", "Roboto Mono", "Courier New", monospace;
 
   --step-13: 0.8125rem;

@@ -103,7 +103,7 @@
   <!-- An abandoned hunt is not a finished one, and saying so is kinder than a
        congratulation nobody earned. The whole-campus map stays behind `wrapped`
        for the same reason: it is the reward for going the distance. -->
-  <h1>{game.abandoned ? 'Called it a day.' : "That's a wrap."}</h1>
+  <h1>{game.abandoned ? 'Called it a day.' : 'That’s a wrap.'}</h1>
   {#if game.abandoned}
     <p class="stopped">
       {splits.length === 0

@@ -228,8 +228,12 @@
     margin-bottom: var(--sp-2);
   }
   h1 {
+    /* The one screen whose heading was still set in the interface face, which
+       only showed once the display face had a voice of its own. Bagnard has a
+       single weight, so 600 would ask the browser to fake a bold. */
+    font-family: var(--font-display);
     font-size: var(--step-28);
-    font-weight: 600;
+    font-weight: 400;
     margin: 0 0 var(--sp-3);
   }
   p {

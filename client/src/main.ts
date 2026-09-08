@@ -1,4 +1,4 @@
-import '@fontsource/instrument-serif/latin-400.css'
+import './fonts.css'
 import './tokens.css'
 import {mount} from 'svelte'
 import App from './App.svelte'

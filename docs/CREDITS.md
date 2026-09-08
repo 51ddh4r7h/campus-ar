@@ -90,3 +90,33 @@ Most of the library needs a cursor — `Magnet`, `GlareHover`, `SplashCursor`,
 WebGL backgrounds were declined for the same reason the proximity ring avoids a
 second WebGL context: three.js is already a lazy chunk for the AR stage and the
 entry screen is the worst place to pay for another one.
+
+## Typefaces
+
+**Bagnard** — the display face, on every heading. Drawn by Sébastien Sanfilippo
+from graffiti cut by an anonymous prisoner of the Napoleonic wars, which is
+also why it suits a game about a campus with a history under it.
+
+- Source: <https://github.com/sebsan/Bagnard>
+- Licence: SIL Open Font License 1.1 — full text in
+  `docs/licences/Bagnard-OFL.txt`, which the OFL requires to travel with the
+  font wherever it goes.
+- No Reserved Font Name is declared, so converting the shipped `Bagnard.otf`
+  to WOFF2 (`client/src/assets/fonts/Bagnard.woff2`, done with `wawoff2`, no
+  change to the outlines) keeps the original name legitimately.
+- One weight, no italic, 149 glyphs. That is the whole family. Anything
+  outside basic Latin — an em dash in an organiser's event name, say — is
+  drawn by the Georgia fallback instead, which is why the display stack keeps
+  a real serif behind it.
+
+**Inter Variable** — the interface face, everywhere else. Installed from
+`@fontsource-variable/inter`; only the Latin subset is declared, in
+`client/src/fonts.css`, so the six other subsets the package ships never reach
+the build.
+
+- Licence: SIL Open Font License 1.1 (bundled in the npm package as
+  `node_modules/@fontsource-variable/inter/LICENSE`).
+
+The monospace role — timers, scores, roll numbers, the uppercase kickers — is
+still the platform's own (`ui-monospace` → SF Mono on iOS, Roboto Mono on
+Android). It costs nothing to download and both are good.
