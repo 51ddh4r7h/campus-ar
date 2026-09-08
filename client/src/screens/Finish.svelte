@@ -70,6 +70,15 @@
   /** Rung 5: the half of campus a randomised route never sent you to. */
   const wrapped = $derived(game.complete)
 
+  /**
+   * Ran out of time, as opposed to choosing to stop.
+   *
+   * Both end as `abandoned`, so the clock is what tells them apart: a hunt
+   * that timed out has used every second of the limit and has none left, and
+   * one somebody ended at eight minutes has seventeen still on it.
+   */
+  const timedOut = $derived(game.abandoned && clock.remainingMs === 0)
+
   /** A shared phone needs a way to hand the next player a clean slate. */
   function signOut() {
     game.reset()
@@ -103,12 +112,15 @@
   <!-- An abandoned hunt is not a finished one, and saying so is kinder than a
        congratulation nobody earned. The whole-campus map stays behind `wrapped`
        for the same reason: it is the reward for going the distance. -->
-  <h1>{game.abandoned ? 'Called it a day.' : 'That’s a wrap.'}</h1>
+  <h1>{timedOut ? 'Time’s up.' : game.abandoned ? 'Called it a day.' : 'That’s a wrap.'}</h1>
   {#if game.abandoned}
     <p class="stopped">
-      {splits.length === 0
-        ? `You stopped before finding a scene, at level 1 of ${LEVEL_COUNT}.`
-        : `You stopped at level ${splits.length + 1} of ${LEVEL_COUNT}, having found ${splits.length} of them.`}
+      {#if splits.length === 0}
+        {timedOut ? 'Time ran out' : 'You stopped'} before finding a scene.
+      {:else}
+        {timedOut ? 'Time ran out' : 'You stopped'} at level {splits.length + 1} of {LEVEL_COUNT},
+        having found {splits.length} of them.
+      {/if}
     </p>
   {/if}
 
@@ -120,7 +132,11 @@
     {#if game.abandoned}
       <p class="label">Time played</p>
       <p class="big">{formatMarquee(clock.elapsedMs)}</p>
-      <p class="raw">Not ranked — the board is for finished hunts.</p>
+      <p class="raw">
+        {splits.length === 0
+          ? 'On the board below everyone who found something.'
+          : `On the board on ${splits.length} found — below anyone who finished.`}
+      </p>
     {:else}
       <p class="label">{score <= 0 ? 'Under par by' : 'Over par by'}</p>
       <p class="big">{formatMarquee(Math.abs(score))}</p>

@@ -8,6 +8,7 @@
   import {camera} from './lib/stores/camera.svelte'
   import {probe} from './lib/stores/probe.svelte'
   import {standings} from './lib/stores/standings.svelte'
+  import {clock} from './lib/stores/clock.svelte'
   import {haptics} from './lib/haptics'
   import {playerLink, adminRequested, dashboardRequested, demoAllowed} from './lib/mode'
   import {POLLING} from '@cmh/shared'
@@ -128,6 +129,31 @@
     if (game.finished) nav.go('finish')
     else if (game.paused) nav.go('ready')
   }
+
+  /**
+   * Zero on the clock ends the hunt on screen, signal or no signal.
+   *
+   * The server is still the authority: it closes the session at the deadline
+   * and scores it there, whoever asks and whenever. But it can only do that
+   * when it is asked, and a player standing in a wifi dead-spot at 25:00 was
+   * left on the search screen with a dead 0:00 clock, still hunting for a
+   * level that had already stopped counting — then yanked to the wrap the
+   * moment signal came back.
+   *
+   * So the client stops presenting a hunt the moment its own countdown runs
+   * out. It asks the server on the way, but does not wait for permission to
+   * stop lying.
+   */
+  let timeUpHandled = $state(false)
+  $effect(() => {
+    if (clock.remainingMs > 0) {
+      timeUpHandled = false
+      return
+    }
+    if (timeUpHandled || !game.inProgress) return
+    timeUpHandled = true
+    void game.refresh().finally(() => nav.go('finish'))
+  })
 
   const PLAYING: readonly ScreenName[] = ['clue', 'search', 'reveal']
   /**

@@ -6,7 +6,7 @@
 
 import {haversineM, type LatLng} from './geo'
 import type {GameLocation, ParConstants, Session} from './types'
-import {LEVEL_COUNT} from './config'
+import {HUNT_LIMIT_MS, LEVEL_COUNT} from './config'
 
 /** Expected walking time between two points, ms. */
 export const walkParMs = (from: LatLng, to: LatLng, walkSpeedMps: number): number =>
@@ -75,3 +75,15 @@ export const elapsedMsOf = (
   const openPause = session.pausedAtMs === null ? 0 : Math.max(0, end - session.pausedAtMs)
   return Math.max(0, end - session.startTsMs - session.pausedTotalMs - openPause)
 }
+
+/**
+ * Time left on the clock, floored at zero.
+ *
+ * The countdown the player sees. Derived from the same elapsed figure the
+ * server scores with, so the number on screen and the deadline the server
+ * enforces cannot drift apart.
+ */
+export const remainingMsOf = (
+  session: Pick<Session, 'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs'>,
+  nowMs: number,
+): number => Math.max(0, HUNT_LIMIT_MS - elapsedMsOf(session, nowMs))

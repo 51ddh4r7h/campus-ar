@@ -4,7 +4,7 @@
  * Ticks the display ~4×/s.
  */
 
-import {elapsedMsOf} from '@cmh/shared'
+import {HUNT_LIMIT_MS, elapsedMsOf, remainingMsOf} from '@cmh/shared'
 import {game} from './game.svelte'
 
 class Clock {
@@ -22,6 +22,23 @@ class Clock {
   get elapsedMs(): number {
     const s = game.session
     return s ? elapsedMsOf(s, this.now) : 0
+  }
+
+  /**
+   * What the player is shown: time left, not time spent.
+   *
+   * Derived from the same elapsed figure the server scores with, so the number
+   * on screen and the deadline the server enforces cannot drift apart. Floors
+   * at zero rather than going negative — the server ends the hunt there.
+   */
+  get remainingMs(): number {
+    const s = game.session
+    return s ? remainingMsOf(s, this.now) : HUNT_LIMIT_MS
+  }
+
+  /** The last five minutes, where the number stops being background. */
+  get lowOnTime(): boolean {
+    return game.inProgress && this.remainingMs <= 5 * 60_000
   }
 }
 

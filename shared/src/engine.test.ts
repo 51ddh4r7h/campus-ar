@@ -1,5 +1,5 @@
 import {beforeEach, describe, expect, it} from 'vitest'
-import {SESSION_MAX_MS, VALIDATION} from './config'
+import {HUNT_LIMIT_MS, VALIDATION} from './config'
 import {locationById} from './content'
 import {createEngine, type EngineDeps} from './engine'
 import {elapsedMsOf} from './scoring'
@@ -237,7 +237,7 @@ describe('engine — standings', () => {
     let level = s2.clue.level
     const route2 = (await store.getRoute(p2.player.id))!
     while (level <= 5) {
-      deps.advance(8 * 60_000)
+      deps.advance(4 * 60_000)
       const res = await engine.arrive(
         p2.player.sessionToken,
         parkedAt(locationById(route2.stops[level - 1]!)!, deps.now()),
@@ -574,27 +574,82 @@ describe('engine — sessions and batches that outlive their event', () => {
     return {batch, player}
   }
 
-  it('closes a hunt that has been open longer than any real one', async () => {
+  it('ends a hunt the moment the time limit is reached', async () => {
     const {player} = await playing()
-    deps.advance(SESSION_MAX_MS + 60_000)
+    deps.advance(HUNT_LIMIT_MS + 60_000)
     // Any call is enough — the check sits at the auth boundary.
     const state = await engine.getState(player.sessionToken)
     expect(state.session.status).toBe('abandoned')
     expect(state.session.endTsMs).not.toBeNull()
   })
 
-  it('leaves a hunt inside the cap alone', async () => {
+  it('leaves a hunt inside the limit alone', async () => {
     const {player} = await playing('stale-b')
-    deps.advance(SESSION_MAX_MS - 60_000)
+    deps.advance(HUNT_LIMIT_MS - 60_000)
     const state = await engine.getState(player.sessionToken)
     expect(state.session.status).toBe('in_progress')
   })
 
-  it('does not count paused time towards the cap', async () => {
+  it('records the deadline as the end, not whenever the player reopened the app', async () => {
+    const {player} = await playing('stale-d')
+    const startedAt = deps.now()
+    // Runs out, then the phone goes in a pocket for an hour.
+    deps.advance(HUNT_LIMIT_MS + 60 * 60_000)
+
+    const state = await engine.getState(player.sessionToken)
+
+    expect(state.session.status).toBe('abandoned')
+    // Ended at 25:00 exactly — not at the 85 minutes of wall clock that passed.
+    expect(state.session.endTsMs).toBe(startedAt + HUNT_LIMIT_MS)
+    expect(elapsedMsOf(state.session, deps.now())).toBe(HUNT_LIMIT_MS)
+  })
+
+  it('gives back the time a player spent paused', async () => {
+    const {player} = await playing('stale-e')
+    deps.advance(10 * 60_000)
+    await engine.pause(player.sessionToken)
+    deps.advance(30 * 60_000) // half an hour stopped
+    await engine.resume(player.sessionToken)
+
+    // 10 minutes used, so 15 remain despite 40 minutes of wall clock.
+    deps.advance(14 * 60_000)
+    expect((await engine.getState(player.sessionToken)).session.status).toBe('in_progress')
+    deps.advance(2 * 60_000)
+    expect((await engine.getState(player.sessionToken)).session.status).toBe('abandoned')
+  })
+
+  it('ranks a player who ran out of time on how far they got', async () => {
+    const batch = await engine.createBatch({name: 'Timed', eventCode: 'timed-1'})
+    const far = (await engine.registerPlayer({batchId: batch.id, name: 'Far', rosterId: 'r1'})).player
+    const near = (await engine.registerPlayer({batchId: batch.id, name: 'Near', rosterId: 'r2'})).player
+
+    for (const p of [far, near]) await engine.startHunt(p.sessionToken)
+    const stops = async (id: string) => (await store.getRoute(id))!.stops
+    // Far reaches two locations, Near only one; then both run out.
+    for (const [p, levels] of [[far, 2] as const, [near, 1] as const]) {
+      for (let i = 0; i < levels; i++) {
+        deps.advance(3 * 60_000)
+        await engine.arrive(p.sessionToken, parkedAt(locationById((await stops(p.id))[i]!)!, deps.now()))
+      }
+    }
+    deps.advance(HUNT_LIMIT_MS)
+    for (const p of [far, near]) await engine.getState(p.sessionToken)
+
+    const rows = await engine.standings(batch.id)
+    // Both are on the board at all — that is the point — and the one who got
+    // further is above the one who did not.
+    expect(rows.map((r) => r.playerName)).toEqual(['Far', 'Near'])
+    // Scored on progress, not on a par they never played to the end of.
+    expect(rows[0]!.scoreMs).toBeNull()
+    expect(rows[0]!.level).toBe(3)
+    expect(rows[1]!.level).toBe(2)
+  })
+
+  it('does not count paused time towards the limit', async () => {
     const {player} = await playing('stale-c')
     deps.advance(60_000)
     await engine.pause(player.sessionToken)
-    deps.advance(SESSION_MAX_MS * 2) // a very long lunch
+    deps.advance(HUNT_LIMIT_MS * 2) // a very long lunch
     const s = await engine.resume(player.sessionToken)
     expect(s.status).toBe('in_progress')
   })

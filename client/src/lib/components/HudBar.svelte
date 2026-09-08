@@ -41,7 +41,7 @@
     aria-label="Pause the hunt"
   >
     <Icon name="timer" size={15} />
-    <span>{formatMarquee(clock.elapsedMs)}</span>
+    <span class:low={clock.lowOnTime}>{formatMarquee(clock.remainingMs)}</span>
     {#if game.inProgress}<span class="bars" aria-hidden="true"></span>{/if}
   </button>
   <div class="chip">
@@ -93,5 +93,11 @@
     font-size: var(--step-15);
     font-variant-numeric: tabular-nums;
     color: var(--amber);
+  }
+  /* The clock is background information for twenty minutes and then suddenly
+     is not. Written as `.timer span.low` because `.timer span` above already
+     claims the colour, and a bare `.low` quietly loses to it. */
+  .timer span.low {
+    color: var(--alert);
   }
 </style>

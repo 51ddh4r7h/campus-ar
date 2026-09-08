@@ -76,16 +76,18 @@ export const POLLING = {
 } as const
 
 /**
- * How long a hunt may stay open before it closes itself.
+ * How long a player has, once they press START.
  *
- * A run takes about forty-five minutes. Six hours is far past any honest
- * variation and well inside "this person walked off and shut their phone",
- * which is the case this exists for: without a cap those sessions stayed
- * `in_progress` forever, their clocks counting for days, and the only way out
- * was an organiser editing the database. A session past this is closed the next
- * time it is touched, scored on whatever was actually reached.
+ * A hard limit, not a suggestion: the clock counts down on screen, and the
+ * server ends the hunt at the deadline whether or not the app is still open.
+ * Paused time does not count against it — a player who stops for five minutes
+ * still gets their twenty-five.
+ *
+ * This is also the safety net that used to be a six-hour cap. A session left
+ * running can now only ever be twenty-five minutes long, so there is nothing
+ * left to run away.
  */
-export const SESSION_MAX_MS = 6 * 60 * 60 * 1000
+export const HUNT_LIMIT_MS = 25 * 60 * 1000
 
 /** How long a player must be stuck on a level before each hint rung unlocks. */
 export const HINT_GATES = {

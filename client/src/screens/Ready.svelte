@@ -131,7 +131,7 @@
       <span>{starting ? '…' : resuming ? 'RESUME' : 'START'}</span>
     </button>
     {#if resuming}
-      <p class="sub mono">{formatMarquee(clock.elapsedMs)}</p>
+      <p class="sub mono">{formatMarquee(clock.remainingMs)} left</p>
     {:else}
       <p class="sub">Your timer starts the moment you tap.</p>
     {/if}

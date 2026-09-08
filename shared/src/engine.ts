@@ -14,7 +14,7 @@ import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool, playableOrder, type RoutePool} from './routes'
 import {assignRoute} from './routes'
 import {elapsedMsOf, routePar, sessionScoreMs} from './scoring'
-import {SESSION_MAX_MS, VALIDATION} from './config'
+import {HUNT_LIMIT_MS, VALIDATION} from './config'
 import {haversineM} from './geo'
 import {bandFromHeat, heatFromDistance} from './heat'
 import {bonusViews, hasHintCredit, perkForLevel} from './perks'
@@ -291,11 +291,14 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     route: Route,
   ): Promise<Session> => {
     const now = deps.now()
-    if (!isStale(session, now)) return session
-    const done = await endSession(session, route, now)
+    if (!isOutOfTime(session, now)) return session
+    // Ended at the deadline, not at the moment they happened to reopen the
+    // app. Otherwise a player who closed their phone at 24 minutes and came
+    // back an hour later would be recorded as having taken an hour.
+    const done = await endSession(session, route, deadlineOf(session))
     await event(session.playerId, 'hunt_abandoned', {
       level: session.currentLevel,
-      reason: 'stale',
+      reason: 'time_limit',
     })
     return done
   }
@@ -322,9 +325,19 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
   }
 
   /** Still running, and running for longer than any real hunt takes. */
-  const isStale = (session: Session, nowMs: number): boolean =>
+  /**
+   * The wall-clock moment this hunt runs out.
+   *
+   * Elapsed time excludes pauses, so the deadline moves later by however long
+   * the player has been stopped. A paused clock cannot reach the limit at all,
+   * which is why this does not need to consider a pause in progress.
+   */
+  const deadlineOf = (session: Session): number =>
+    (session.startTsMs ?? 0) + HUNT_LIMIT_MS + session.pausedTotalMs
+
+  const isOutOfTime = (session: Session, nowMs: number): boolean =>
     (session.status === 'in_progress' || session.status === 'paused') &&
-    elapsedMsOf(session, nowMs) > SESSION_MAX_MS
+    elapsedMsOf(session, nowMs) >= HUNT_LIMIT_MS
 
   /** A short, URL-safe signup code from a batch name, plus 3 hex for uniqueness. */
   const codeFromName = (name: string): string => {
@@ -920,7 +933,18 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       const nameById = new Map(players.map((p) => [p.id, p.name]))
       const now = deps.now()
       const sorted = sessions
-        .filter((s) => s.status === 'complete' || s.status === 'in_progress' || s.status === 'paused')
+        // `abandoned` belongs here now. With a hard time limit, running out is
+        // an ordinary way to finish, and a board that hid everyone it happened
+        // to would be mostly empty. The sort below already puts them under the
+        // finishers and ranks them on how far they got, not on a score that was
+        // measured against a route they never completed.
+        .filter(
+          (s) =>
+            s.status === 'complete' ||
+            s.status === 'in_progress' ||
+            s.status === 'paused' ||
+            s.status === 'abandoned',
+        )
         .sort((a, b) => {
           const aDone = a.status === 'complete'
           const bDone = b.status === 'complete'
