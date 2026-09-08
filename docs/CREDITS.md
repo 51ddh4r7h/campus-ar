@@ -130,25 +130,33 @@ use here without either problem.
 
 ## Companion sprite — Cat Pack (Mochi)
 
-The pixel cat on the search screen, `client/src/assets/sprites/cat-idle.png`,
-is the `Idle.png` sheet from ToffeeCraft's free Cat Asset Pack —
-<https://toffeecraft.itch.io/cat-pack>. 320x32, ten 32px frames, unmodified.
+The pixel cat on the search screen. ToffeeCraft's Cat Asset Pack —
+<https://toffeecraft.itch.io/cat-pack> — **paid edition**, which the creator
+licenses "for commercial or personal use". Neither edition permits
+redistributing the raw sprites as assets; ours are compiled into an
+application, which is the permitted use rather than a download.
 
-**This is the free pack, which the creator licenses for personal /
-non-commercial use.** Campus Movie Hunt is a student proof of concept: it is
-not sold, carries no advertising, and runs only for an induction on one
-campus, so it sits inside those terms. Two things follow from that, and they
-matter if the project ever changes:
+The free edition previously used here was non-commercial and has been removed;
+every sprite now comes from the paid pack, so there is one set of terms
+covering all of them.
 
-- If this is ever sold, sponsored, or shipped as a product, buy the paid pack
-  first — it grants commercial use for a few dollars and removes the question
-  entirely.
-- Neither pack permits redistributing the raw sprites as assets. Ours is
-  compiled into an application, which is the permitted use, not a download.
+Five sheets in `client/src/assets/sprites/`, unmodified, 32px cells:
 
-The sheet is the only animation in the free pack — one idle loop, no walk and
-no second emotion — so the heat bands are expressed by how it is played
-(speed, opacity, a bounce and a glow) rather than by different drawings. The
-paid pack adds sleepy, dancing, eating and licking, which would map onto the
-bands directly; swapping them in is a change to `BANDS` in
-`CompanionCat.svelte` and a few more files.
+| File | Source | Frames | Band |
+|---|---|---|---|
+| `cat-sleep.png` | `Sleep.png` | 4 | Cold |
+| `cat-sleepy.png` | `Sleepy.png` | 8 | Chilly |
+| `cat-idle.png` | `Idle.png` | 10 | Warm |
+| `cat-excited.png` | `Excited.png` | 12 | Hot |
+| `cat-dance.png` | `Dance.png` | 4 | You're close |
+
+Together about 8 KB, and small enough that Vite inlines them into the bundle
+as data URIs — so a band change never waits on a network fetch.
+
+The pack ships more than these (`Surprised`, `Waiting`, `Cry`, `Sad`,
+`LayDown`, `Eating`, `Idle2`, `Box`, `DeadCat`). They are not used yet;
+`STATES` in `CompanionCat.svelte` is where they would go.
+
+The download carries no licence file — the terms above are the ones stated on
+the itch.io page at the time of purchase. Worth keeping the receipt with the
+project.

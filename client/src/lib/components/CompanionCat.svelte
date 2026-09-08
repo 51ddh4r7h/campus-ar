@@ -2,19 +2,24 @@
   /**
    * A companion that reacts to how close you are.
    *
-   * One 320x32 sheet — ten frames of a cat sitting, tail going — driven from
-   * the heat band. There is only the one animation in the free pack, so the
-   * emotion is carried by how it is played rather than by different drawings:
-   * the flick slows to almost nothing when you are cold, quickens as you warm,
-   * and breaks into a bounce with an amber glow on the last band. Swapping in
-   * real sleepy/dancing sheets later is a change to `BANDS` and two files.
+   * Five drawn animations from the heat band, not one loop played at five
+   * speeds: the cat is asleep when there is nothing near, stirs, sits up and
+   * watches, gets to its feet, and dances when you are on top of a scene.
    *
    * Pixel art on purpose. At 32px over a live camera feed it reads as a HUD
    * overlay rather than something pretending to be in the scene, which is what
    * keeps it from fighting the photographic illusion the rest of the app is
    * built on.
+   *
+   * Adding or reordering states is a change to `STATES` and `BY_BAND` and
+   * nothing else — the drawing below does not know what any of them mean.
    */
   import {BAND_WORDS, type HeatBand} from '@cmh/shared'
+  import sleepSheet from '../../assets/sprites/cat-sleep.png'
+  import sleepySheet from '../../assets/sprites/cat-sleepy.png'
+  import idleSheet from '../../assets/sprites/cat-idle.png'
+  import excitedSheet from '../../assets/sprites/cat-excited.png'
+  import danceSheet from '../../assets/sprites/cat-dance.png'
 
   interface Props {
     band: HeatBand
@@ -32,7 +37,31 @@
   }
   const {band, preview = false}: Props = $props()
 
-  /** Long enough to watch the slowest loop (2.6s) come round twice. */
+  /** Cell size on screen. The sheets are 32px cells, so this is a 3x zoom. */
+  const CELL = 96
+
+  interface CatState {
+    src: string
+    /** Cells across the sheet. They differ per animation. */
+    frames: number
+    /** One full pass, seconds. */
+    loop: number
+    dim: number
+    glow: number
+  }
+
+  const STATES = {
+    sleep: {src: sleepSheet, frames: 4, loop: 2.8, dim: 0.55, glow: 0},
+    sleepy: {src: sleepySheet, frames: 8, loop: 2.4, dim: 0.72, glow: 0},
+    idle: {src: idleSheet, frames: 10, loop: 1.6, dim: 0.9, glow: 0},
+    excited: {src: excitedSheet, frames: 12, loop: 0.95, dim: 1, glow: 0.4},
+    dance: {src: danceSheet, frames: 4, loop: 0.55, dim: 1, glow: 0.85},
+  } as const satisfies Record<string, CatState>
+
+  /** Cold, Chilly, Warm, Hot, You're close. */
+  const BY_BAND = ['sleep', 'sleepy', 'idle', 'excited', 'dance'] as const
+
+  /** Long enough to watch the slowest loop come round twice. */
   const HOLD_MS = 4500
 
   let previewBand = $state<HeatBand>(0)
@@ -47,34 +76,29 @@
   })
 
   const shown = $derived(preview ? previewBand : band)
-
-  /** Cell size on screen. The sheet is 32px cells, so this is a 3x zoom. */
-  const CELL = 96
-  const FRAMES = 10
-
-  /** How the one idle loop is played at each band. */
-  const BANDS = [
-    {loop: 2.6, opacity: 0.5, grey: 0.55, bounce: 0, glow: 0},
-    {loop: 1.9, opacity: 0.68, grey: 0.3, bounce: 0, glow: 0},
-    {loop: 1.3, opacity: 0.85, grey: 0.1, bounce: 0, glow: 0},
-    {loop: 0.85, opacity: 1, grey: 0, bounce: 0.95, glow: 0.35},
-    {loop: 0.5, opacity: 1, grey: 0, bounce: 0.45, glow: 0.8},
-  ] as const
-
-  const look = $derived(BANDS[shown] ?? BANDS[0])
+  const cat = $derived(STATES[BY_BAND[shown] ?? 'sleep'])
 </script>
+
+<!-- The sheets are a couple of kilobytes each and Vite inlines them, so every
+     state is already in the document when the band changes. Without that a
+     first crossing would show a blank square while the browser fetched. -->
+<div class="preload" aria-hidden="true">
+  {#each Object.values(STATES) as s (s.src)}
+    <img src={s.src} alt="" />
+  {/each}
+</div>
 
 <div
   class="cat"
-  class:bouncing={look.bounce > 0}
   style="
     --cell: {CELL}px;
-    --sheet: {CELL * FRAMES}px;
-    --loop: {look.loop}s;
-    --bounce: {look.bounce}s;
-    --opacity: {look.opacity};
-    --grey: {look.grey};
-    --glow: {look.glow};
+    --sheet: {CELL * cat.frames}px;
+    --frames: {cat.frames};
+    --loop: {cat.loop}s;
+    --dim: {cat.dim};
+    --glow: {cat.glow};
+    background-image: url('{cat.src}');
+    animation-timing-function: steps({cat.frames});
   "
   aria-hidden="true"
 ></div>
@@ -84,6 +108,12 @@
 {/if}
 
 <style>
+  .preload {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
   .cat {
     position: fixed;
     left: var(--edge);
@@ -92,24 +122,17 @@
     z-index: 14;
     width: var(--cell);
     height: var(--cell);
-    background-image: url('../../assets/sprites/cat-idle.png');
     background-repeat: no-repeat;
     background-size: var(--sheet) var(--cell);
     /* Keep the pixels square — a smoothed 32px sprite turns to mush. */
     image-rendering: pixelated;
     pointer-events: none;
-    opacity: var(--opacity);
-    filter: grayscale(var(--grey))
-      drop-shadow(0 0 calc(var(--glow) * 10px) rgba(232, 165, 76, var(--glow)));
+    opacity: var(--dim);
+    filter: drop-shadow(0 0 calc(var(--glow) * 10px) rgba(232, 165, 76, var(--glow)));
     transition:
       opacity var(--dur-standard) ease,
       filter var(--dur-standard) ease;
-    animation: flick var(--loop) steps(10) infinite;
-  }
-  .cat.bouncing {
-    animation:
-      flick var(--loop) steps(10) infinite,
-      hop var(--bounce) var(--ease-spring) infinite;
+    animation: flick var(--loop) infinite;
   }
 
   @keyframes flick {
@@ -117,22 +140,11 @@
       background-position-x: calc(-1 * var(--sheet));
     }
   }
-  @keyframes hop {
-    0%,
-    100% {
-      translate: 0 0;
-    }
-    45% {
-      translate: 0 -14%;
-    }
-  }
 
   .preview-label {
     position: fixed;
     left: var(--edge);
-    /* Above the cat, not below it: the action bar owns the bottom of this
-       screen and was covering the caption entirely. 92px clears the bar, 96px
-       is the sprite, and the rest is a gap. */
+    /* Above the cat: below it, the action bar covered it completely. */
     bottom: calc(var(--safe-bottom) + 92px + 96px + 6px);
     z-index: 14;
     margin: 0;
@@ -146,10 +158,9 @@
     white-space: nowrap;
   }
 
-  /* Still, but present — the band still reads through opacity and the glow. */
+  /* Still, but present — the band still reads through the pose and the glow. */
   @media (prefers-reduced-motion: reduce) {
-    .cat,
-    .cat.bouncing {
+    .cat {
       animation: none;
       background-position-x: 0;
     }
