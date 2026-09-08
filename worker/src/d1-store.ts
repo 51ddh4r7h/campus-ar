@@ -330,6 +330,27 @@ export class D1Store implements GameStore {
     return results.map(toSplit)
   }
 
+  /**
+   * Children first, batch last.
+   *
+   * Every child table keys off `player_id`, so each delete re-selects the
+   * batch's players rather than relying on cascade — D1 does not enforce
+   * foreign keys by default, and a half-deleted batch leaves orphan rows that
+   * nothing will ever look at again.
+   */
+  async deleteBatch(batchId: string): Promise<void> {
+    const players = 'SELECT id FROM player WHERE batch_id = ?1'
+    await this.db.batch([
+      this.db.prepare(`DELETE FROM breadcrumb WHERE player_id IN (${players})`).bind(batchId),
+      this.db.prepare(`DELETE FROM game_event WHERE player_id IN (${players})`).bind(batchId),
+      this.db.prepare(`DELETE FROM split WHERE player_id IN (${players})`).bind(batchId),
+      this.db.prepare(`DELETE FROM session WHERE player_id IN (${players})`).bind(batchId),
+      this.db.prepare(`DELETE FROM route WHERE player_id IN (${players})`).bind(batchId),
+      this.db.prepare('DELETE FROM player WHERE batch_id = ?1').bind(batchId),
+      this.db.prepare('DELETE FROM batch WHERE id = ?1').bind(batchId),
+    ])
+  }
+
   async listRoutes(batchId: string): Promise<Route[]> {
     const {results} = await this.db
       .prepare(

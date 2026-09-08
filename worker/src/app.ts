@@ -220,6 +220,9 @@ export const createApp = (
     requireAdmin(c.env, c.req.header('X-Admin-Key'))
     const store = makeStore(c.env)
     const batchId = c.req.param('id')
+    // A report for a batch that no longer exists is a 404, not an empty one:
+    // every figure would read zero and look like a cohort that did nothing.
+    if (!(await store.getBatch(batchId))) return c.json({error: 'batch_not_found'}, 404)
     const [players, sessions, routes, splits, events] = await Promise.all([
       store.listPlayers(batchId),
       store.listSessions(batchId),
@@ -262,6 +265,21 @@ export const createApp = (
   })
 
   /** Shut a batch down — stops signups and closes out any hunt still running. */
+  /**
+   * Bulk-remove practice batches. Declared before the `:id` delete so the
+   * literal path wins the match.
+   */
+  app.delete('/admin/batches/demo', async (c) => {
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    return c.json(await engineFor(c.env).deleteDemoBatches())
+  })
+
+  /** Remove one batch and everything recorded against it. Irreversible. */
+  app.delete('/admin/batches/:id', async (c) => {
+    requireAdmin(c.env, c.req.header('X-Admin-Key'))
+    return c.json(await engineFor(c.env).deleteBatch(c.req.param('id')))
+  })
+
   app.post('/admin/batches/:id/close', async (c) => {
     requireAdmin(c.env, c.req.header('X-Admin-Key'))
     return c.json(await engineFor(c.env).closeBatch(c.req.param('id')))

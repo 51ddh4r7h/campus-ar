@@ -23,6 +23,12 @@ export interface GameStore {
   getBatchByCode(code: string): Promise<StoredBatch | null>
   /** Newest first. Organiser console only. */
   listBatches(): Promise<StoredBatch[]>
+  /**
+   * Remove a batch and everything hanging off it — players, routes, sessions,
+   * splits, events, breadcrumbs. Irreversible, and the storage layer's job
+   * because only it knows every table a player is referenced from.
+   */
+  deleteBatch(batchId: string): Promise<void>
 
   putPlayer(player: Player): Promise<void>
   getPlayer(id: string): Promise<Player | null>
@@ -85,6 +91,20 @@ export class InMemoryStore implements GameStore {
   }
   async listBatches(): Promise<StoredBatch[]> {
     return [...this.batches.values()].sort((a, b) => b.createdAtMs - a.createdAtMs)
+  }
+  async deleteBatch(batchId: string): Promise<void> {
+    const ids = new Set(
+      [...this.players.values()].filter((p) => p.batchId === batchId).map((p) => p.id),
+    )
+    for (const id of ids) {
+      this.players.delete(id)
+      this.routes.delete(id)
+      this.sessions.delete(id)
+    }
+    this.splits = this.splits.filter((s) => !ids.has(s.playerId))
+    this.events = this.events.filter((e) => !ids.has(e.playerId))
+    this.crumbs = this.crumbs.filter((c) => !ids.has(c.playerId))
+    this.batches.delete(batchId)
   }
 
   async putPlayer(player: Player): Promise<void> {

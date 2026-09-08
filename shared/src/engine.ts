@@ -451,6 +451,36 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       return batch
     },
 
+    /**
+     * Delete a batch and everything recorded against it.
+     *
+     * Irreversible, and deliberately not offered to anyone but an organiser
+     * holding the key. Returns what it removed so the console can say so
+     * rather than silently emptying a list.
+     */
+    async deleteBatch(batchId: string): Promise<{name: string; players: number}> {
+      const batch = await store.getBatch(batchId)
+      if (!batch) throw new EngineError('batch_not_found')
+      const players = await store.listPlayers(batchId)
+      await store.deleteBatch(batchId)
+      return {name: batch.name, players: players.length}
+    },
+
+    /**
+     * Sweep away the throwaway batches practice runs leave behind.
+     *
+     * Every tap of "try a practice run" creates a batch of its own, so they
+     * accumulate for as long as anyone is testing — which is what buries the
+     * real events in the organiser's list. Only `isDemo` batches are touched:
+     * a real cohort is never deleted in bulk, however old it looks.
+     */
+    async deleteDemoBatches(): Promise<{deleted: number}> {
+      const batches = await store.listBatches()
+      const demo = batches.filter((b) => b.isDemo)
+      for (const b of demo) await store.deleteBatch(b.id)
+      return {deleted: demo.length}
+    },
+
     async registerPlayer(
       input: RegisterPlayerInput,
     ): Promise<{player: Player; session: Session}> {

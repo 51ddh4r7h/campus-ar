@@ -74,6 +74,63 @@ const parkedAt = (id: string, endTsMs: number): GeoSample[] => {
   return out
 }
 
+describe('app — deleting batches', () => {
+  it('removes a batch and everything recorded against it', async () => {
+    const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
+    await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
+    clock.advance(4 * 60_000)
+    await json('/session/arrive', {samples: parkedAt('amphitheatre', clock.now())}, {
+      Authorization: `Bearer ${p.sessionToken}`,
+    })
+
+    // Fails closed without the key, like every other admin route.
+    const noKey = await app.request(`/admin/batches/${p.batchId}`, {method: 'DELETE'}, env)
+    expect(noKey.status).toBe(403)
+
+    const res = await app.request(
+      `/admin/batches/${p.batchId}`,
+      {method: 'DELETE', headers: {'X-Admin-Key': ADMIN}},
+      env,
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({players: 1})
+
+    // The batch is gone, and so is the player's way back in.
+    expect((await json('/admin/batches')).status).toBe(200)
+    const {batches} = (await (await json('/admin/batches')).json()) as {batches: Array<{id: string}>}
+    expect(batches.find((b) => b.id === p.batchId)).toBeUndefined()
+    expect(
+      (await json('/session', undefined, {Authorization: `Bearer ${p.sessionToken}`})).status,
+    ).toBe(401)
+    // And nothing of theirs survives to be reported on.
+    expect(await store.listBatchSplits(p.batchId)).toHaveLength(0)
+    expect(await store.listEvents(p.batchId, 100)).toHaveLength(0)
+    expect(await store.listPlayers(p.batchId)).toHaveLength(0)
+  })
+
+  it('sweeps practice batches and leaves real ones alone', async () => {
+    const real = await bootPlayer()
+    await json('/demo/session', {})
+    await json('/demo/session', {})
+
+    const before = (await (await json('/admin/batches')).json()) as {batches: Array<{isDemo: boolean}>}
+    expect(before.batches.filter((b) => b.isDemo)).toHaveLength(2)
+
+    const res = await app.request(
+      '/admin/batches/demo',
+      {method: 'DELETE', headers: {'X-Admin-Key': ADMIN}},
+      env,
+    )
+    expect(await res.json()).toEqual({deleted: 2})
+
+    const after = (await (await json('/admin/batches')).json()) as {
+      batches: Array<{id: string; isDemo: boolean}>
+    }
+    expect(after.batches.filter((b) => b.isDemo)).toHaveLength(0)
+    expect(after.batches.find((b) => b.id === real.batchId)).toBeDefined()
+  })
+})
+
 describe('app — analytics', () => {
   it('fails closed without the admin key, and reports a played batch with it', async () => {
     const p = await bootPlayer(['amphitheatre', 'symbieat', 'sibm', 'library', 'fountain'])
@@ -100,6 +157,10 @@ describe('app — analytics', () => {
     expect(a.activation).toEqual({count: 1, of: 1})
     expect(a.funnel.find((f) => f.label === 'Found 1')!.count).toBe(1)
     expect(a.locations.find((l) => l.locationId === 'amphitheatre')!.found).toBe(1)
+  })
+
+  it('404s for a batch that does not exist, rather than reporting zeroes', async () => {
+    expect((await json('/admin/batches/gone/analytics')).status).toBe(404)
   })
 })
 

@@ -40,6 +40,8 @@
   type Confirmation =
     | {kind: 'close'; batch: BatchRow}
     | {kind: 'reset'; player: RosterEntry}
+    | {kind: 'delete'; batch: BatchRow}
+    | {kind: 'sweep'; count: number}
   let confirmation = $state<Confirmation | null>(null)
   let cancelButton = $state<HTMLButtonElement | null>(null)
 
@@ -341,11 +343,67 @@
     scoreMs: session.scoreMs,
   })
 
+  /**
+   * Practice runs each create a batch of their own, so they pile up for as
+   * long as anyone is testing and bury the real events in this list.
+   */
+  const demoBatches = $derived(batches.filter((batch) => batch.isDemo))
+
+  async function deleteBatch(batch: BatchRow): Promise<void> {
+    if (mutating) return
+    const previous = batches
+    mutating = true
+    confirmation = null
+    batches = batches.filter((row) => row.id !== batch.id)
+    if (selected?.id === batch.id) {
+      selected = null
+      roster = []
+      board = []
+      setSelectedInUrl(null)
+    }
+    try {
+      await api.deleteBatch(batch.id, adminKey)
+      toasts.show(`Deleted ${batch.name}`, 'success')
+    } catch (error) {
+      batches = previous
+      toasts.show(error instanceof ApiError ? error.message : 'Could not delete that event', 'alert')
+    } finally {
+      mutating = false
+    }
+  }
+
+  async function sweepDemoBatches(): Promise<void> {
+    if (mutating) return
+    const previous = batches
+    const removed = new Set(demoBatches.map((batch) => batch.id))
+    mutating = true
+    confirmation = null
+    batches = batches.filter((batch) => !removed.has(batch.id))
+    if (selected && removed.has(selected.id)) {
+      selected = null
+      roster = []
+      board = []
+      setSelectedInUrl(null)
+    }
+    try {
+      const {deleted} = await api.deleteDemoBatches(adminKey)
+      toasts.show(`Cleared ${deleted} practice run${deleted === 1 ? '' : 's'}`, 'success')
+      await refreshBatches()
+    } catch (error) {
+      batches = previous
+      toasts.show(error instanceof ApiError ? error.message : 'Could not clear practice runs', 'alert')
+    } finally {
+      mutating = false
+    }
+  }
+
   async function performConfirmedAction(): Promise<void> {
     const action = confirmation
     if (!action) return
     if (action.kind === 'close') await closeBatch(action.batch)
-    else await resetPlayer(action.player)
+    else if (action.kind === 'reset') await resetPlayer(action.player)
+    else if (action.kind === 'delete') await deleteBatch(action.batch)
+    else await sweepDemoBatches()
   }
 
   function closeConfirmationOnEscape(event: KeyboardEvent): void {
@@ -471,6 +529,15 @@
             </div>
             <span class="count">{batches.length}</span>
           </div>
+          {#if demoBatches.length > 0}
+            <button
+              class="ghost sweep"
+              disabled={mutating}
+              onclick={() => (confirmation = {kind: 'sweep', count: demoBatches.length})}
+            >
+              Clear {demoBatches.length} practice run{demoBatches.length === 1 ? '' : 's'}
+            </button>
+          {/if}
           {#if batches.length === 0}
             <p class="empty">No events yet. Create the first one above.</p>
           {:else}
@@ -490,6 +557,16 @@
                     </span>
                     <span class="status {batch.status}">{batch.status === 'creating' ? 'Creating…' : batch.status}</span>
                   </button>
+                  <!-- Its own control, outside the row button: nesting a button
+                       inside a button is invalid, and a delete that shares a hit
+                       target with "open" is a delete waiting to happen. -->
+                  <button
+                    class="remove"
+                    disabled={mutating}
+                    title="Delete {batch.name}"
+                    aria-label="Delete {batch.name}"
+                    onclick={() => (confirmation = {kind: 'delete', batch})}
+                  >×</button>
                 </li>
               {/each}
             </ul>
@@ -692,6 +769,25 @@
         <button class="danger" disabled={mutating} onclick={() => void performConfirmedAction()}>
           {mutating ? 'Closing…' : 'Close Event'}
         </button>
+      {:else if confirmation.kind === 'delete'}
+        <h2 id="confirm-title">Delete {confirmation.batch.name}?</h2>
+        <p>
+          This removes the event and everything recorded against it —
+          {confirmation.batch.playerCount} player{confirmation.batch.playerCount === 1 ? '' : 's'},
+          their routes, scores and history. It cannot be undone.
+        </p>
+        <button class="danger" disabled={mutating} onclick={() => void performConfirmedAction()}>
+          {mutating ? 'Deleting…' : 'Delete Event'}
+        </button>
+      {:else if confirmation.kind === 'sweep'}
+        <h2 id="confirm-title">Clear {confirmation.count} practice run{confirmation.count === 1 ? '' : 's'}?</h2>
+        <p>
+          Practice runs are the throwaway events a demo creates. Real events are
+          never touched by this. It cannot be undone.
+        </p>
+        <button class="danger" disabled={mutating} onclick={() => void performConfirmedAction()}>
+          {mutating ? 'Clearing…' : 'Clear Practice Runs'}
+        </button>
       {:else}
         <h2 id="confirm-title">Reset {confirmation.player.name}?</h2>
         <p>Their route, progress, splits, and current score are replaced. Their account stays signed in.</p>
@@ -877,6 +973,31 @@
     background: var(--surface-raised);
     color: var(--text-dim);
     font: 500 var(--step-13) var(--font-mono);
+  }
+  .events li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px;
+  }
+  .remove {
+    /* A destructive control sat next to the one you actually want, so it gets
+       a real touch target rather than the 29px the glyph alone would give. */
+    min-width: 40px;
+    min-height: 40px;
+    padding: 6px 9px;
+    border-radius: 8px;
+    color: var(--text-faint);
+    font-size: var(--step-17);
+    line-height: 1;
+  }
+  .remove:hover {
+    color: var(--alert);
+    background: color-mix(in srgb, var(--alert) 12%, transparent);
+  }
+  .sweep {
+    width: 100%;
+    margin-bottom: var(--sp-2);
   }
   .events ul {
     display: grid;

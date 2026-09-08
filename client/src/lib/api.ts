@@ -241,6 +241,20 @@ export const api = {
       headers: adminHeaders(adminKey),
     }),
 
+  /** Organiser: remove one batch and everything recorded against it. */
+  deleteBatch: (batchId: string, adminKey: string) =>
+    request<{name: string; players: number}>(`/admin/batches/${encodeURIComponent(batchId)}`, {
+      method: 'DELETE',
+      headers: adminHeaders(adminKey),
+    }),
+
+  /** Organiser: sweep away the throwaway batches practice runs leave behind. */
+  deleteDemoBatches: (adminKey: string) =>
+    request<{deleted: number}>('/admin/batches/demo', {
+      method: 'DELETE',
+      headers: adminHeaders(adminKey),
+    }),
+
   listBatches: (adminKey: string) =>
     request<{batches: BatchRow[]}>('/admin/batches', {headers: adminHeaders(adminKey)}),
 
