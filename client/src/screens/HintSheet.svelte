@@ -2,6 +2,7 @@
   import type {HintRung} from '@cmh/shared'
   import {formatMarquee} from '@cmh/shared'
   import {game} from '../lib/stores/game.svelte'
+  import {clock} from '../lib/stores/clock.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
   import Sheet from '../lib/components/Sheet.svelte'
   import Icon from '../lib/components/Icon.svelte'
@@ -21,8 +22,11 @@
   const used = $derived(game.session?.currentLevelHints ?? 0)
   let pending = $state<HintRung | null>(null)
 
+  /** A hint whose cost is more than the time left would end the hunt on the spot. */
+  const tooExpensive = (r: Rung) => r.penaltyMs >= clock.remainingMs
+
   async function take(r: Rung, index: number) {
-    if (index !== used) return
+    if (index !== used || tooExpensive(r)) return
     pending = r.key
     try {
       const penalty = await game.hint(r.key)
@@ -47,14 +51,20 @@
           {#if i < used}
             <span class="tag">Used</span>
           {:else if i === used}
-            <button class="use" disabled={pending !== null} onclick={() => take(r, i)}>
+            <button
+              class="use"
+              disabled={pending !== null || tooExpensive(r)}
+              onclick={() => take(r, i)}
+            >
               {pending === r.key ? '…' : 'Use hint'}
             </button>
           {:else}
             <span class="tag lock"><Icon name="lock" size={14} /> Locked</span>
           {/if}
         </div>
-        {#if r.unlockedText && i < used}
+        {#if i === used && tooExpensive(r)}
+          <p class="revealed warn">Not enough time left for this one.</p>
+        {:else if r.unlockedText && i < used}
           <p class="revealed">{r.unlockedText}</p>
         {/if}
       </li>
@@ -119,5 +129,8 @@
     margin: var(--sp-3) 0 0;
     color: var(--text);
     font-size: var(--step-15);
+  }
+  .revealed.warn {
+    color: var(--alert);
   }
 </style>

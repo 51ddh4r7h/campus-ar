@@ -79,11 +79,12 @@ export const elapsedMsOf = (
 /**
  * Time left on the clock, floored at zero.
  *
- * The countdown the player sees. Derived from the same elapsed figure the
- * server scores with, so the number on screen and the deadline the server
- * enforces cannot drift apart.
+ * The countdown the player sees. Hint and extra-look penalties come straight
+ * off it — a hint that says "+5:00" takes five minutes off the number on
+ * screen the moment it is used, not just off the final score. The server's
+ * deadline is worked out the same way, so the two cannot drift apart.
  */
 export const remainingMsOf = (
-  session: Pick<Session, 'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs'>,
+  session: Pick<Session, 'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs' | 'penaltyMs'>,
   nowMs: number,
-): number => Math.max(0, HUNT_LIMIT_MS - elapsedMsOf(session, nowMs))
+): number => Math.max(0, HUNT_LIMIT_MS - elapsedMsOf(session, nowMs) - session.penaltyMs)

@@ -331,14 +331,16 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
    *
    * Elapsed time excludes pauses, so the deadline moves later by however long
    * the player has been stopped. A paused clock cannot reach the limit at all,
-   * which is why this does not need to consider a pause in progress.
+   * which is why this does not need to consider a pause in progress. Hint and
+   * look penalties move it *earlier* — the same time they take off the
+   * countdown the player sees.
    */
   const deadlineOf = (session: Session): number =>
-    (session.startTsMs ?? 0) + HUNT_LIMIT_MS + session.pausedTotalMs
+    (session.startTsMs ?? 0) + HUNT_LIMIT_MS + session.pausedTotalMs - session.penaltyMs
 
   const isOutOfTime = (session: Session, nowMs: number): boolean =>
     (session.status === 'in_progress' || session.status === 'paused') &&
-    elapsedMsOf(session, nowMs) >= HUNT_LIMIT_MS
+    elapsedMsOf(session, nowMs) + session.penaltyMs >= HUNT_LIMIT_MS
 
   /** A short, URL-safe signup code from a batch name, plus 3 hex for uniqueness. */
   const codeFromName = (name: string): string => {

@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest'
-import {DEFAULT_PAR_CONSTANTS, LOCATIONS, START_POINT} from './index'
-import {routePar, sessionScoreMs, walkParMs} from './scoring'
+import {DEFAULT_PAR_CONSTANTS, HUNT_LIMIT_MS, LOCATIONS, START_POINT} from './index'
+import {remainingMsOf, routePar, sessionScoreMs, walkParMs} from './scoring'
+import type {Session} from './types'
 
 describe('scoring', () => {
   it('walk par scales with distance and inverse speed', () => {
@@ -28,6 +29,24 @@ describe('scoring', () => {
 
   it('score is elapsed plus penalty minus par', () => {
     expect(sessionScoreMs(1_000_000, 90_000, 1_200_000)).toBe(-110_000)
+  })
+
+  it('the countdown loses both the time spent and the penalties taken', () => {
+    const base: Pick<Session, 'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs' | 'penaltyMs'> = {
+      startTsMs: 0,
+      endTsMs: null,
+      pausedAtMs: null,
+      pausedTotalMs: 0,
+      penaltyMs: 0,
+    }
+    // Ten minutes in, no penalties: fifteen left.
+    expect(remainingMsOf(base, 10 * 60_000)).toBe(HUNT_LIMIT_MS - 10 * 60_000)
+    // Same ten minutes, but a 5:00 hint was taken: only ten left.
+    expect(remainingMsOf({...base, penaltyMs: 5 * 60_000}, 10 * 60_000)).toBe(
+      HUNT_LIMIT_MS - 10 * 60_000 - 5 * 60_000,
+    )
+    // Penalties past the whole clock floor at zero, never negative.
+    expect(remainingMsOf({...base, penaltyMs: 40 * 60_000}, 10 * 60_000)).toBe(0)
   })
 
   it('rejects a wrong stop count', () => {
