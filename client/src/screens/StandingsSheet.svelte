@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {elapsedMsOf, formatMarquee, formatScore, type StandingRow} from '@cmh/shared'
+  import {HUNT_LIMIT_MS, formatMarquee, remainingMsOf, type StandingRow} from '@cmh/shared'
   import {standings} from '../lib/stores/standings.svelte'
   import {clock} from '../lib/stores/clock.svelte'
   import Sheet from '../lib/components/Sheet.svelte'
@@ -12,18 +12,15 @@
   }
 
   /**
-   * Everyone's clock, running.
+   * Everyone's clock, counting down from 25:00.
    *
-   * The board used to say only "Level 3" for anyone still out there, so you
-   * could see who was ahead of you but not by how much — and on a course this
-   * short, the gap is the whole race. `clock.now` ticks four times a second and
-   * every row derives from it, so this needs no timer of its own.
-   *
-   * `elapsedMsOf` is the same function the player's own clock and the server's
-   * scoring use, which is why a paused rival's time visibly stops rather than
-   * drifting away from what they see on their phone.
+   * The same number the player sees on their own HUD — time left, real time and
+   * hint penalties both taken off it. A finished player's is frozen at whatever
+   * they had left when they finished; the rest tick down live. `clock.now` ticks
+   * four times a second and every row derives from it, so no timer of its own.
    */
-  const runningMs = (r: StandingRow): number => elapsedMsOf(r.timing, clock.now)
+  const leftOnClock = (r: StandingRow): number =>
+    r.scoreMs === null ? remainingMsOf(r.timing, clock.now) : Math.max(0, HUNT_LIMIT_MS - r.scoreMs)
 
   let tab = $state<'overall' | 'level'>('overall')
   const self = $derived(standings.self)
@@ -39,12 +36,12 @@
     <button class:on={tab === 'overall'} onclick={() => (tab = 'overall')}>Overall</button>
     <button class:on={tab === 'level'} onclick={() => (tab = 'level')}>Your level</button>
   </div>
-  <p class="cap">Finished: vs par, lower is better · Still out: time on the clock</p>
+  <p class="cap">Time left on the 25-minute clock — most left is fastest.</p>
 
   {#if self}
     <div class="you">
       <span>You're <b>{ordinal(self.rank)}</b></span>
-      <span class="score">{self.scoreMs === null ? formatMarquee(runningMs(self)) : formatScore(self.scoreMs)}</span>
+      <span class="score">{formatMarquee(leftOnClock(self))} left</span>
     </div>
   {/if}
 
@@ -61,10 +58,12 @@
               <small class:paused={r.paused}>
                 {r.paused ? 'Paused' : `Level ${r.level}`}
               </small>
+            {:else}
+              <small>Finished</small>
             {/if}
           </span>
           <span class="val" class:live={r.scoreMs === null && !r.paused}>
-            {r.scoreMs === null ? formatMarquee(runningMs(r)) : formatScore(r.scoreMs)}
+            {formatMarquee(leftOnClock(r))}
           </span>
         </li>
       {/each}

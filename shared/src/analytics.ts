@@ -91,7 +91,7 @@ export interface PlayerRow {
   found: number
   /** Time on the clock, ms. */
   elapsedMs: number
-  /** Against par, once finished. Null while playing or if they ran out. */
+  /** Finish time (elapsed + hint penalties). Null while playing or if they ran out. */
   scoreMs: number | null
   hintsTaken: number
 }
@@ -139,7 +139,9 @@ export interface Analytics {
   completion: Ratio
   /** Finishers who took no hint at all. */
   hintFree: Ratio
+  /** Middle finish time — real time plus hint penalties. */
   medianScoreMs: number | null
+  /** Middle of pure walking time, penalties excluded. */
   medianFinishMs: number | null
   /** How long the first location takes — the game's time-to-first-value. */
   medianTimeToFirstFindMs: number | null

@@ -27,8 +27,9 @@ describe('scoring', () => {
     }
   })
 
-  it('score is elapsed plus penalty minus par', () => {
-    expect(sessionScoreMs(1_000_000, 90_000, 1_200_000)).toBe(-110_000)
+  it('score is elapsed plus what the hints cost, nothing subtracted', () => {
+    expect(sessionScoreMs(1_000_000, 90_000)).toBe(1_090_000)
+    expect(sessionScoreMs(15 * 60_000, 0)).toBe(15 * 60_000)
   })
 
   it('the countdown loses both the time spent and the penalties taken', () => {

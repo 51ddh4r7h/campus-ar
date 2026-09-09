@@ -1,12 +1,6 @@
 <script lang="ts">
   import {onMount} from 'svelte'
-  import {
-    LEVEL_COUNT,
-    formatMarquee,
-    formatScore,
-    locationById,
-    perksEarned,
-  } from '@cmh/shared'
+  import {LEVEL_COUNT, formatMarquee, locationById, perksEarned} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
   import {standings} from '../lib/stores/standings.svelte'
@@ -98,7 +92,7 @@
   async function shareResult() {
     const text = game.abandoned
       ? `I found ${splits.length} of ${LEVEL_COUNT} scenes in ARound Campus.`
-      : `I finished ARound Campus ${formatScore(score)} vs par!`
+      : `I finished ARound Campus in ${formatMarquee(score)}!`
     try {
       if (navigator.share) {
         await navigator.share({title: 'ARound Campus', text})
@@ -137,10 +131,6 @@
   {/if}
 
   <div class="hero">
-    <!-- No par comparison for a hunt that was cut short. Par is the whole
-         route's, so ending early subtracts time for legs nobody walked and
-         reports a personal best — "under par by 18:01" for finding nothing.
-         Elapsed time is the only honest number here. -->
     {#if game.abandoned}
       <p class="label">Time played</p>
       <p class="big">{formatMarquee(clock.elapsedMs)}</p>
@@ -150,9 +140,9 @@
           : `On the board on ${splits.length} found — below anyone who finished.`}
       </p>
     {:else}
-      <p class="label">{score <= 0 ? 'Under par by' : 'Over par by'}</p>
-      <p class="big">{formatMarquee(Math.abs(score))}</p>
-      <p class="raw">Total time {formatMarquee(clock.elapsedMs)}</p>
+      <p class="label">You completed the game in</p>
+      <p class="big">{formatMarquee(score)}</p>
+      <p class="raw">of the 25 minutes you had</p>
     {/if}
   </div>
 
@@ -169,8 +159,8 @@
     <Survey />
   {/if}
 
-  <!-- The strip the player watched fill up, finished. Warm frames are the legs
-       they beat par on. -->
+  <!-- The strip the player watched fill up, finished. Warm frames are the
+       quicker legs. -->
   <div class="reel">
     <FilmStrip {splits} size="full" />
   </div>

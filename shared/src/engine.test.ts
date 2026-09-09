@@ -70,7 +70,7 @@ async function playThrough(token: string): Promise<void> {
 }
 
 describe('engine — full playthrough', () => {
-  it('registers, plays five levels, scores against par', async () => {
+  it('registers, plays five levels, scores as total time', async () => {
     const batch = await engine.createBatch({name: 'Batch A'})
     const {player} = await engine.registerPlayer({
       batchId: batch.id,
@@ -85,9 +85,8 @@ describe('engine — full playthrough', () => {
     expect(session.currentLevel).toBe(6)
     expect(splits).toHaveLength(5)
     expect(session.scoreMs).not.toBeNull()
-    const route = (await store.getRoute(player.id))!
     const elapsed = session.endTsMs! - session.startTsMs!
-    expect(session.scoreMs).toBe(elapsed + session.penaltyMs - route.parTotalMs)
+    expect(session.scoreMs).toBe(elapsed + session.penaltyMs)
 
     const events = store.allEvents().map((e) => e.type)
     expect(events).toContain('hunt_started')

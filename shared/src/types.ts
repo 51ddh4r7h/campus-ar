@@ -76,7 +76,9 @@ export interface Player {
   device: DeviceKind | null
 }
 
-/** A player's assigned path: five location ids in play order, with par split out. */
+/** A player's assigned path: five location ids in play order. `parTotalMs` and
+ *  `legParMs` are the pool balancer's expected times, kept only to keep every
+ *  route roughly equal — never shown to a player. */
 export type DeviceKind = 'ios' | 'android' | 'other'
 
 export interface Route {
@@ -111,7 +113,7 @@ export interface Session {
   hintCreditUsed: boolean
   /** Accumulated hint penalty across the whole hunt, in ms. */
   penaltyMs: number
-  /** elapsed + penalties − par, in ms. Null until complete. Lower is better. */
+  /** Finish time: elapsed + penalties, in ms. Null until complete. Lower is better. */
   scoreMs: number | null
   /** When the current pause began, or null when running. */
   pausedAtMs: number | null
@@ -277,7 +279,7 @@ export interface StandingRow {
   rank: number
   playerName: string
   isSelf: boolean
-  /** `-Xms` under par for finished players; null while still playing. */
+  /** Finish time (elapsed + penalties) for finished players; null while playing. */
   scoreMs: number | null
   /** Current level for players in progress; null once complete. */
   level: number | null
@@ -299,7 +301,7 @@ export interface StandingRow {
 /** The fields `elapsedMsOf` needs, and nothing else about a session. */
 export type SessionTiming = Pick<
   Session,
-  'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs'
+  'startTsMs' | 'endTsMs' | 'pausedAtMs' | 'pausedTotalMs' | 'penaltyMs'
 >
 
 /**

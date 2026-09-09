@@ -24,7 +24,6 @@
   import Panel from '../lib/components/charts/Panel.svelte'
   import TimeArea from '../lib/components/charts/TimeArea.svelte'
   import RankedBars from '../lib/components/charts/RankedBars.svelte'
-  import DivergingBars from '../lib/components/charts/DivergingBars.svelte'
 
   /** Shared with the console: one key unlocks both surfaces on this device. */
   const KEY_STORE = 'cmh.adminKey'
@@ -104,36 +103,19 @@
   )
 
   /**
-   * Each leg against the time it was budgeted, as a percentage either side.
-   *
-   * The index is the median split over the median par, so 1.0 is exactly on
-   * budget. Plotted as a distance from that, because what an organiser needs
-   * is not the ratio but which way and by how much — a leg 40% over is a clue
-   * to rewrite, one 40% under is par set too generously.
+   * The typical time each location's leg took, longest first. A leg that eats
+   * more minutes than the others is a hard clue or a long walk — either way,
+   * the thing to look at.
    */
-  /**
-   * How much longer or shorter each leg took than the game expected, in
-   * minutes. The underlying figure is a ratio; nobody reads a ratio. A bar
-   * that says "2 minutes slower than expected" needs no explaining.
-   */
-  const paceRows = $derived(
+  const slowRows = $derived(
     (data?.locations ?? [])
-      .filter((l) => l.medianSplitMs !== null && l.medianParMs !== null)
-      .map((l) => {
-        const offMs = l.medianSplitMs! - l.medianParMs!
-        const offMin = offMs / 60_000
-        // SAFETY: the three branches produce exactly the three union members.
-        const side = (offMin > 0.5 ? 'over' : offMin < -0.5 ? 'under' : 'level') as
-          | 'over'
-          | 'under'
-          | 'level'
-        return {
-          label: l.name,
-          value: Math.abs(+offMin.toFixed(1)),
-          side,
-          sub: `${offMin > 0 ? 'took' : 'saved'} ${Math.abs(offMin).toFixed(1)} min · ${l.found} of ${l.assigned} got there`,
-        }
-      }),
+      .filter((l) => l.medianSplitMs !== null)
+      .map((l) => ({
+        label: l.name,
+        value: +(l.medianSplitMs! / 60_000).toFixed(1),
+        sub: `${l.found} of ${l.assigned} got there`,
+      }))
+      .sort((a, b) => b.value - a.value),
   )
 
   const visitRows = $derived(
@@ -247,9 +229,9 @@
           tone={data.completion.of > 0 && data.completion.count / data.completion.of >= 0.7 ? 'good' : 'neutral'}
         />
         <StatTile
-          label="Typical run"
-          value={data.medianFinishMs === null ? '—' : formatMarquee(data.medianFinishMs)}
-          sub="middle of the pack, start to finish"
+          label="Typical finish"
+          value={data.medianScoreMs === null ? '—' : formatMarquee(data.medianScoreMs)}
+          sub="middle of the pack — real time plus any hint penalties"
         />
         <StatTile
           label="First find"
@@ -276,31 +258,15 @@
 
         <Panel
           wide
-          title="Which locations took longer than expected"
-          subtitle="The game budgets a time for each walk. Red means people took longer than that — the clue is probably too hard, or the walk is longer than it looks."
-          columns={['Location', 'Typical time', 'Expected', 'Difference', 'Reached it']}
-          rows={data.locations.map((l) => [
-            l.name,
-            mins(l.medianSplitMs),
-            mins(l.medianParMs),
-            l.medianSplitMs === null || l.medianParMs === null
-              ? '—'
-              : `${l.medianSplitMs - l.medianParMs > 0 ? '+' : ''}${((l.medianSplitMs - l.medianParMs) / 60_000).toFixed(1)} min`,
-            `${l.found} of ${l.assigned}`,
-          ])}
+          title="Where people spent the most time"
+          subtitle="Typical time on each leg — walking there plus working out the clue. The long ones are the hard clues or the far walks."
+          columns={['Location', 'Typical time', 'Reached it']}
+          rows={slowRows.map((r) => [r.label, `${r.value} min`, r.sub])}
         >
-          {#if paceRows.length === 0}
+          {#if slowRows.length === 0}
             <p class="empty">Nobody has reached a location yet.</p>
           {:else}
-            <DivergingBars
-              rows={paceRows}
-              labelWidth={152}
-              legend={{
-                under: 'Quicker than expected',
-                level: 'About right',
-                over: 'Slower than expected',
-              }}
-            />
+            <RankedBars rows={slowRows} colour="#d95926" labelWidth={152} emphasise={2} />
           {/if}
         </Panel>
 

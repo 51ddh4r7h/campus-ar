@@ -1,7 +1,11 @@
 /**
- * Par-time scoring. Every route gets a fair expected time from its walking
- * distance and clue difficulty; a player's score is their elapsed time (plus
- * hint penalties) minus that par. Lower is better; negative means under par.
+ * Scoring is just time. A player's score is the wall clock they took plus the
+ * time their hints and extra looks cost — nothing subtracted. Lower is better,
+ * and it can never be more than the 25-minute limit.
+ *
+ * `routePar` below still exists, but only to keep the route pool balanced: every
+ * route is generated to take about the same real time, which is what makes
+ * ranking on raw time fair without the player ever seeing the word "par".
  */
 
 import {haversineM, type LatLng} from './geo'
@@ -50,12 +54,9 @@ export const routePar = (
   }
 }
 
-/** score = elapsed + hint penalties − route par. */
-export const sessionScoreMs = (
-  elapsedMs: number,
-  penaltyMs: number,
-  routeParTotalMs: number,
-): number => elapsedMs + penaltyMs - routeParTotalMs
+/** A player's finish time: the wall clock they took plus what their hints cost. */
+export const sessionScoreMs = (elapsedMs: number, penaltyMs: number): number =>
+  elapsedMs + penaltyMs
 
 /**
  * How long a hunt has actually been running.

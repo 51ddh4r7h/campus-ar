@@ -4,7 +4,7 @@
    * roll back on failure; background refreshes reconcile it with the server.
    */
   import {onMount} from 'svelte'
-  import {LEVEL_COUNT, LOCATIONS, formatScore} from '@cmh/shared'
+  import {HUNT_LIMIT_MS, LEVEL_COUNT, LOCATIONS, formatMarquee} from '@cmh/shared'
   import type {Session, StandingRow} from '@cmh/shared'
   import {api, ApiError, type BatchRow, type RosterEntry} from '../lib/api'
   import {toasts} from '../lib/stores/toast.svelte'
@@ -735,17 +735,21 @@
                 <p class="empty">Nobody is on the board yet.</p>
               {:else}
                 <table>
-                  <thead><tr><th>Rank</th><th>Player</th><th>Progress</th><th>Score vs Par</th></tr></thead>
+                  <thead><tr><th>Rank</th><th>Player</th><th>Progress</th><th>Time left</th></tr></thead>
                   <tbody>
                     {#each board as row (`${row.rank}-${row.playerName}`)}
                       <tr>
                         <td class="rank mono">#{row.rank}</td>
                         <td><strong>{row.playerName}</strong></td>
                         <td>{row.level === null ? 'Finished' : `Level ${row.level} of ${LEVEL_COUNT}`}</td>
-                        <!-- `formatScore`, not `formatMarquee`: this column is signed, and
-                             marquee clamps below zero — so every under-par finisher, which
-                             is most of them, printed 0:00 and the board read as a tie. -->
-                        <td class="mono score">{row.scoreMs === null ? '—' : formatScore(row.scoreMs)}</td>
+                        <!-- Finish time as a countdown: 25:00 minus what they used
+                             (real time plus hint penalties). Still-playing rows show a
+                             dash — the live clock is on the players' own board. -->
+                        <td class="mono score"
+                          >{row.scoreMs === null
+                            ? '—'
+                            : formatMarquee(Math.max(0, HUNT_LIMIT_MS - row.scoreMs))}</td
+                        >
                       </tr>
                     {/each}
                   </tbody>

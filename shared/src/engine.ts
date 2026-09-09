@@ -1,6 +1,6 @@
 /**
  * The game engine. Pure orchestration over a GameStore: session lifecycle,
- * strict level progression, arrival validation, par scoring and
+ * strict level progression, arrival validation, time scoring and
  * standings. No HTTP, no storage details, no time or randomness of its own —
  * those come in through `deps` so tests are deterministic.
  */
@@ -92,7 +92,7 @@ const rejectArrival = (
 ): ValidationResult => ({ok: false, failure, session, split: null, reveal: null, nextClue})
 
 /** Move the player on to the next level, or close out the hunt on the last one. */
-const advanceSession = (session: Session, route: Route, reachedTsMs: number): Session => {
+const advanceSession = (session: Session, reachedTsMs: number): Session => {
   const nextLevel = session.currentLevel + 1
   const complete = nextLevel > LEVEL_COUNT
   const elapsedMs = elapsedMsOf({...session, endTsMs: reachedTsMs}, reachedTsMs)
@@ -103,7 +103,7 @@ const advanceSession = (session: Session, route: Route, reachedTsMs: number): Se
     currentLevelViews: 0,
     status: complete ? 'complete' : 'in_progress',
     endTsMs: complete ? reachedTsMs : null,
-    scoreMs: complete ? sessionScoreMs(elapsedMs, session.penaltyMs, route.parTotalMs) : null,
+    scoreMs: complete ? sessionScoreMs(elapsedMs, session.penaltyMs) : null,
   }
 }
 
@@ -257,7 +257,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     ])
     if (!session || !route || !batch) throw new EngineError('bad_token')
     if (routeIsLive(route.stops)) {
-      return {player, session: await closeIfStale(session, route), route, batch}
+      return {player, session: await closeIfStale(session), route, batch}
     }
 
     /**
@@ -287,16 +287,13 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
    * counting up forever. It does not reach sessions nobody returns to — that is
    * what closing the batch is for.
    */
-  const closeIfStale = async (
-    session: Session,
-    route: Route,
-  ): Promise<Session> => {
+  const closeIfStale = async (session: Session): Promise<Session> => {
     const now = deps.now()
     if (!isOutOfTime(session, now)) return session
     // Ended at the deadline, not at the moment they happened to reopen the
     // app. Otherwise a player who closed their phone at 24 minutes and came
     // back an hour later would be recorded as having taken an hour.
-    const done = await endSession(session, route, deadlineOf(session))
+    const done = await endSession(session, deadlineOf(session))
     await event(session.playerId, 'hunt_abandoned', {
       level: session.currentLevel,
       reason: 'time_limit',
@@ -305,11 +302,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
   }
 
   /** Close a hunt out, scored on whatever was actually reached. */
-  const endSession = async (
-    session: Session,
-    route: Route,
-    endTsMs: number,
-  ): Promise<Session> => {
+  const endSession = async (session: Session, endTsMs: number): Promise<Session> => {
     const elapsedMs = elapsedMsOf({...session, endTsMs}, endTsMs)
     const openPauseMs =
       session.pausedAtMs === null ? 0 : Math.max(0, endTsMs - session.pausedAtMs)
@@ -319,7 +312,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       endTsMs,
       pausedAtMs: null,
       pausedTotalMs: session.pausedTotalMs + openPauseMs,
-      scoreMs: sessionScoreMs(elapsedMs, session.penaltyMs, route.parTotalMs),
+      scoreMs: sessionScoreMs(elapsedMs, session.penaltyMs),
     }
     await store.putSession(done)
     return done
@@ -716,14 +709,14 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
      * is no route back — that is the point of it, and the client asks twice.
      */
     async abandon(token: string): Promise<Session> {
-      const {session, route} = await authed(token)
+      const {session} = await authed(token)
       if (session.status === 'abandoned') return session
       if (session.status !== 'in_progress' && session.status !== 'paused') {
         throw new EngineError('not_in_progress')
       }
 
       const endTsMs = deps.now()
-      const done = await endSession(session, route, endTsMs)
+      const done = await endSession(session, endTsMs)
       await event(session.playerId, 'hunt_abandoned', {
         level: session.currentLevel,
         elapsedMs: elapsedMsOf(done, endTsMs),
@@ -751,7 +744,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         if (session.status !== 'in_progress' && session.status !== 'paused') continue
         const route = await store.getRoute(session.playerId)
         if (!route) continue
-        await endSession(session, route, now)
+        await endSession(session, now)
         await event(session.playerId, 'hunt_abandoned', {reason: 'batch_closed'})
         ended++
       }
@@ -849,7 +842,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
 
       const target = stops[session.currentLevel - 1]!
       const split = await recordSplit(session, target, outcome, prev, batch.parConstants)
-      const next = advanceSession(session, route, outcome.reachedTsMs)
+      const next = advanceSession(session, outcome.reachedTsMs)
       const complete = next.status === 'complete'
 
       await store.putSession(next)
@@ -970,11 +963,10 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
           if (aDone && bDone) return (a.scoreMs ?? 0) - (b.scoreMs ?? 0)
           if (aDone) return -1
           if (bDone) return 1
-          // Same level: whoever got there quicker is ahead. Without this the
-          // order among everyone still walking was arbitrary, which now shows,
-          // because their times are on screen next to each other.
+          // Same level: whoever has used less time — real time plus whatever
+          // their hints cost — is ahead, which is what their countdown shows.
           if (b.currentLevel !== a.currentLevel) return b.currentLevel - a.currentLevel
-          return elapsedMsOf(a, now) - elapsedMsOf(b, now)
+          return elapsedMsOf(a, now) + a.penaltyMs - (elapsedMsOf(b, now) + b.penaltyMs)
         })
       return sorted.map((s, i) => ({
         rank: i + 1,
@@ -987,6 +979,7 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
           endTsMs: s.endTsMs,
           pausedAtMs: s.pausedAtMs,
           pausedTotalMs: s.pausedTotalMs,
+          penaltyMs: s.penaltyMs,
         },
         paused: s.status === 'paused',
       }))

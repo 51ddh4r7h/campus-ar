@@ -10,8 +10,8 @@
    *
    * So: five frames of film. Empty ones are blank sprockets. Each find
    * *develops* its frame — the still from the scene fades in — and the frame
-   * carries how the leg went in its own colour. Warm means the leg beat par,
-   * washed-out means it did not. By the wrap the player is holding a strip of
+   * carries how the leg went in its own colour: warm for a quicker leg,
+   * washed-out for a slower one. By the wrap the player is holding a strip of
    * the film they reconstructed, which is both the progress meter and the thing
    * worth keeping.
    *
@@ -44,7 +44,7 @@
   }
 
   type Frame =
-    | {state: 'exposed'; level: number; split: SplitView; underPar: boolean}
+    | {state: 'exposed'; level: number; split: SplitView; quick: boolean}
     | {state: 'gate' | 'blank'; level: number}
 
   const frames = $derived.by((): Frame[] =>
@@ -52,9 +52,9 @@
       const level = i + 1
       const split = splits.find((s) => s.level === level)
       if (split) {
-        // Penalties are part of how the leg went, so they count against par.
+        // Penalties are part of how the leg went, so they count here too.
         const taken = split.splitMs + split.penaltyMs
-        return {state: 'exposed', level, split, underPar: taken <= split.parMs}
+        return {state: 'exposed', level, split, quick: taken <= split.parMs}
       }
       return {state: level === current ? 'gate' : 'blank', level}
     }),
@@ -69,7 +69,7 @@
   {#each frames as f (f.level)}
     <div
       class="cell {f.state}"
-      class:par={f.state === 'exposed' && f.underPar}
+      class:quick={f.state === 'exposed' && f.quick}
       title={f.state === 'exposed' ? f.split.locationName : ''}
     >
       {#if f.state === 'exposed' && !blank.has(f.split.locationId)}
@@ -117,12 +117,12 @@
     height: 100%;
     object-fit: cover;
     display: block;
-    /* Developed but not printed well: a leg run over par keeps the picture and
+    /* Developed but not printed well: a slower leg keeps the picture and
        loses the colour, so the strip reads at a glance without a second gauge. */
     filter: grayscale(1) brightness(0.62);
     animation: develop 0.9s var(--ease-spring, ease-out) both;
   }
-  .cell.par img {
+  .cell.quick img {
     filter: none;
   }
   /* The frame in the gate — the one being shot right now. */
