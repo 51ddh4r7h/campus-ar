@@ -23,6 +23,7 @@
     | 'callsheet'
     | 'clapper'
     | 'reel'
+    | 'star'
 
   const {name, size = 24}: {name: IconName; size?: number} = $props()
 
@@ -50,6 +51,7 @@
     callsheet: 'M6 5h12v15H6z M9 5V3h6v2 M9 11h6 M9 15h4',
     clapper: 'M3 10h18v10H3z M3 10l2-5h14l-2 5 M8.5 5l-2 5 M13.5 5l-2 5',
     reel: 'M12 21a9 9 0 100-18 9 9 0 000 18z M13.5 12a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M13.5 7.2a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M9.6 15.4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z M17.4 15.4a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z',
+    star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
   }) satisfies Record<IconName, string>
 </script>
 

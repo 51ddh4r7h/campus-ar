@@ -18,6 +18,7 @@ import {
   parseCreateBatch,
   parseDemoSession,
   parseCrumbs,
+  parseFeedback,
   parseHintRung,
   parseRegisterPlayers,
   parseSamples,
@@ -379,6 +380,13 @@ export const createApp = (
     const token = bearer(c.req.header('Authorization'))
     const {crumbs} = parseCrumbs(await c.req.json())
     await engineFor(c.env).addBreadcrumbs(token, crumbs)
+    return c.body(null, 204)
+  })
+
+  /** The post-game survey. */
+  app.post('/session/feedback', async (c) => {
+    const token = bearer(c.req.header('Authorization'))
+    await engineFor(c.env).submitFeedback(token, parseFeedback(await c.req.json()))
     return c.body(null, 204)
   })
 

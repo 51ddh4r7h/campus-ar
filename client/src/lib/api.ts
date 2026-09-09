@@ -7,6 +7,7 @@ import type {
   Analytics,
   ClueView,
   DeviceKind,
+  Feedback,
   GeoSample,
   HintRung,
   NearbyResult,
@@ -151,6 +152,14 @@ export const api = {
       method: 'POST',
       headers: jsonAuth(token),
       body: JSON.stringify({crumbs}),
+    }),
+
+  /** The post-game survey. Fire-and-forget from the finish screen. */
+  submitFeedback: (token: string, feedback: Feedback) =>
+    request<void>('/session/feedback', {
+      method: 'POST',
+      headers: jsonAuth(token),
+      body: JSON.stringify(feedback),
     }),
 
   /** Record a viewing of the scene. Beyond the free allowance it costs time. */

@@ -241,6 +241,25 @@ describe('app', () => {
     const {rows} = (await res.json()) as {rows: unknown[]}
     expect(Array.isArray(rows)).toBe(true)
   })
+
+  it('takes a survey response and shows it in analytics', async () => {
+    const p = await bootPlayer()
+    const auth = {authorization: `Bearer ${p.sessionToken}`}
+
+    const good = {stars: 5, clues: 'right', navigation: 'confident', friction: 'none', recommend: 'yes'}
+    expect((await json('/session/feedback', good, auth)).status).toBe(204)
+
+    // An answer outside a question's option set is a 400.
+    expect((await json('/session/feedback', {...good, clues: 'nonsense'}, auth)).status).toBe(400)
+    // Stars out of range is a 400.
+    expect((await json('/session/feedback', {...good, stars: 9}, auth)).status).toBe(400)
+
+    const report = (await (await json(`/admin/batches/${p.batchId}/analytics`)).json()) as {
+      feedback: {responses: number; avgStars: number | null}
+    }
+    expect(report.feedback.responses).toBe(1)
+    expect(report.feedback.avgStars).toBe(5)
+  })
 })
 
 describe('admin console reads', () => {

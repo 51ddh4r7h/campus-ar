@@ -18,6 +18,7 @@ import {HUNT_LIMIT_MS, VALIDATION} from './config'
 import {haversineM} from './geo'
 import {bandFromHeat, heatFromDistance} from './heat'
 import {bonusViews, hasHintCredit, perkForLevel} from './perks'
+import type {Feedback} from './feedback'
 import {evaluateArrival} from './validation'
 import type {ArrivalOutcome} from './validation'
 import type {GameStore, StoredBatch} from './store'
@@ -937,6 +938,18 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
     ): Promise<void> {
       const {player} = await authed(token)
       await store.addBreadcrumbs(crumbs.map((c) => ({playerId: player.id, ...c})))
+    },
+
+    /**
+     * The post-game survey, stored as an event like everything else.
+     *
+     * No status gate: it is only ever shown on the finish screen, and a second
+     * submission (a replay, a re-open) simply lands another event — the
+     * analytics layer keeps the latest per player.
+     */
+    async submitFeedback(token: string, feedback: Feedback): Promise<void> {
+      const {player} = await authed(token)
+      await event(player.id, 'feedback_submitted', {...feedback})
     },
 
     /** Impersonal by design — see StandingEntry. The caller marks the self row. */

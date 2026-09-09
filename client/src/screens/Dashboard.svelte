@@ -187,6 +187,13 @@
     ...(data && data.speedFlags > 0 ? [{label: 'Impossible arrival', value: data.speedFlags}] : []),
     ...(data && data.chargedViews > 0 ? [{label: 'Paid-for replays', value: data.chargedViews}] : []),
   ])
+
+  const starRows = $derived(
+    [5, 4, 3, 2, 1].map((n) => ({
+      label: `${'★'.repeat(n)}${'☆'.repeat(5 - n)}`,
+      value: data?.feedback.starCounts[n - 1] ?? 0,
+    })),
+  )
 </script>
 
 <main>
@@ -413,6 +420,38 @@
             <RankedBars rows={troubles} colour="#e66767" labelWidth={172} />
           </Panel>
         {/if}
+
+        <Panel
+          wide
+          plain
+          title="What players said"
+          subtitle={data.feedback.responses === 0
+            ? 'The post-game survey. Nobody has answered yet.'
+            : `The post-game survey — ${data.feedback.responses} ${data.feedback.responses === 1 ? 'reply' : 'replies'}${data.feedback.avgStars === null ? '' : `, averaging ${data.feedback.avgStars} out of 5`}.`}
+          columns={[]}
+          rows={[]}
+        >
+          {#if data.feedback.responses === 0}
+            <p class="empty">Nothing yet.</p>
+          {:else}
+            <div class="survey-out">
+              <div class="q">
+                <h3>Overall rating</h3>
+                <RankedBars rows={starRows} colour="#c98500" labelWidth={92} />
+              </div>
+              {#each data.feedback.questions as q (q.id)}
+                <div class="q">
+                  <h3>{q.prompt}</h3>
+                  <RankedBars
+                    rows={q.options.map((o) => ({label: o.label, value: o.count}))}
+                    colour="#3987e5"
+                    labelWidth={172}
+                  />
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </Panel>
       </div>
 
       <p class="footnote">
@@ -529,6 +568,17 @@
   }
   .roster {
     overflow-x: auto;
+  }
+  .survey-out {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-5);
+  }
+  .survey-out .q h3 {
+    margin: 0 0 var(--sp-2);
+    font-size: var(--step-13);
+    font-weight: 500;
+    color: var(--text-dim);
   }
   .roster table {
     width: 100%;

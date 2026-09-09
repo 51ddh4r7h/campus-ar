@@ -274,5 +274,47 @@ describe('analytics — an empty cohort', () => {
     expect(a.medianScoreMs).toBeNull()
     expect(a.locations).toEqual([])
     expect(a.timeline).toEqual([])
+    expect(a.feedback).toEqual({responses: 0, avgStars: null, starCounts: [0, 0, 0, 0, 0], questions: expect.any(Array)})
+  })
+})
+
+describe('analytics — the post-game survey', () => {
+  const fb = (playerId: string, tsMs: number, p: Record<string, string | number>): GameEvent => ({
+    playerId,
+    type: 'feedback_submitted',
+    tsMs,
+    payload: p,
+  })
+
+  it('averages the stars and buckets each answer', () => {
+    const events: GameEvent[] = [
+      fb('fast', T0, {stars: 5, clues: 'right', navigation: 'confident', friction: 'none', recommend: 'yes'}),
+      fb('mid', T0, {stars: 3, clues: 'tricky', navigation: 'unsure', friction: 'gps', recommend: 'maybe'}),
+      fb('slow', T0, {stars: 4, clues: 'right', navigation: 'unsure', friction: 'gps', recommend: 'yes'}),
+    ]
+    const a = computeAnalytics({...input, events})
+
+    expect(a.feedback.responses).toBe(3)
+    expect(a.feedback.avgStars).toBe(4)
+    expect(a.feedback.starCounts).toEqual([0, 0, 1, 1, 1])
+
+    const clues = a.feedback.questions.find((q) => q.id === 'clues')!
+    expect(clues.options.find((o) => o.value === 'right')!.count).toBe(2)
+    expect(clues.options.find((o) => o.value === 'tricky')!.count).toBe(1)
+
+    const friction = a.feedback.questions.find((q) => q.id === 'friction')!
+    expect(friction.options.find((o) => o.value === 'gps')!.count).toBe(2)
+  })
+
+  it('keeps only the latest response when a player answers twice', () => {
+    const events: GameEvent[] = [
+      fb('fast', T0, {stars: 1, clues: 'hard', navigation: 'lost', friction: 'time', recommend: 'no'}),
+      fb('fast', T0 + MIN, {stars: 5, clues: 'right', navigation: 'confident', friction: 'none', recommend: 'yes'}),
+    ]
+    const a = computeAnalytics({...input, events})
+
+    expect(a.feedback.responses).toBe(1)
+    expect(a.feedback.avgStars).toBe(5)
+    expect(a.feedback.starCounts).toEqual([0, 0, 0, 0, 1])
   })
 })

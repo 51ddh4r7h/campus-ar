@@ -158,6 +158,7 @@ export type GameEventType =
   | 'hunt_paused'
   | 'hunt_resumed'
   | 'hunt_abandoned'
+  | 'feedback_submitted'
 
 export interface GameEvent {
   playerId: string

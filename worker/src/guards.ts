@@ -4,7 +4,7 @@
  */
 
 import * as v from 'valibot'
-import type {GeoSample, HintRung} from '@cmh/shared'
+import {optionValues, type Feedback, type GeoSample, type HintRung} from '@cmh/shared'
 
 export class BadInput extends Error {
   constructor(message: string) {
@@ -84,6 +84,22 @@ const CrumbsSchema = v.object({
   crumbs: v.pipe(v.array(CrumbSchema), v.maxLength(500)),
 })
 
+/** One of the answers the shared SURVEY defines for that question, nothing else. */
+const answerFor = (id: string): v.GenericSchema<string> => {
+  const values = optionValues(id)
+  // SAFETY: optionValues throws on an unknown id, and every SURVEY question is
+  // defined with at least two options — so this is always a non-empty tuple,
+  // which is the shape v.picklist's type wants.
+  return v.picklist(values as [string, ...string[]])
+}
+const FeedbackSchema = v.object({
+  stars: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(5)),
+  clues: answerFor('clues'),
+  navigation: answerFor('navigation'),
+  friction: answerFor('friction'),
+  recommend: answerFor('recommend'),
+})
+
 const parse = <TSchema extends v.GenericSchema>(
   schema: TSchema,
   raw: unknown,
@@ -119,3 +135,5 @@ export const parseCrumbs = (
   raw: unknown,
 ): {crumbs: ReadonlyArray<{lat: number; lng: number; accuracyM: number; tsMs: number}>} =>
   parse(CrumbsSchema, raw)
+
+export const parseFeedback = (raw: unknown): Feedback => parse(FeedbackSchema, raw)

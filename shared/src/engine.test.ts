@@ -818,3 +818,45 @@ describe('engine — player replay', () => {
     await expect(engine.replay(player.sessionToken)).rejects.toThrow(/signups_closed/)
   })
 })
+
+describe('engine — post-game feedback', () => {
+  const seat = async (batchId: string, rosterId: string) =>
+    (await engine.registerPlayer({batchId, name: `P-${rosterId}`, rosterId})).player
+
+  it('stores the survey as a feedback_submitted event', async () => {
+    const batch = await engine.createBatch({name: 'F1'})
+    const player = await seat(batch.id, 'S-001')
+    await playThrough(player.sessionToken)
+
+    await engine.submitFeedback(player.sessionToken, {
+      stars: 4,
+      clues: 'right',
+      navigation: 'confident',
+      friction: 'none',
+      recommend: 'yes',
+    })
+
+    const events = await store.listEvents(batch.id, 100)
+    const fb = events.filter((e) => e.type === 'feedback_submitted')
+    expect(fb).toHaveLength(1)
+    expect(fb[0]!.payload).toEqual({
+      stars: 4,
+      clues: 'right',
+      navigation: 'confident',
+      friction: 'none',
+      recommend: 'yes',
+    })
+  })
+
+  it('rejects a bad token', async () => {
+    await expect(
+      engine.submitFeedback('nope', {
+        stars: 3,
+        clues: 'right',
+        navigation: 'unsure',
+        friction: 'gps',
+        recommend: 'maybe',
+      }),
+    ).rejects.toThrow(/bad_token/)
+  })
+})

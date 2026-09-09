@@ -19,6 +19,7 @@
 
 import {LEVEL_COUNT} from './config'
 import {locationById} from './content'
+import {SURVEY} from './feedback'
 import {elapsedMsOf} from './scoring'
 import type {DeviceKind, GameEvent, Player, Route, Session, Split} from './types'
 
@@ -109,6 +110,24 @@ export interface LocationVisits {
   missed: number
 }
 
+/** One survey question with a count against each of its answers. */
+export interface FeedbackQuestion {
+  id: string
+  prompt: string
+  options: Array<{value: string; label: string; count: number}>
+}
+
+/** What the post-game survey came back with, across the cohort. */
+export interface FeedbackSummary {
+  /** Players who submitted (latest response only, if someone answered twice). */
+  responses: number
+  /** Mean of the star ratings, 1–5, or null with no responses. */
+  avgStars: number | null
+  /** Count at each rating: index 0 is one star, index 4 is five. */
+  starCounts: [number, number, number, number, number]
+  questions: FeedbackQuestion[]
+}
+
 export interface Analytics {
   generatedAtMs: number
   registered: number
@@ -139,6 +158,8 @@ export interface Analytics {
   visits: LocationVisits[]
   /** Everyone, one row each. */
   players: PlayerRow[]
+  /** The post-game survey. */
+  feedback: FeedbackSummary
 }
 
 // ------------------------------------------------------------------ helpers
@@ -174,6 +195,54 @@ const hasReason = (p: Payload): p is Payload & {reason: string} =>
 
 const hasPenalty = (p: Payload): p is Payload & {penaltyMs: number} =>
   typeof p['penaltyMs'] === 'number'
+
+const hasStars = (p: Payload): p is Payload & {stars: number} =>
+  typeof p['stars'] === 'number'
+
+/**
+ * Roll the `feedback_submitted` events up into the survey shape.
+ *
+ * One player can answer more than once (a replay re-shows the screen); the last
+ * event wins, matched by keeping only the newest per player id.
+ */
+function buildFeedback(events: readonly GameEvent[]): FeedbackSummary {
+  const latest = new Map<string, GameEvent>()
+  for (const e of events) {
+    if (e.type !== 'feedback_submitted') continue
+    const prev = latest.get(e.playerId)
+    if (!prev || e.tsMs >= prev.tsMs) latest.set(e.playerId, e)
+  }
+  const responses = [...latest.values()]
+
+  const stars = responses
+    .map((e) => (hasStars(e.payload) ? Math.round(e.payload.stars) : 0))
+    .filter((s) => s >= 1 && s <= 5)
+  const starCounts: [number, number, number, number, number] = [
+    stars.filter((s) => s === 1).length,
+    stars.filter((s) => s === 2).length,
+    stars.filter((s) => s === 3).length,
+    stars.filter((s) => s === 4).length,
+    stars.filter((s) => s === 5).length,
+  ]
+  const starSum = stars.reduce((a, b) => a + b, 0)
+
+  const questions: FeedbackQuestion[] = SURVEY.map((q) => ({
+    id: q.id,
+    prompt: q.prompt,
+    options: q.options.map((o) => ({
+      value: o.value,
+      label: o.label,
+      count: responses.filter((e) => e.payload[q.id] === o.value).length,
+    })),
+  }))
+
+  return {
+    responses: responses.length,
+    avgStars: stars.length > 0 ? Math.round((starSum / stars.length) * 10) / 10 : null,
+    starCounts,
+    questions,
+  }
+}
 
 /** Events carry a level; the player's route says which place that level was. */
 const stopAt = (route: Route | undefined, event: GameEvent): string | null => {
@@ -470,5 +539,6 @@ export function computeAnalytics(input: AnalyticsInput): Analytics {
     })),
     visits: buildVisits(routes, splits),
     players: buildPlayers(players, sessions, splits, nowMs),
+    feedback: buildFeedback(events),
   }
 }

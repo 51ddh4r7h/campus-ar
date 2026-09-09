@@ -24,6 +24,7 @@
   import CampusMap from '../lib/components/CampusMap.svelte'
   import FilmStrip from '../lib/components/FilmStrip.svelte'
   import Confetti from '../lib/components/Confetti.svelte'
+  import Survey from '../lib/components/Survey.svelte'
   import {applause} from '../lib/applause'
 
   onMount(() => {
@@ -160,6 +161,12 @@
       {#if self.rank <= 3}<Icon name="trophy" size={18} />{/if}
       {self.rank}{#if standings.rows.length} of {standings.rows.length}{/if}
     </p>
+  {/if}
+
+  <!-- Real cohort only. Practice runs are the team, and their answers would
+       only dilute the exhibition-day data. -->
+  {#if !demoAllowed}
+    <Survey />
   {/if}
 
   <!-- The strip the player watched fill up, finished. Warm frames are the legs
