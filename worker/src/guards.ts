@@ -76,7 +76,7 @@ const SamplesSchema = v.object({
 })
 
 const HintSchema = v.object({
-  rung: v.picklist(['warm', 'close', 'showLocation'] satisfies HintRung[]),
+  rung: v.picklist(['warm', 'close'] satisfies HintRung[]),
 })
 
 const CrumbSchema = v.object({lat: Finite, lng: Finite, accuracyM: Finite, tsMs: Finite})

@@ -17,7 +17,6 @@
   const rungs = $derived<Rung[]>([
     {key: 'warm', title: 'Hint 1 — a nudge', penaltyMs: 90_000, unlockedText: game.clue?.clueText.warm ?? null},
     {key: 'close', title: 'Hint 2 — almost there', penaltyMs: 90_000, unlockedText: game.clue?.clueText.close ?? null},
-    {key: 'showLocation', title: 'Show me the location', penaltyMs: 300_000, unlockedText: game.clue?.revealPoint ? 'Shown on the map' : null},
   ])
   const used = $derived(game.session?.currentLevelHints ?? 0)
   let pending = $state<HintRung | null>(null)
@@ -38,7 +37,7 @@
   }
 </script>
 
-<Sheet title="Take a hint" height="58%">
+<Sheet title="Take a hint" height="48%">
   <p class="lead">Each hint adds time. Everyone pays the same.</p>
   <ul>
     {#each rungs as r, i}

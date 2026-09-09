@@ -196,9 +196,8 @@ describe('engine — hints', () => {
     expect(h2.clue.clueText.close).not.toBeNull()
     expect(h2.session.penaltyMs).toBe(180_000)
 
-    const h3 = await engine.useHint(player.sessionToken, 'showLocation')
-    expect(h3.clue.revealPoint).not.toBeNull()
-    expect(h3.session.penaltyMs).toBe(180_000 + 300_000)
+    // Two rungs is the whole ladder — there is no third.
+    await expect(engine.useHint(player.sessionToken, 'close')).rejects.toThrow(/hint_locked/)
   })
 
   it('carries the hint penalty into the final score', async () => {
@@ -613,16 +612,15 @@ describe('engine — sessions and batches that outlive their event', () => {
 
   it('brings the deadline forward by the penalties taken', async () => {
     const {player} = await playing('stale-pen')
-    // All three hint rungs — 1:30 + 1:30 + 5:00 = 8:00 off the clock.
+    // Both hint rungs — 1:30 + 1:30 = 3:00 off the clock.
     await engine.useHint(player.sessionToken, 'warm')
     await engine.useHint(player.sessionToken, 'close')
-    await engine.useHint(player.sessionToken, 'showLocation')
 
-    // Still fine at 16 minutes of real time — 16:00 + 8:00 = 24:00.
-    deps.advance(16 * 60_000)
+    // Still fine at 21 minutes of real time — 21:00 + 3:00 = 24:00.
+    deps.advance(21 * 60_000)
     expect((await engine.getState(player.sessionToken)).session.status).toBe('in_progress')
 
-    // But 18 minutes of real time plus 8:00 of penalty is over the 25.
+    // But 23 minutes of real time plus 3:00 of penalty is over the 25.
     deps.advance(2 * 60_000)
     expect((await engine.getState(player.sessionToken)).session.status).toBe('abandoned')
   })

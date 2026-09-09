@@ -121,7 +121,7 @@ export interface Session {
   pausedTotalMs: number
 }
 
-export type HintRung = 'warm' | 'close' | 'showLocation'
+export type HintRung = 'warm' | 'close'
 
 export interface Split {
   playerId: string
@@ -218,8 +218,6 @@ export interface ClueView {
   /** Progressive text — only rungs the player has unlocked are populated. */
   clueText: {far: string; warm: string | null; close: string | null}
   radiusHintM: number
-  /** Set only once the "show me the location" hint has been taken. */
-  revealPoint: {lat: number; lng: number} | null
 }
 
 export type ValidationFailure =

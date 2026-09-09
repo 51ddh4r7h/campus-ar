@@ -143,7 +143,7 @@
 
   const hintRows = $derived(
     (data?.hints ?? []).map((h) => ({
-      label: h.rung === 'showLocation' ? 'Show location' : h.rung === 'close' ? 'Close' : 'Warm',
+      label: h.rung === 'close' ? 'Close' : 'Warm',
       value: h.count,
     })),
   )

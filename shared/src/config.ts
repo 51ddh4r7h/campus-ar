@@ -37,7 +37,7 @@ export const DEFAULT_PAR_CONSTANTS: ParConstants = {
   identifyParMs: {1: 75_000, 2: 135_000, 3: 210_000},
   dwellParMs: 25_000,
   walkSpeedMps: 1.3,
-  hintPenaltyMs: {warm: 90_000, close: 90_000, showLocation: 300_000},
+  hintPenaltyMs: {warm: 90_000, close: 90_000},
   // The screening that opens a level is free and not metered. One more look
   // after that — a replay or a compare — is free too; every one past that costs
   // time, the same way a hint does. The clip is the clue, so staring at it

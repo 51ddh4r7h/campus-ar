@@ -68,7 +68,7 @@ export interface EngineDeps {
   verifyPassword(password: string, stored: string): Promise<boolean>
 }
 
-const HINT_ORDER: readonly HintRung[] = ['warm', 'close', 'showLocation']
+const HINT_ORDER: readonly HintRung[] = ['warm', 'close']
 
 /** Sum of the first `count` hint-rung penalties, in ms. */
 const hintPenaltyForCount = (count: number, pc: ParConstants): number => {
@@ -204,7 +204,6 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
         close: hints >= 2 ? loc.clue.close : null,
       },
       radiusHintM: loc.radiusM,
-      revealPoint: hints >= 3 ? {lat: loc.lat, lng: loc.lng} : null,
     }
   }
 
@@ -895,13 +894,13 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       const {session, route, batch} = await authed(token)
       if (session.status !== 'in_progress') throw new EngineError('not_in_progress')
 
-      // Rungs are still climbed in order — a nudge, then almost-there, then the
-      // map pin — but there is no timer holding them back. If you want one, it
-      // is yours; the time penalty is the whole of the cost.
+      // The two rungs are still climbed in order — a nudge, then almost-there —
+      // but there is no timer holding them back. If you want one, it is yours;
+      // the time penalty is the whole of the cost.
       const rungIndex = HINT_ORDER.indexOf(rung)
       if (rungIndex !== session.currentLevelHints) throw new EngineError('hint_locked')
 
-      // Rung 3 is one free hint for the whole hunt — spent on whichever the
+      // One hint on the house for the whole hunt — spent on whichever the
       // player decides is worth it, rather than a discount on all of them.
       const onTheHouse = hasHintCredit(session.currentLevel) && !session.hintCreditUsed
       const penaltyMs = onTheHouse ? 0 : batch.parConstants.hintPenaltyMs[rung]
