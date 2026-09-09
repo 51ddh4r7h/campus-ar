@@ -2,9 +2,11 @@
  * Campus content — the real scene list.
  *
  * Every location here is a place a scene was actually shot, at coordinates
- * surveyed on site with GPS Map Camera (see `Clips Master Sheet`). Clue text is
- * written from the frames themselves: it describes what is visible in the shot,
- * never something invented about the place.
+ * surveyed on site with GPS Map Camera (see `Clips Master Sheet`). The `far`
+ * clue is written from the frames themselves — what is visible in the shot,
+ * never something invented. The two hints (`warm`, `close`) are the organisers'
+ * own campus-knowledge riddles from `with_hints.pdf`: they lean on what a
+ * Symbiosis student already knows, since that is who plays this.
  *
  * TWELVE sites were surveyed. NINE are in play. Three are parked, not because
  * anything is wrong with the clips but because they sit too close to another
@@ -83,8 +85,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'A long covered walk of rough stone, cut through by square openings that let the daylight in.',
-      warm: 'Squat stone pillars on both sides, with lawn showing through the gaps.',
-      close: 'The arcade running along the back of the banking and finance block.',
+      warm: 'A popular photoshoot spot.',
+      close: 'Right behind SSBF.',
     },
   },
   {
@@ -103,8 +105,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'A wide open forecourt under a run of white angled struts, with a curved brick wall on one side.',
-      warm: 'Patterned paving, long benches, and a noticeboard on the brick.',
-      close: 'The courtyard outside the business management institute.',
+      warm: 'By the famous wall of SIU Lavale.',
+      close: 'The entrance to the hilltop ka baap college.',
     },
   },
   {
@@ -123,8 +125,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'A glass frontage with orange columns, and a printed list of departments beside the door.',
-      warm: 'You are looking through glass into a lobby — reflections of the walkway on it.',
-      close: 'The admin office at the telecom and digital management institute.',
+      warm: 'This place is named after a committee.',
+      close: 'Where the top hierarchy works.',
     },
   },
   {
@@ -143,8 +145,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'A broad flight of steps up to a building under a white sail-shaped canopy, with the wooded hillside behind.',
-      warm: 'Water on one side of the steps, a clock on the building opposite.',
-      close: 'The steps and the fountain below them.',
+      warm: 'The last checkpoint for every bus.',
+      close: 'A statue of Saraswati Ma stands nearby.',
     },
   },
   {
@@ -163,8 +165,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'Tall pale doors standing open, with the tail of a sign visible on the wall above them.',
-      warm: 'Pale panelling, a bin beside the door, shelving just inside.',
-      close: 'The doors into the library.',
+      warm: 'Too many bags piled up outside.',
+      close: 'You are supposed to stay quiet here.',
     },
   },
   {
@@ -183,8 +185,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'A pale open hall with a staircase climbing across the back of it, and a brick pier at one side.',
-      warm: 'Potted palms at the foot of the stairs; a mezzanine walkway above.',
-      close: 'The university administration building.',
+      warm: 'There is a photo of PM Modi nearby.',
+      close: 'Where hillbase students used to wait for the bus.',
     },
   },
   {
@@ -203,8 +205,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'Wide stone tiers stepping down towards a stage, with a stair cut straight through the middle.',
-      warm: 'Open to the sky. Seating enough for hundreds, all facing one way.',
-      close: 'The amphitheatre.',
+      warm: 'You can see it from the Ramanujan and Lilavati classrooms.',
+      close: 'Far too many stairs.',
     },
   },
   {
@@ -223,8 +225,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'Shot after dark at a table, with foliage behind and nothing of the building in frame.',
-      warm: 'Somewhere people sit down to eat together in the evening.',
-      close: 'The food court.',
+      warm: 'Your go-to spot between lectures.',
+      close: 'Last-minute vada pav runs.',
     },
   },
   {
@@ -243,8 +245,8 @@ const SURVEYED: readonly GameLocation[] = [
     campusFact: '',
     clue: {
       far: 'A clipped lawn in front of a brick and white building, with a single tree breaking the frontage.',
-      warm: 'A low hedge along the edge of the grass, and a stairway at the far end of the block.',
-      close: 'The lawn outside C hall.',
+      warm: "Where everyone ran when late for Giri Sir's class.",
+      close: 'One of the ways to get to C Hall.',
     },
   },
 ]
