@@ -66,7 +66,8 @@
   const name = (id: string) => locationById(id)?.name ?? id
 
   const earned = $derived(perksEarned(splits.length))
-  const visited = $derived(new Set(splits.map((s) => s.locationId)))
+  /** Location ids in the order they were reached — the player's own route. */
+  const visited = $derived(splits.map((s) => s.locationId))
   /** Rung 5: the half of campus a randomised route never sent you to. */
   const wrapped = $derived(game.complete)
 
@@ -183,11 +184,12 @@
   {/if}
 
   {#if wrapped}
-    <!-- The wrap. A route only ever sends you to five of the ten, so finishing
-         is what buys you the sight of the whole campus. -->
+    <!-- The wrap: the five they walked, and only those. Showing the rest of the
+         pool would name places this player was never sent to, which is both a
+         spoiler for their replay and a leak of everyone else's clues. -->
     <section class="wrap">
-      <h2>The wrap — every location on campus</h2>
-      <CampusMap found={visited} />
+      <h2>The wrap — the five you found</h2>
+      <CampusMap route={visited} />
     </section>
   {/if}
 

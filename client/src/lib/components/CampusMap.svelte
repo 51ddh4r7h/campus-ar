@@ -1,19 +1,31 @@
 <script lang="ts">
   /**
-   * The wrap — every location on campus, drawn as a plan.
+   * The wrap — the route this player walked, drawn as a plan.
    *
-   * A randomised route only ever sends a player to five of the ten, so this is
-   * the thing finishing buys: the whole map, with the five you found lit and
-   * the five you never saw sitting dark. A list could say the same words; only
-   * a plan shows how much of the campus you actually covered.
+   * Only their own five stops. The map used to draw all nine and name every one
+   * in the key, which handed a finisher the four places they had never been
+   * sent to: the answers to clues they might still be given on a replay, and
+   * the shape of the pool everyone else is still hunting through. A player's
+   * wrap should describe their game and no one else's.
+   *
+   * Numbered in the order they were found, so the plan reads against the split
+   * list above it rather than against a pool ordering nobody sees.
    *
    * Geometry is baked from OpenStreetMap at build time rather than fetched, so
    * it works on a bad signal and can be painted in the app's own palette
    * instead of pasting a bright standard tile into a dark interface.
    */
+  import type {MapStop} from '../campus-map'
   import {MAP_FEATURES, MAP_LANDMARKS, MAP_SIZE, MAP_STOPS, MAP_WIDTH_M} from '../campus-map'
 
-  const {found}: {found: ReadonlySet<string>} = $props()
+  /** Location ids in the order the player reached them. */
+  const {route}: {route: readonly string[]} = $props()
+
+  const stops = $derived(
+    route
+      .map((id) => MAP_STOPS.find((s) => s.id === id))
+      .filter((s): s is MapStop => s !== undefined),
+  )
 
   /** A 100 m rule, sized against the plan's real width. */
   const scaleW = (100 / MAP_WIDTH_M) * MAP_SIZE.w
@@ -21,7 +33,7 @@
 </script>
 
 <figure>
-  <svg viewBox="0 0 {MAP_SIZE.w} {MAP_SIZE.h}" role="img" aria-label="Campus plan showing every location">
+  <svg viewBox="0 0 {MAP_SIZE.w} {MAP_SIZE.h}" role="img" aria-label="Campus plan showing the route this player walked">
     <rect width={MAP_SIZE.w} height={MAP_SIZE.h} fill="var(--map-ground)" />
 
     {#each featuresOf('wood') as s (s.d)}
@@ -47,10 +59,9 @@
       </g>
     {/each}
 
-    {#each MAP_STOPS as s, i (s.id)}
-      {@const hit = found.has(s.id)}
-      <g class:hit>
-        {#if hit}<circle cx={s.x} cy={s.y} r="24" class="halo" />{/if}
+    {#each stops as s, i (s.id)}
+      <g class="hit">
+        <circle cx={s.x} cy={s.y} r="24" class="halo" />
         <circle cx={s.x} cy={s.y} r="14" class="pin" />
         <text x={s.x} y={s.y + 6} text-anchor="middle" class="num">{i + 1}</text>
       </g>
@@ -62,12 +73,12 @@
       <text x={scaleW / 2} y="-9" text-anchor="middle">100 m</text>
     </g>
   </svg>
-  <!-- Names sit in a key rather than on the plan. Across the whole hilltop the
-       stops cluster tightly enough that labels collide into each other, and an
-       unreadable map is worse than a numbered one. -->
+  <!-- Names sit in a key rather than on the plan. Even five stops cluster
+       tightly enough on this hilltop that labels collide into each other, and
+       an unreadable map is worse than a numbered one. -->
   <ol class="key">
-    {#each MAP_STOPS as s, i (s.id)}
-      <li class:hit={found.has(s.id)}>
+    {#each stops as s, i (s.id)}
+      <li class="hit">
         <span class="n">{i + 1}</span>
         {s.name}
       </li>
@@ -75,7 +86,7 @@
   </ol>
 
   <figcaption>
-    {found.size} of {MAP_STOPS.length} found · map data © OpenStreetMap contributors
+    Your route, in the order you found them · map data © OpenStreetMap contributors
   </figcaption>
 </figure>
 
