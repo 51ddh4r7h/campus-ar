@@ -22,7 +22,9 @@
   import {toasts} from '../lib/stores/toast.svelte'
   import StatTile from '../lib/components/charts/StatTile.svelte'
   import Panel from '../lib/components/charts/Panel.svelte'
-  import FlintChart from '../lib/components/charts/FlintChart.svelte'
+  import TimeArea from '../lib/components/charts/TimeArea.svelte'
+  import RankedBars from '../lib/components/charts/RankedBars.svelte'
+  import DivergingBars from '../lib/components/charts/DivergingBars.svelte'
 
   /** Shared with the console: one key unlocks both surfaces on this device. */
   const KEY_STORE = 'cmh.adminKey'
@@ -93,43 +95,68 @@
             ? 'Stopped'
             : 'Not started'
 
+  const funnelRows = $derived(
+    (data?.funnel ?? []).map((f) => ({
+      label: f.label,
+      value: f.count,
+      sub: `${Math.round(f.retentionOfPrevious * 100)}% of the step before`,
+    })),
+  )
+
   /**
-   * Minutes slower (positive) or quicker (negative) than the game expected.
+   * Each leg against the time it was budgeted, as a percentage either side.
    *
-   * Signed on purpose: a bar either side of zero says "slower" and "quicker"
-   * on its own, and the underlying ratio that nobody reads never appears.
+   * The index is the median split over the median par, so 1.0 is exactly on
+   * budget. Plotted as a distance from that, because what an organiser needs
+   * is not the ratio but which way and by how much — a leg 40% over is a clue
+   * to rewrite, one 40% under is par set too generously.
    */
-  const paceSigned = $derived(
+  /**
+   * How much longer or shorter each leg took than the game expected, in
+   * minutes. The underlying figure is a ratio; nobody reads a ratio. A bar
+   * that says "2 minutes slower than expected" needs no explaining.
+   */
+  const paceRows = $derived(
     (data?.locations ?? [])
       .filter((l) => l.medianSplitMs !== null && l.medianParMs !== null)
       .map((l) => {
-        const minutes = +((l.medianSplitMs! - l.medianParMs!) / 60_000).toFixed(1)
+        const offMs = l.medianSplitMs! - l.medianParMs!
+        const offMin = offMs / 60_000
+        // SAFETY: the three branches produce exactly the three union members.
+        const side = (offMin > 0.5 ? 'over' : offMin < -0.5 ? 'under' : 'level') as
+          | 'over'
+          | 'under'
+          | 'level'
         return {
-          location: l.name,
-          minutes,
-          // Carried as a field so the colour is part of the data rather than
-          // something the reader has to infer from which way a bar points.
-          pace: minutes > 0 ? 'Slower than expected' : 'Quicker than expected',
+          label: l.name,
+          value: Math.abs(+offMin.toFixed(1)),
+          side,
+          sub: `${offMin > 0 ? 'took' : 'saved'} ${Math.abs(offMin).toFixed(1)} min · ${l.found} of ${l.assigned} got there`,
         }
       }),
   )
 
-  /** Two measures per place, so one row each rather than one row per place. */
-  const stuckGrouped = $derived(
-    (data?.locations ?? [])
-      .filter((l) => l.hinted.count + l.skipAttempts > 0)
-      .flatMap((l) => [
-        {location: l.name, kind: 'Asked for a hint', count: l.hinted.count},
-        {location: l.name, kind: 'Tried to skip', count: l.skipAttempts},
-      ]),
+  const visitRows = $derived(
+    (data?.visits ?? []).map((v) => ({
+      label: v.name,
+      value: v.visits,
+      sub: v.missed > 0 ? `${v.missed} sent there never arrived` : 'everyone sent there arrived',
+    })),
   )
 
-  /** One row per point per series — the long shape a colour encoding needs. */
-  const timelineLong = $derived(
-    (data?.timeline ?? []).flatMap((b) => [
-      {minute: b.minute, people: b.onCourse, group: 'Still playing'},
-      {minute: b.minute, people: b.finished, group: 'Finished'},
-    ]),
+  const deviceRows = $derived(
+    (data?.devices ?? []).map((d) => ({label: phone(d.device), value: d.count})),
+  )
+
+  const stuckRows = $derived(
+    (data?.locations ?? [])
+      .map((l) => ({
+        label: l.name,
+        value: l.hinted.count + l.skipAttempts,
+        sub: `${l.hinted.count} took a hint, ${l.skipAttempts} tried to skip`,
+      }))
+      .filter((r) => r.value > 0)
+      .sort((a, b) => b.value - a.value),
   )
 
   const hintRows = $derived(
@@ -139,16 +166,22 @@
     })),
   )
 
+  const timelineSeries = $derived([
+    {
+      name: 'On course',
+      colour: '#3987e5',
+      points: (data?.timeline ?? []).map((b) => ({x: b.minute, y: b.onCourse})),
+    },
+    {
+      name: 'Finished',
+      colour: '#d95926',
+      points: (data?.timeline ?? []).map((b) => ({x: b.minute, y: b.finished})),
+    },
+  ])
+
   const troubles = $derived([
     ...(data?.abandonReasons ?? []).map((a) => ({
-      label:
-        a.reason === 'time_limit'
-          ? 'Ran out of time'
-          : a.reason === 'stale'
-            ? 'Left open too long'
-            : a.reason === 'batch_closed'
-              ? 'Event was closed'
-              : 'Chose to stop',
+      label: a.reason === 'stale' ? 'Timed out' : a.reason === 'batch_closed' ? 'Event closed' : 'Player stopped',
       value: a.count,
     })),
     ...(data && data.speedFlags > 0 ? [{label: 'Impossible arrival', value: data.speedFlags}] : []),
@@ -231,14 +264,7 @@
           columns={['Step', 'People', 'Kept from the step before']}
           rows={data.funnel.map((f) => [f.label, String(f.count), `${Math.round(f.retentionOfPrevious * 100)}%`])}
         >
-          <FlintChart
-            data={data.funnel.map((f) => ({step: f.label, people: f.count}))}
-            semanticTypes={{step: 'Category', people: 'Quantity'}}
-            chartType="Bar Chart"
-            encodings={{x: {field: 'people'}, y: {field: 'step'}}}
-            height={280}
-            label="How many people reached each step of the hunt"
-          />
+          <RankedBars rows={funnelRows} colour="#3987e5" labelWidth={92} />
         </Panel>
 
         <Panel
@@ -256,16 +282,17 @@
             `${l.found} of ${l.assigned}`,
           ])}
         >
-          {#if paceSigned.length === 0}
+          {#if paceRows.length === 0}
             <p class="empty">Nobody has reached a location yet.</p>
           {:else}
-            <FlintChart
-              data={paceSigned}
-              semanticTypes={{location: 'Category', minutes: 'Quantity', pace: 'Category'}}
-              chartType="Bar Chart"
-              encodings={{x: {field: 'minutes'}, y: {field: 'location'}, color: {field: 'pace'}}}
-              height={300}
-              label="Minutes slower or quicker than expected, by location"
+            <DivergingBars
+              rows={paceRows}
+              labelWidth={152}
+              legend={{
+                under: 'Quicker than expected',
+                level: 'About right',
+                over: 'Slower than expected',
+              }}
             />
           {/if}
         </Panel>
@@ -277,17 +304,10 @@
           columns={['Location', 'People who got there', 'Sent but never arrived']}
           rows={data.visits.map((v) => [v.name, String(v.visits), String(v.missed)])}
         >
-          {#if data.visits.length === 0}
+          {#if visitRows.length === 0}
             <p class="empty">Nobody has reached a location yet.</p>
           {:else}
-            <FlintChart
-              data={data.visits.map((v) => ({location: v.name, people: v.visits}))}
-              semanticTypes={{location: 'Category', people: 'Quantity'}}
-              chartType="Bar Chart"
-              encodings={{x: {field: 'people'}, y: {field: 'location'}}}
-              height={300}
-              label="How many people reached each location"
-            />
+            <RankedBars rows={visitRows} colour="#199e70" labelWidth={152} />
           {/if}
         </Panel>
 
@@ -302,17 +322,10 @@
             String(l.abandonedHere),
           ])}
         >
-          {#if stuckGrouped.length === 0}
+          {#if stuckRows.length === 0}
             <p class="empty">Nobody has needed help.</p>
           {:else}
-            <FlintChart
-              data={stuckGrouped}
-              semanticTypes={{location: 'Category', kind: 'Category', count: 'Quantity'}}
-              chartType="Grouped Bar Chart"
-              encodings={{x: {field: 'count'}, y: {field: 'location'}, color: {field: 'kind'}}}
-              height={300}
-              label="Hints asked for and skips attempted, by location"
-            />
+            <RankedBars rows={stuckRows} colour="#c98500" labelWidth={152} emphasise={3} />
           {/if}
         </Panel>
 
@@ -325,14 +338,7 @@
           {#if hintRows.length === 0}
             <p class="empty">No hints taken.</p>
           {:else}
-            <FlintChart
-              data={hintRows.map((h) => ({kind: h.label, times: h.value}))}
-              semanticTypes={{kind: 'Category', times: 'Quantity'}}
-              chartType="Bar Chart"
-              encodings={{x: {field: 'times'}, y: {field: 'kind'}}}
-              height={180}
-              label="How many times each kind of hint was used"
-            />
+            <RankedBars rows={hintRows} colour="#c98500" labelWidth={112} />
           {/if}
         </Panel>
 
@@ -342,17 +348,10 @@
           columns={['Phone', 'People']}
           rows={data.devices.map((d) => [phone(d.device), String(d.count)])}
         >
-          {#if data.devices.length === 0}
+          {#if deviceRows.length === 0}
             <p class="empty">Nothing recorded yet.</p>
           {:else}
-            <FlintChart
-              data={data.devices.map((d) => ({phone: phone(d.device), people: d.count}))}
-              semanticTypes={{phone: 'Category', people: 'Quantity'}}
-              chartType="Donut Chart"
-              encodings={{theta: {field: 'people'}, color: {field: 'phone'}}}
-              height={220}
-              label="Share of players on each kind of phone"
-            />
+            <RankedBars rows={deviceRows} colour="#3987e5" labelWidth={132} />
           {/if}
         </Panel>
 
@@ -396,13 +395,10 @@
           columns={['Minutes in', 'Still playing', 'Finished']}
           rows={data.timeline.map((b) => [`+${b.minute}`, String(b.onCourse), String(b.finished)])}
         >
-          <FlintChart
-            data={timelineLong}
-            semanticTypes={{minute: 'Quantity', people: 'Quantity', group: 'Category'}}
-            chartType="Line Chart"
-            encodings={{x: {field: 'minute'}, y: {field: 'people'}, color: {field: 'group'}}}
-            height={260}
-            label="Players still playing and players finished, by minutes since the first start"
+          <TimeArea
+            series={timelineSeries}
+            labelFor={(x) => `+${x}m`}
+            label="Players on course and players finished, by minutes since the first start"
           />
         </Panel>
 
@@ -414,14 +410,7 @@
             columns={['Kind', 'Count']}
             rows={troubles.map((t) => [t.label, String(t.value)])}
           >
-            <FlintChart
-              data={troubles.map((t) => ({kind: t.label, count: t.value}))}
-              semanticTypes={{kind: 'Category', count: 'Quantity'}}
-              chartType="Bar Chart"
-              encodings={{x: {field: 'count'}, y: {field: 'kind'}}}
-              height={200}
-              label="Problems recorded during the event"
-            />
+            <RankedBars rows={troubles} colour="#e66767" labelWidth={172} />
           </Panel>
         {/if}
       </div>
