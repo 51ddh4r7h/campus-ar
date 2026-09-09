@@ -24,8 +24,14 @@
   import CampusMap from '../lib/components/CampusMap.svelte'
   import FilmStrip from '../lib/components/FilmStrip.svelte'
   import Confetti from '../lib/components/Confetti.svelte'
+  import {applause} from '../lib/applause'
 
-  onMount(() => haptics.fanfare())
+  onMount(() => {
+    haptics.fanfare()
+    // Sound and confetti are the completed-hunt reward; an abandoned one gets
+    // neither. The player reached here through a tap, so autoplay is allowed.
+    if (game.complete) applause()
+  })
 
   let starting = $state(false)
 

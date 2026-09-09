@@ -47,6 +47,14 @@ Use the "Copy Credits" button on each model's download page and paste the exact
 text here. Once complete, surface it in the app — the How to play sheet is the
 natural home, since it is reachable without interrupting a run.
 
+### Wrap applause — `client/src/assets/clap.m4a`
+
+Trimmed to 2.3s from `Clapping.wav` in `~/Downloads/clapping/` (a three-file
+zip, no readme, no licence). The only shipped sound in the app; it plays on the
+finish screen for a completed hunt. **Source and licence: TODO** — whoever
+added the zip needs to confirm it permits use in an application, and paste the
+attribution here.
+
 ## svelte-bits
 
 Two components are vendored from svelte-bits (the Svelte port of React Bits)

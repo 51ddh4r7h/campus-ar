@@ -4,6 +4,8 @@ import {defineConfig} from 'vite'
 export default defineConfig({
   base: './',
   plugins: [svelte()],
+  // .m4a isn't in Vite's built-in asset list; the wrap applause is one.
+  assetsInclude: ['**/*.m4a'],
   build: {
     target: 'es2022',
     cssCodeSplit: false,

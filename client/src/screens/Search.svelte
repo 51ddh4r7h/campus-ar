@@ -242,7 +242,7 @@
   }
   .cat-preview {
     position: fixed;
-    left: max(var(--safe-left), 6px);
+    left: max(var(--safe-left), var(--edge));
     /* Directly above the cat. */
     bottom: calc(var(--safe-bottom) + 98px + 64px + 6px);
     z-index: 14;

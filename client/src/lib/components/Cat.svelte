@@ -98,9 +98,9 @@
   }
   .cat {
     position: fixed;
-    /* Tucked past the edge so only the front of the cat shows — it reads as
-       peeking in, and its footprint over any corner content stays small. */
-    left: calc(max(var(--safe-left), 0px) - 14px);
+    /* Left edge flush with the content column, so it lines up with the control
+       bar below it rather than hanging off the screen. */
+    left: max(var(--safe-left), var(--edge));
     bottom: calc(var(--safe-bottom) + 4px);
     z-index: 14;
     width: var(--cell);
@@ -121,7 +121,7 @@
   }
   .cat.right {
     left: auto;
-    right: calc(max(var(--safe-right), 0px) - 14px);
+    right: max(var(--safe-right), var(--edge));
     /* Face back into the screen. */
     transform: scaleX(-1);
   }
