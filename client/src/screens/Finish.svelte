@@ -107,8 +107,10 @@
 
 <!-- Only for a hunt that was actually finished. On an abandoned one this
      would be a taunt, and `game.complete` is the difference. -->
-{#if game.complete}<Confetti />{/if}
-<Cat pose={game.complete ? 'dance' : 'sad'} anchor="br" />
+{#if game.complete}
+  <Confetti />
+  <Cat pose="dance" anchor="br" />
+{/if}
 
 <main>
   <span class="eyebrow">ARound Campus</span>

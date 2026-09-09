@@ -17,7 +17,6 @@
   import ArScreen from '../lib/components/ArScreen.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
-  import Cat from '../lib/components/Cat.svelte'
   import {ApiError} from '../lib/api'
   import {rungIcon} from '../lib/rung-icons'
   import {camera} from '../lib/stores/camera.svelte'
@@ -166,8 +165,6 @@
 </script>
 
 <CameraFeed />
-
-<Cat pose="surprised" anchor="br" raised />
 
 <ArScreen
   bind:this={screen}

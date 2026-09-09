@@ -9,7 +9,6 @@
   import {toasts} from '../lib/stores/toast.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
-  import Cat from '../lib/components/Cat.svelte'
   import StepDots from '../lib/components/StepDots.svelte'
 
   /** Lazy, like the hero's beam: three.js is a chunk, not a line. */
@@ -166,8 +165,6 @@
     {/if}
   </div>
 </main>
-
-<Cat pose="waiting" anchor="br" raised />
 
 <style>
   .scan {

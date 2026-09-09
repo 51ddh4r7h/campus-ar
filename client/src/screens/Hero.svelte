@@ -11,10 +11,9 @@
   import {nav} from '../lib/stores/nav.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
-  import Cat from '../lib/components/Cat.svelte'
   import EdgeBlur from '../lib/components/EdgeBlur.svelte'
   import Sheen from '../lib/components/Sheen.svelte'
-  import TrueFocus from '../lib/components/bits/TrueFocus.svelte'
+  import Wordmark from '../lib/components/Wordmark.svelte'
   import {isInAppBrowser} from '../lib/env'
 
   /**
@@ -65,7 +64,7 @@
 
   <div class="top">
     <span class="eyebrow"><Sheen text="Shot on this campus" /></span>
-    <h1><TrueFocus sentence="ARound Campus" blurAmount={6} /></h1>
+    <h1><Wordmark size="clamp(2.9rem, 13vw, 3.8rem)" /></h1>
     <p class="tag">Five scenes were filmed here. Find where.</p>
   </div>
 
@@ -93,8 +92,6 @@
     {/if}
   </div>
 </main>
-
-<Cat pose="sleep" />
 
 <style>
   main {

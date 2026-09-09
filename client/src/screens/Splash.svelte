@@ -1,8 +1,9 @@
 <script lang="ts">
+  import Wordmark from '../lib/components/Wordmark.svelte'
 </script>
 
 <div class="splash">
-  <h1>AR<span>ound</span>&nbsp;Campus</h1>
+  <h1><Wordmark size="clamp(2.4rem, 11vw, 3.4rem)" /></h1>
   <div class="rule"></div>
 </div>
 
@@ -25,9 +26,6 @@
     text-align: center;
     margin: 0;
     animation: fade 0.6s ease both;
-  }
-  h1 span {
-    color: var(--text-dim);
   }
   .rule {
     width: 0;

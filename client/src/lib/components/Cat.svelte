@@ -6,16 +6,13 @@
     | 'idle'
     | 'excited'
     | 'dance'
-    | 'surprised'
-    | 'waiting'
-    | 'sad'
 </script>
 
 <script lang="ts">
   /**
-   * The mascot. One pixel cat that hangs around the corner of every screen and
-   * reacts to where you are in the game — asleep on the landing page, sitting up
-   * on the start line, dancing when you finish, sulking when the clock beats you.
+   * The pixel cat. It lives on the search screen, where its pose follows the
+   * heat band — asleep with nothing near, on its feet on top of a scene — and
+   * turns up once more on the finish screen to dance for a completed hunt.
    *
    * Pixel art on purpose. At this size over a live camera it reads as a HUD
    * sticker rather than something pretending to be in the shot, which is what
@@ -31,23 +28,12 @@
   import idleSheet from '../../assets/sprites/cat-idle.png'
   import excitedSheet from '../../assets/sprites/cat-excited.png'
   import danceSheet from '../../assets/sprites/cat-dance.png'
-  import surprisedSheet from '../../assets/sprites/cat-surprised.png'
-  import waitingSheet from '../../assets/sprites/cat-waiting.png'
-  import sadSheet from '../../assets/sprites/cat-sad.png'
 
   interface Props {
     pose: CatPose
-    /**
-     * Which bottom corner to hang from. Pick per screen by where the content
-     * isn't: 'bl' against a left-aligned layout, 'br' where the right side is
-     * the emptier one. The cat only ever lives in a corner — that is what keeps
-     * it out of the way whatever the screen is doing.
-     */
+    /** Which bottom corner to hang from — search uses left, finish uses right. */
     anchor?: 'bl' | 'br'
-    /**
-     * Lift the cat clear of a bottom control bar. The camera screens float one
-     * there; the entry screens do not, so their cat sits right in the corner.
-     */
+    /** Lift clear of a floating control bar (the search screen has one). */
     raised?: boolean
   }
   const {pose, anchor = 'bl', raised = false}: Props = $props()
@@ -73,9 +59,6 @@
     idle: {src: idleSheet, frames: 10, loop: 1.6, dim: 0.9, glow: 0},
     excited: {src: excitedSheet, frames: 12, loop: 0.95, dim: 1, glow: 0.4},
     dance: {src: danceSheet, frames: 4, loop: 0.55, dim: 1, glow: 0.85},
-    surprised: {src: surprisedSheet, frames: 12, loop: 0.8, dim: 1, glow: 0.5},
-    waiting: {src: waitingSheet, frames: 6, loop: 2.0, dim: 0.85, glow: 0},
-    sad: {src: sadSheet, frames: 9, loop: 2.2, dim: 0.66, glow: 0},
   } as const satisfies Record<CatPose, PoseSpec>
 
   const cat = $derived(POSES[pose] ?? POSES.idle)
@@ -116,10 +99,8 @@
   .cat {
     position: fixed;
     /* Tucked past the edge so only the front of the cat shows — it reads as
-       peeking in, and its footprint over any corner text is small. */
+       peeking in, and its footprint over any corner content stays small. */
     left: calc(max(var(--safe-left), 0px) - 14px);
-    /* Entry screens: down in the corner by the primary button, whose label is
-       centred so nothing readable is covered. */
     bottom: calc(var(--safe-bottom) + 4px);
     z-index: 14;
     width: var(--cell);
