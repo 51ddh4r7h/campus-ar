@@ -104,8 +104,8 @@
       video.pause()
       return
     }
-    // Every hold is a viewing. Two a level are free; the rest cost time, so
-    // say what it cost rather than quietly moving the score.
+    // Every hold is a viewing. One a level is free; the rest cost time, so say
+    // what it cost rather than quietly moving the score.
     video.currentTime = 0
     void video.play().catch(() => {})
     void game.view().then((penaltyMs) => {

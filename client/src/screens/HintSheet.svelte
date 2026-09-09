@@ -28,7 +28,7 @@
       const penalty = await game.hint(r.key)
       toasts.show(`Penalty +${formatMarquee(penalty)} applied`, 'alert')
     } catch {
-      toasts.show('That hint is not available yet', 'alert')
+      toasts.show('Could not take that hint — try again', 'alert')
     }
     pending = null
   }

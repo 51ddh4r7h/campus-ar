@@ -19,17 +19,11 @@
   let screen = $state<ReturnType<typeof ArScreen> | null>(null)
   let usedAr = $state(false)
 
-  // The screening that opens a level is the first of the two free viewings —
-  // registered here so the counter the player sees matches the server's.
-  let counted = -1
-  $effect(() => {
-    const level = game.level
-    if (counted === level) return
-    counted = level
-    void game.view()
-  })
-
-  /** Watching again is metered: two a level are free, the rest cost time. */
+  /**
+   * Watching again is metered. The screening that opens the level is free and
+   * not counted; one more look after that is free too; every one past that
+   * costs time, the way a hint does.
+   */
   function replay(): void {
     screen?.replay()
     void game.view().then((penaltyMs) => {

@@ -18,7 +18,7 @@ export const SESSION_ERRORS = {
   player_not_found: "That player isn't in this batch.",
   bad_password: 'Wrong roll number or password.',
   pool_empty: 'No route could be assigned. Tell an organiser.',
-  hint_locked: "That hint isn't available yet.",
+  hint_locked: "Take the hints in order — the nudge first.",
   internal: 'Something went wrong on our side. Try again.',
 } as const
 

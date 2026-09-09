@@ -334,27 +334,48 @@ describe('admin console reads', () => {
   })
 })
 
+describe('hints', () => {
+  it('are available the moment the level starts, in rung order', async () => {
+    const p = await bootPlayer()
+    await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
+    const hint = (rung: string) =>
+      json('/session/hint', {rung}, {Authorization: `Bearer ${p.sessionToken}`})
+
+    // No wait — the first hint is takeable immediately.
+    expect((await hint('warm')).status).toBe(200)
+    // But rung 2 needs rung 1 first, and there is no time that unlocks a skip.
+    // (rung 2 is available now because rung 1 was just taken.)
+    expect((await hint('close')).status).toBe(200)
+    // rung 1 again is out of order — refused, not a 200.
+    expect((await hint('warm')).status).toBe(409)
+  })
+})
+
 describe('scene viewings', () => {
   const view = (token: string) =>
     app.request('/session/view', {method: 'POST', headers: {Authorization: `Bearer ${token}`}}, env)
 
-  it('is free for the first two and charges after', async () => {
+  it('is free for the first look and charges every one after', async () => {
     const p = await bootPlayer()
     await json('/session/start', {}, {Authorization: `Bearer ${p.sessionToken}`})
 
     const first = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
-    const second = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
-    const third = (await (await view(p.sessionToken)).json()) as {
+    const second = (await (await view(p.sessionToken)).json()) as {
       penaltyMs: number
       session: {penaltyMs: number; currentLevelViews: number}
     }
+    const third = (await (await view(p.sessionToken)).json()) as {
+      penaltyMs: number
+      session: {penaltyMs: number}
+    }
 
     expect(first.penaltyMs).toBe(0)
-    expect(second.penaltyMs).toBe(0)
+    expect(second.penaltyMs).toBeGreaterThan(0)
     expect(third.penaltyMs).toBeGreaterThan(0)
-    // The charge lands on the score, not just the response.
-    expect(third.session.penaltyMs).toBe(third.penaltyMs)
-    expect(third.session.currentLevelViews).toBe(3)
+    // Each charge stacks on the score, not just the response.
+    expect(second.session.penaltyMs).toBe(second.penaltyMs)
+    expect(third.session.penaltyMs).toBe(second.penaltyMs + third.penaltyMs)
+    expect(second.session.currentLevelViews).toBe(2)
   })
 
   it('gives the allowance back at the next level', async () => {
@@ -412,13 +433,13 @@ describe('the reward ladder', () => {
 
   it('rung 2 buys an extra free viewing on later levels', async () => {
     const p = await climbTo(3)
-    // Two from the base allowance, a third from the rung — all free.
-    for (let i = 0; i < 3; i++) {
+    // One from the base allowance, a second from the rung — both free.
+    for (let i = 0; i < 2; i++) {
       const r = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
       expect(r.penaltyMs, `view ${i + 1}`).toBe(0)
     }
-    const fourth = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
-    expect(fourth.penaltyMs).toBeGreaterThan(0)
+    const third = (await (await view(p.sessionToken)).json()) as {penaltyMs: number}
+    expect(third.penaltyMs).toBeGreaterThan(0)
   })
 
   it('rung 3 gives exactly one free hint, then charges again', async () => {

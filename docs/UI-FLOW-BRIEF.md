@@ -387,8 +387,8 @@ Each entry: **role · layout · components · copy · states · transitions.**
 - After a hint is used, that row collapses to show the hint content inline, with
   a mono `PENALTY +M:SS APPLIED` tag.
 - **States:** rows show `LOCKED` with a lock icon until the prior hint is used.
-  A 4-minute stuck timer gates whether Hint 1 is offered at all (before that,
-  the row reads *"Available in M:SS"*).
+  There is no timer — a hint is available the moment its rung is next, and the
+  time penalty is the whole of the cost.
 - **Transitions:** standard sheet. Using a hint bumps the timer chip with a brief
   `--alert` flash to make the cost visible.
 

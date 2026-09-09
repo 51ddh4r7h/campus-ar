@@ -179,32 +179,33 @@ describe('engine — progression rules', () => {
 })
 
 describe('engine — hints', () => {
-  it('gates rungs by order and by time on the level', async () => {
+  it('gates rungs by order but not by a timer', async () => {
     const batch = await engine.createBatch({name: 'B'})
     const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
     await engine.startHunt(player.sessionToken)
 
-    // Too soon for the first hint.
-    await expect(engine.useHint(player.sessionToken, 'warm')).rejects.toThrow()
-    // Can't skip straight to rung 2.
-    deps.advance(5 * 60_000)
-    await expect(engine.useHint(player.sessionToken, 'close')).rejects.toThrow()
+    // The first hint is available the moment the level starts — no wait.
+    // But you cannot skip straight to rung 2.
+    await expect(engine.useHint(player.sessionToken, 'close')).rejects.toThrow(/hint_locked/)
 
     const h1 = await engine.useHint(player.sessionToken, 'warm')
     expect(h1.clue.clueText.warm).not.toBeNull()
     expect(h1.session.penaltyMs).toBe(90_000)
 
-    deps.advance(4 * 60_000)
+    // The next rung, still with no time elapsed.
     const h2 = await engine.useHint(player.sessionToken, 'close')
     expect(h2.clue.clueText.close).not.toBeNull()
     expect(h2.session.penaltyMs).toBe(180_000)
+
+    const h3 = await engine.useHint(player.sessionToken, 'showLocation')
+    expect(h3.clue.revealPoint).not.toBeNull()
+    expect(h3.session.penaltyMs).toBe(180_000 + 300_000)
   })
 
   it('carries the hint penalty into the final score', async () => {
     const batch = await engine.createBatch({name: 'B'})
     const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
     await engine.startHunt(player.sessionToken)
-    deps.advance(5 * 60_000)
     await engine.useHint(player.sessionToken, 'warm')
 
     // Finish level 1 and the rest.
@@ -221,6 +222,27 @@ describe('engine — hints', () => {
     }
     const {session} = await engine.getState(player.sessionToken)
     expect(session.penaltyMs).toBe(90_000)
+  })
+})
+
+describe('engine — extra looks at the clip', () => {
+  it('gives one free look then charges every one after, stacking', async () => {
+    const batch = await engine.createBatch({name: 'V'})
+    const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
+    await engine.startHunt(player.sessionToken)
+
+    const first = await engine.viewScene(player.sessionToken)
+    expect(first.penaltyMs).toBe(0)
+    expect(first.session.currentLevelViews).toBe(1)
+
+    const second = await engine.viewScene(player.sessionToken)
+    expect(second.penaltyMs).toBe(45_000)
+    expect(second.session.penaltyMs).toBe(45_000)
+
+    const third = await engine.viewScene(player.sessionToken)
+    expect(third.penaltyMs).toBe(45_000)
+    expect(third.session.penaltyMs).toBe(90_000)
+    expect(third.session.currentLevelViews).toBe(3)
   })
 })
 

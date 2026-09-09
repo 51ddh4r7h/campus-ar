@@ -38,9 +38,11 @@ export const DEFAULT_PAR_CONSTANTS: ParConstants = {
   dwellParMs: 25_000,
   walkSpeedMps: 1.3,
   hintPenaltyMs: {warm: 90_000, close: 90_000, showLocation: 300_000},
-  // Two viewings is enough to recognise a place you know; a third is a search
-  // aid, and search aids cost time here the same way hints do.
-  freeViews: 2,
+  // The screening that opens a level is free and not metered. One more look
+  // after that — a replay or a compare — is free too; every one past that costs
+  // time, the same way a hint does. The clip is the clue, so staring at it
+  // until the answer arrives should not be free.
+  freeViews: 1,
   viewPenaltyMs: 45_000,
 }
 
@@ -88,13 +90,6 @@ export const POLLING = {
  * left to run away.
  */
 export const HUNT_LIMIT_MS = 25 * 60 * 1000
-
-/** How long a player must be stuck on a level before each hint rung unlocks. */
-export const HINT_GATES = {
-  warmAfterMs: 4 * 60_000,
-  closeAfterMs: 8 * 60_000,
-  showLocationAfterMs: 12 * 60_000,
-} as const
 
 /** Route-pool generation constraints. */
 export const ROUTE_POOL = {

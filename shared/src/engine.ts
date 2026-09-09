@@ -1,15 +1,11 @@
 /**
  * The game engine. Pure orchestration over a GameStore: session lifecycle,
- * strict level progression, arrival validation, hint gating, par scoring and
+ * strict level progression, arrival validation, par scoring and
  * standings. No HTTP, no storage details, no time or randomness of its own —
  * those come in through `deps` so tests are deterministic.
  */
 
-import {
-  DEFAULT_PAR_CONSTANTS,
-  HINT_GATES,
-  LEVEL_COUNT,
-} from './config'
+import {DEFAULT_PAR_CONSTANTS, LEVEL_COUNT} from './config'
 import {LAYOUT, LOCATIONS, START_POINT, locationById} from './content'
 import {generateRoutePool, playableOrder, type RoutePool} from './routes'
 import {assignRoute} from './routes'
@@ -904,18 +900,11 @@ export const createEngine = (store: GameStore, deps: EngineDeps) => {
       const {session, route, batch} = await authed(token)
       if (session.status !== 'in_progress') throw new EngineError('not_in_progress')
 
+      // Rungs are still climbed in order — a nudge, then almost-there, then the
+      // map pin — but there is no timer holding them back. If you want one, it
+      // is yours; the time penalty is the whole of the cost.
       const rungIndex = HINT_ORDER.indexOf(rung)
       if (rungIndex !== session.currentLevelHints) throw new EngineError('hint_locked')
-
-      const splits = await store.listSplits(session.playerId)
-      const onLevelForMs = deps.now() - prevReachedTs(session, splits)
-      const gate =
-        rung === 'warm'
-          ? HINT_GATES.warmAfterMs
-          : rung === 'close'
-            ? HINT_GATES.closeAfterMs
-            : HINT_GATES.showLocationAfterMs
-      if (onLevelForMs < gate) throw new EngineError('hint_locked')
 
       // Rung 3 is one free hint for the whole hunt — spent on whichever the
       // player decides is worth it, rather than a discount on all of them.
