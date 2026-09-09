@@ -1,7 +1,5 @@
 <script lang="ts">
-  import {HUNT_LIMIT_MS, formatMarquee, remainingMsOf, type StandingRow} from '@cmh/shared'
   import {standings} from '../lib/stores/standings.svelte'
-  import {clock} from '../lib/stores/clock.svelte'
   import Sheet from '../lib/components/Sheet.svelte'
 
   function ordinal(n: number): string {
@@ -10,17 +8,6 @@
     const ones = n % 10
     return `${n}${ones === 1 ? 'st' : ones === 2 ? 'nd' : ones === 3 ? 'rd' : 'th'}`
   }
-
-  /**
-   * Everyone's clock, counting down from 25:00.
-   *
-   * The same number the player sees on their own HUD — time left, real time and
-   * hint penalties both taken off it. A finished player's is frozen at whatever
-   * they had left when they finished; the rest tick down live. `clock.now` ticks
-   * four times a second and every row derives from it, so no timer of its own.
-   */
-  const leftOnClock = (r: StandingRow): number =>
-    r.scoreMs === null ? remainingMsOf(r.timing, clock.now) : Math.max(0, HUNT_LIMIT_MS - r.scoreMs)
 
   let tab = $state<'overall' | 'level'>('overall')
   const self = $derived(standings.self)
@@ -36,12 +23,11 @@
     <button class:on={tab === 'overall'} onclick={() => (tab = 'overall')}>Overall</button>
     <button class:on={tab === 'level'} onclick={() => (tab = 'level')}>Your level</button>
   </div>
-  <p class="cap">Time left on the 25-minute clock — most left is fastest.</p>
+  <p class="cap">Live order — it shuffles as players find their scenes.</p>
 
   {#if self}
     <div class="you">
       <span>You're <b>{ordinal(self.rank)}</b></span>
-      <span class="score">{formatMarquee(leftOnClock(self))} left</span>
     </div>
   {/if}
 
@@ -61,9 +47,6 @@
             {:else}
               <small>Finished</small>
             {/if}
-          </span>
-          <span class="val" class:live={r.scoreMs === null && !r.paused}>
-            {formatMarquee(leftOnClock(r))}
           </span>
         </li>
       {/each}
@@ -107,14 +90,6 @@
   .name small.paused {
     color: var(--amber);
   }
-  /* A running clock reads as the live thing on the row; a finished score is
-     settled, and shouldn't compete with it for attention. */
-  .val.live {
-    color: var(--text);
-  }
-  li.me .val.live {
-    color: var(--amber);
-  }
   .you {
     display: flex;
     align-items: baseline;
@@ -127,10 +102,6 @@
   .you b {
     font-size: var(--step-28);
   }
-  .you .score {
-    font-family: var(--font-mono);
-    color: var(--amber);
-  }
   ol {
     list-style: none;
     margin: 0;
@@ -138,7 +109,7 @@
   }
   li {
     display: grid;
-    grid-template-columns: 24px 1fr auto;
+    grid-template-columns: 24px 1fr;
     gap: var(--sp-3);
     align-items: center;
     padding: var(--sp-4) 0;
@@ -159,14 +130,6 @@
   }
   .name {
     font-weight: 600;
-  }
-  .val {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    color: var(--text-dim);
-  }
-  li.me .val {
-    color: var(--amber);
   }
   .empty {
     color: var(--text-dim);
