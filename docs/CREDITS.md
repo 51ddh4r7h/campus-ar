@@ -51,10 +51,10 @@ natural home, since it is reachable without interrupting a run.
 
 Two components are vendored from svelte-bits (the Svelte port of React Bits)
 into `client/src/lib/components/bits/`, kept close to upstream so they can be
-re-synced: **LaserFlow** (the projector beam on the hero) and **GridScan** (the
-surveying grid behind the permissions screen). They are exempted from the house
-lint rules in `oxlint.config.ts` for that reason — those rules police code we
-write.
+re-synced: **Prism** (the tumbling prism behind the landing page, `ogl`) and
+**GridScan** (the surveying grid behind the permissions screen). They are
+exempted from the house lint rules in `oxlint.config.ts` for that reason —
+those rules police code we write.
 
 One change is not cosmetic. **GridScan's face-tracking path is removed**, and
 with it the `face-api.js` dependency: it opened the *front* camera on the
@@ -86,10 +86,14 @@ copied, for reasons that are worth recording:
   three, which is where the ramp stops looking stepped, and stops there.
 
 Most of the library needs a cursor — `Magnet`, `GlareHover`, `SplashCursor`,
-`TextPressure` and friends — so it has nothing to offer a phone-only game. The
-WebGL backgrounds were declined for the same reason the proximity ring avoids a
-second WebGL context: three.js is already a lazy chunk for the AR stage and the
-entry screen is the worst place to pay for another one.
+`TextPressure` and friends — so it has nothing to offer a phone-only game.
+
+**Prism** is the exception, on the landing page only. It runs on `ogl` rather
+than three.js — a ~15KB WebGL micro-library — so it does not drag the AR
+stage's 730KB chunk onto the entry screen. That chunk still needs warming for
+the first reveal, so the hero kicks off a bare `import('three')` on mount and
+throws the result away; the fetch lands while someone reads the page rather
+than while they wait at a location.
 
 ## Typefaces
 

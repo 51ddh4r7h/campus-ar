@@ -15,18 +15,33 @@
   import Sheen from '../lib/components/Sheen.svelte'
   import Wordmark from '../lib/components/Wordmark.svelte'
   import {isInAppBrowser} from '../lib/env'
+  import {onMount} from 'svelte'
 
   /**
-   * The beam is three.js and three.js is a 730KB chunk, so it is imported only
-   * when this screen mounts rather than sitting in the entry bundle. Loading it
-   * here is not purely a cost either: the AR stage needs the same chunk at the
-   * first reveal, and fetching it while someone reads the hero is a better
-   * moment than fetching it while they are standing in a car park waiting for a
-   * scene to play.
+   * The prism background is ogl — a ~15KB WebGL micro-library — imported only
+   * when this screen mounts rather than sitting in the entry bundle.
    */
-  const beam = import('../lib/components/bits/LaserFlow.svelte')
+  const prism = import('../lib/components/bits/Prism.svelte')
+
+  /**
+   * The old beam was three.js and pulled that 730KB chunk here, which doubled
+   * as a pre-fetch: the AR stage needs the same chunk at the first reveal, and
+   * warming it while someone reads the hero beats fetching it while they stand
+   * in a car park waiting for a scene. Prism doesn't touch three, so warm it
+   * explicitly — fire-and-forget, the result is thrown away.
+   */
+  onMount(() => {
+    void import('three')
+  })
 
   const inApp = isInAppBrowser()
+
+  /**
+   * Prism has no reduced-motion handling of its own. `timeScale: 0` makes its
+   * loop render one frame and stop, so the setting gets a still prism rather
+   * than a tumbling one.
+   */
+  const stillMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   const steps = [
     {icon: 'play', text: 'Watch a scene'},
@@ -35,21 +50,20 @@
   ] as const
 </script>
 
-<!-- The projector. Sits behind everything, pointing down the screen. -->
-<div class="beam" aria-hidden="true">
-  {#await beam then LaserFlow}
-    <LaserFlow.default
-      color="#e8a54c"
-      dpr={1}
-      horizontalBeamOffset={0.0}
-      verticalBeamOffset={-0.42}
-      verticalSizing={1.9}
-      horizontalSizing={0.62}
-      flowSpeed={0.28}
-      fogIntensity={0.38}
-      wispIntensity={4}
-      wispDensity={0.8}
-      mouseTiltStrength={0}
+<!-- The prism. Sits behind everything, tumbling slowly in the upper half —
+     a warm caustic light rather than a hard shape, so it never fights the
+     wordmark. -->
+<div class="prism" aria-hidden="true">
+  {#await prism then Prism}
+    <Prism.default
+      animationType="3drotate"
+      timeScale={stillMotion ? 0 : 0.24}
+      scale={3}
+      glow={1.4}
+      bloom={1.3}
+      noise={0.28}
+      colorFrequency={1.3}
+      suspendWhenOffscreen
     />
   {/await}
 </div>
@@ -104,19 +118,23 @@
     gap: var(--sp-8);
     padding: calc(var(--safe-top) + var(--sp-8)) var(--edge) calc(var(--safe-bottom) + var(--sp-8));
   }
-  /* Behind the copy, and darkened at the bottom by EdgeBlur so the beam never
+  /* Behind the copy, and darkened at the bottom by EdgeBlur so the prism never
      competes with the words. */
-  .beam {
+  .prism {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
     background: var(--bg);
+    /* The shader renders a green-biased spectrum and its own hueShift barely
+       moves it. Sepia flattens it to a warm monochrome, the small rotate
+       lands it on the app amber, and the darkening keeps it off the words. */
+    filter: sepia(1) saturate(2.5) hue-rotate(-14deg) brightness(0.92);
   }
-  /* The beam splashes where it hits, and that splash was landing on the title.
-     The words win: everything below the beam's pool is taken back to near-black
+  /* The prism's colour is bright where it renders, and that was landing on the
+     title. The words win: everything below its pool is taken back to near-black
      so the copy always reads. */
-  .beam::after {
+  .prism::after {
     content: '';
     position: absolute;
     inset: 0;
