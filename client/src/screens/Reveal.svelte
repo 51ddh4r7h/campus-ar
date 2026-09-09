@@ -395,10 +395,17 @@
   }
   .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--sp-3);
   }
-  .actions :global(.primary) {
+  .actions :global(.secondary) {
     flex: 1;
+    min-width: 0;
+  }
+  /* The forward button takes the whole width: on a phone "See your result"
+     next to Recentre + Photo was squeezed thin enough to clip its label. */
+  .actions :global(.primary) {
+    flex: 1 0 100%;
   }
   @keyframes rise {
     from {

@@ -28,6 +28,7 @@
     gap: var(--sp-2);
     min-height: 44px;
     font-weight: 600;
+    white-space: nowrap;
     border-radius: var(--radius-button);
     transition:
       transform var(--dur-fast) var(--ease-spring),
