@@ -63,6 +63,7 @@
       await new Promise((r) => setTimeout(r, 2500))
       ok = await game.refresh()
     }
+    if (ok) clock.synced()
   }
 
   /**
@@ -126,8 +127,16 @@
    */
   async function followServer(): Promise<void> {
     await game.refresh()
+    clock.synced()
     if (game.finished) nav.go('finish')
     else if (game.paused) nav.go('ready')
+    // A hunt the server still calls live, on a screen that says it is over, is
+    // the stale-tab case. Without this the correction was one-way: the app
+    // could send a player to the wrap screen early but never bring them back,
+    // and the wrap screen has no way out of itself. Routed by the same rules as
+    // a cold start, so an unstarted session lands on the briefing rather than
+    // needing its own branch here.
+    else if (nav.screen === 'finish') routeToSession()
   }
 
   /**
@@ -151,8 +160,45 @@
       return
     }
     if (timeUpHandled || !game.inProgress) return
+    /**
+     * Only on a session we have actually seen recently.
+     *
+     * A phone browser freezes a backgrounded tab rather than unloading it, and
+     * restores it later with every value still in memory — including a session
+     * snapshot from before the freeze. The clock, meanwhile, jumps to now. So a
+     * player who closed Chrome on the clue screen and came back to it found a
+     * stale `in_progress` session measured against a fresh clock, read zero
+     * remaining, and was sent to the wrap screen for a hunt that was still
+     * running. Reloading fixed it, which is the tell: the fault was entirely in
+     * what the page still believed.
+     *
+     * `resyncOnReturn` below is already re-reading the session at that moment.
+     * This waits for it rather than ending a hunt on hearsay.
+     */
+    if (clock.suspended) return
     timeUpHandled = true
     void game.refresh().finally(() => nav.go('finish'))
+  })
+
+  /**
+   * Re-read the session whenever the tab comes back to the front.
+   *
+   * `onMount` runs once. A phone browser that freezes and restores a tab never
+   * runs it again, so without this the only way to resync was a manual reload —
+   * which is exactly what players were having to do.
+   */
+  onMount(() => {
+    const resyncOnReturn = (): void => {
+      if (document.visibilityState !== 'visible') return
+      if (!game.token || adminRequested || dashboardRequested) return
+      void followServer()
+    }
+    document.addEventListener('visibilitychange', resyncOnReturn)
+    window.addEventListener('pageshow', resyncOnReturn)
+    return () => {
+      document.removeEventListener('visibilitychange', resyncOnReturn)
+      window.removeEventListener('pageshow', resyncOnReturn)
+    }
   })
 
   const PLAYING: readonly ScreenName[] = ['clue', 'search', 'reveal']
