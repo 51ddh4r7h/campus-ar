@@ -2,6 +2,7 @@
   import {formatMarquee} from '@cmh/shared'
   import {nav} from '../lib/stores/nav.svelte'
   import {game} from '../lib/stores/game.svelte'
+  import Cat from '../lib/components/Cat.svelte'
   import {clock} from '../lib/stores/clock.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
   import {ApiError} from '../lib/api'
@@ -160,6 +161,8 @@
     {/if}
   </div>
 </main>
+
+<Cat pose={resuming ? 'idle' : 'waiting'} anchor="br" />
 
 <style>
   main {

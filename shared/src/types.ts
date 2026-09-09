@@ -1,5 +1,5 @@
 /**
- * Data model (v1) for Campus Movie Hunt.
+ * Data model (v1) for ARound Campus.
  *
  * The server is authoritative. The client holds a view of session state and
  * emits position + intent; it never decides that a level is complete.

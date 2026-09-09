@@ -130,7 +130,7 @@ use here without either problem.
 
 ## Companion sprite — Cat Pack (Mochi)
 
-The pixel cat on the search screen. ToffeeCraft's Cat Asset Pack —
+The pixel cat mascot that appears on every screen. ToffeeCraft's Cat Asset Pack —
 <https://toffeecraft.itch.io/cat-pack> — **paid edition**, which the creator
 licenses "for commercial or personal use". Neither edition permits
 redistributing the raw sprites as assets; ours are compiled into an
@@ -140,22 +140,24 @@ The free edition previously used here was non-commercial and has been removed;
 every sprite now comes from the paid pack, so there is one set of terms
 covering all of them.
 
-Five sheets in `client/src/assets/sprites/`, unmodified, 32px cells:
+Eight sheets in `client/src/assets/sprites/`, unmodified, 32px cells:
 
-| File | Source | Frames | Band |
+| File | Source | Frames | Used for |
 |---|---|---|---|
-| `cat-sleep.png` | `Sleep.png` | 4 | Cold |
-| `cat-sleepy.png` | `Sleepy.png` | 8 | Chilly |
-| `cat-idle.png` | `Idle.png` | 10 | Warm |
-| `cat-excited.png` | `Excited.png` | 12 | Hot |
-| `cat-dance.png` | `Dance.png` | 4 | You're close |
+| `cat-sleep.png` | `Sleep.png` | 4 | landing page; Cold band |
+| `cat-sleepy.png` | `Sleepy.png` | 8 | briefing; Chilly band |
+| `cat-idle.png` | `Idle.png` | 10 | start line (resuming); Warm band |
+| `cat-excited.png` | `Excited.png` | 12 | Hot band |
+| `cat-dance.png` | `Dance.png` | 4 | finish (completed); You're close band |
+| `cat-surprised.png` | `Surprised.png` | 12 | AR reveal |
+| `cat-waiting.png` | `Waiting.png` | 6 | permissions; start line (fresh) |
+| `cat-sad.png` | `Sad.png` | 9 | finish (ran out of time) |
 
-Together about 8 KB, and small enough that Vite inlines them into the bundle
-as data URIs — so a band change never waits on a network fetch.
+Together about 12 KB, and small enough that Vite inlines them into the bundle
+as data URIs — so a pose change never waits on a network fetch.
 
-The pack ships more than these (`Surprised`, `Waiting`, `Cry`, `Sad`,
-`LayDown`, `Eating`, `Idle2`, `Box`, `DeadCat`). They are not used yet;
-`STATES` in `CompanionCat.svelte` is where they would go.
+The pack ships more still (`Cry`, `LayDown`, `Eating`, `Idle2`, `Box`,
+`DeadCat`). They are not used yet; `POSES` in `Cat.svelte` is where they go.
 
 The download carries no licence file — the terms above are the ones stated on
 the itch.io page at the time of purchase. Worth keeping the receipt with the

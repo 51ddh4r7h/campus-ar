@@ -13,6 +13,7 @@
   import {HOW_TO} from '../lib/how-to'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import Cat from '../lib/components/Cat.svelte'
   import EdgeBlur from '../lib/components/EdgeBlur.svelte'
 
   const first = $derived(game.playerName?.trim().split(/\s+/)[0] ?? '')
@@ -61,6 +62,8 @@
     </p>
   </div>
 </main>
+
+<Cat pose="sleepy" anchor="br" raised />
 
 <style>
   main {

@@ -2,7 +2,7 @@
 </script>
 
 <div class="splash">
-  <h1>Campus<br />Movie&nbsp;Hunt</h1>
+  <h1>AR<span>ound</span>&nbsp;Campus</h1>
   <div class="rule"></div>
 </div>
 
@@ -25,6 +25,9 @@
     text-align: center;
     margin: 0;
     animation: fade 0.6s ease both;
+  }
+  h1 span {
+    color: var(--text-dim);
   }
   .rule {
     width: 0;

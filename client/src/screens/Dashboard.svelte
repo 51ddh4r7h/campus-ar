@@ -192,7 +192,7 @@
 <main>
   {#if !unlocked}
     <form class="gate" onsubmit={(e) => (e.preventDefault(), void unlock())}>
-      <span class="eyebrow">Campus Movie Hunt</span>
+      <span class="eyebrow">ARound Campus</span>
       <h1>Reporting</h1>
       <p>This shows how a whole cohort played. It needs the deployment key.</p>
       <label class="sr-only" for="key">Admin key</label>
@@ -204,7 +204,7 @@
   {:else}
     <header class="top">
       <div>
-        <span class="eyebrow">Campus Movie Hunt</span>
+        <span class="eyebrow">ARound Campus</span>
         <h1>Event reporting</h1>
       </div>
       <label class="filter">

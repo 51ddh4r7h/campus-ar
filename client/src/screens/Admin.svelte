@@ -448,13 +448,13 @@
 <svelte:window onkeydown={closeConfirmationOnEscape} />
 
 <svelte:head>
-  <title>Organiser Console · Campus Movie Hunt</title>
+  <title>Organiser Console · ARound Campus</title>
 </svelte:head>
 
 <main>
   {#if !unlocked}
     <form class="gate card" onsubmit={(event) => (event.preventDefault(), void unlock())}>
-      <span class="eyebrow">Campus Movie Hunt</span>
+      <span class="eyebrow">ARound Campus</span>
       <h1>Organiser Console</h1>
       <p>Manage events, players, links, and live progress.</p>
       <label for="admin-key">Admin key</label>
@@ -474,7 +474,7 @@
   {:else}
     <header>
       <div>
-        <span class="eyebrow">Campus Movie Hunt</span>
+        <span class="eyebrow">ARound Campus</span>
         <h1>Organiser Console</h1>
       </div>
       <div class="header-actions">

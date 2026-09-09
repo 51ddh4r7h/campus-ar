@@ -11,16 +11,43 @@
   import {probe} from '../lib/stores/probe.svelte'
   import {toasts} from '../lib/stores/toast.svelte'
   import {revealVideo} from '../lib/reveal-video'
-  import {formatMarquee} from '@cmh/shared'
+  import {formatMarquee, BAND_WORDS, type HeatBand} from '@cmh/shared'
   import HudBar from '../lib/components/HudBar.svelte'
   import CameraFeed from '../lib/components/CameraFeed.svelte'
   import HeatMeter from '../lib/components/HeatMeter.svelte'
   import ProximityRing from '../lib/components/ProximityRing.svelte'
   import Icon from '../lib/components/Icon.svelte'
-  import CompanionCat from '../lib/components/CompanionCat.svelte'
+  import Cat, {type CatPose} from '../lib/components/Cat.svelte'
   import {demoAllowed} from '../lib/mode'
 
   const clue = $derived(game.clue)
+
+  /**
+   * On the search screen the mascot follows the heat band — asleep when nothing
+   * is near, on its feet when you are on top of a scene. Same five steps as the
+   * meter beside it, said a second way for people glancing rather than reading.
+   */
+  const CAT_BY_BAND: readonly CatPose[] = ['sleep', 'sleepy', 'idle', 'excited', 'dance']
+
+  /**
+   * On ?demo, walk every band on a timer instead of the real one: a live hunt
+   * only ever shows the band you are standing in, and the poses worth seeing are
+   * a hundred metres apart. The label below says which of the two is pretending.
+   */
+  const PREVIEW_HOLD_MS = 4500
+  let previewBand = $state<HeatBand>(0)
+  $effect(() => {
+    if (!demoAllowed) return
+    const id = setInterval(() => {
+      // SAFETY: % 5 lands in 0-4, exactly HeatBand's domain.
+      previewBand = ((previewBand + 1) % 5) as HeatBand
+    }, PREVIEW_HOLD_MS)
+    return () => clearInterval(id)
+  })
+  // SAFETY: probe bands are produced by the shared heat model, whose only
+  // outputs are 0-4 — exactly HeatBand. The `?? 0` covers the no-fix case.
+  const liveBand = $derived((probe.last?.band ?? 0) as HeatBand)
+  const catBand = $derived<HeatBand>(demoAllowed ? previewBand : liveBand)
 
   /**
    * How strongly the original frame is ghosted over the live camera. Held down
@@ -101,7 +128,10 @@
 <!-- Reads the same band the meter does, so it says "warmer" in a second way:
      one for people who are reading an instrument, one for people who are
      glancing at a screen while walking. -->
-<CompanionCat band={probe.last?.band ?? 0} preview={demoAllowed} />
+<Cat pose={CAT_BY_BAND[catBand] ?? 'sleep'} raised />
+{#if demoAllowed}
+  <p class="cat-preview">Cat preview · {BAND_WORDS[catBand]}</p>
+{/if}
 
 {#if clue}
   <!-- The frame you are hunting, laid over the world at whatever strength
@@ -209,5 +239,21 @@
   }
   .hold.on {
     color: var(--amber);
+  }
+  .cat-preview {
+    position: fixed;
+    left: max(var(--safe-left), 6px);
+    /* Directly above the cat. */
+    bottom: calc(var(--safe-bottom) + 98px + 64px + 6px);
+    z-index: 14;
+    margin: 0;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--scrim);
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: var(--step-13);
+    pointer-events: none;
+    white-space: nowrap;
   }
 </style>

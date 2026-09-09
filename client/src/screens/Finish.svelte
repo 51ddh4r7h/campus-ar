@@ -19,6 +19,7 @@
   import {readableError} from '../lib/errors'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import Cat from '../lib/components/Cat.svelte'
   import {rungIcon} from '../lib/rung-icons'
   import CampusMap from '../lib/components/CampusMap.svelte'
   import FilmStrip from '../lib/components/FilmStrip.svelte'
@@ -89,11 +90,11 @@
   /** Share on phones; copy on browsers without a native share sheet. */
   async function shareResult() {
     const text = game.abandoned
-      ? `I found ${splits.length} of ${LEVEL_COUNT} scenes in Campus Movie Hunt.`
-      : `I finished Campus Movie Hunt ${formatScore(score)} vs par!`
+      ? `I found ${splits.length} of ${LEVEL_COUNT} scenes in ARound Campus.`
+      : `I finished ARound Campus ${formatScore(score)} vs par!`
     try {
       if (navigator.share) {
-        await navigator.share({title: 'Campus Movie Hunt', text})
+        await navigator.share({title: 'ARound Campus', text})
         return
       }
       await navigator.clipboard.writeText(text)
@@ -107,9 +108,10 @@
 <!-- Only for a hunt that was actually finished. On an abandoned one this
      would be a taunt, and `game.complete` is the difference. -->
 {#if game.complete}<Confetti />{/if}
+<Cat pose={game.complete ? 'dance' : 'sad'} anchor="br" />
 
 <main>
-  <span class="eyebrow">Campus Movie Hunt</span>
+  <span class="eyebrow">ARound Campus</span>
   <!-- An abandoned hunt is not a finished one, and saying so is kinder than a
        congratulation nobody earned. The whole-campus map stays behind `wrapped`
        for the same reason: it is the reward for going the distance. -->

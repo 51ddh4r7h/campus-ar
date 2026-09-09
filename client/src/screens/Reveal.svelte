@@ -17,6 +17,7 @@
   import ArScreen from '../lib/components/ArScreen.svelte'
   import Button from '../lib/components/Button.svelte'
   import Icon from '../lib/components/Icon.svelte'
+  import Cat from '../lib/components/Cat.svelte'
   import {ApiError} from '../lib/api'
   import {rungIcon} from '../lib/rung-icons'
   import {camera} from '../lib/stores/camera.svelte'
@@ -133,7 +134,7 @@
 
   /** What the saved frame is captioned with. */
   const shotCaption = () => ({
-    title: r?.movie.title ?? 'Campus Movie Hunt',
+    title: r?.movie.title ?? 'ARound Campus',
     place: r?.locationName ?? '',
   })
 
@@ -165,6 +166,8 @@
 </script>
 
 <CameraFeed />
+
+<Cat pose="surprised" anchor="br" raised />
 
 <ArScreen
   bind:this={screen}
