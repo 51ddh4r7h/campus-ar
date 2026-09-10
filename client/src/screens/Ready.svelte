@@ -177,7 +177,18 @@
   .row {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--sp-3);
+  }
+  /* `.rules` carries a top margin for the stacked buttons above. Inside this
+     row that margin only pushes one of the pair down — which is what left
+     "Yes, end it" sitting 12px above "Keep playing". */
+  .row .rules {
+    margin-top: 0;
+  }
+  .danger,
+  .row .rules {
+    min-height: 40px;
   }
   .danger {
     padding: var(--sp-2) var(--sp-4);

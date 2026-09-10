@@ -105,7 +105,7 @@
     flex: 1;
     min-height: 40px;
     border-radius: 999px;
-    font-size: var(--step-14);
+    font-size: var(--step-13);
   }
   .go {
     background: var(--amber);
