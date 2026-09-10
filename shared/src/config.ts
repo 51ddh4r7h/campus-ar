@@ -91,24 +91,25 @@ export const POLLING = {
  */
 export const HUNT_LIMIT_MS = 25 * 60 * 1000
 
-/** Route-pool generation constraints. */
+/**
+ * Route-pool generation. Routes are a random draw from every playable one —
+ * see ./routes for why, and for what that costs in fairness.
+ */
 export const ROUTE_POOL = {
+  /**
+   * How many routes a batch stores: the first N of its random shuffle. Past
+   * this many players routes repeat. The pool rides on the batch row, which is
+   * read on every request, so this is a load number as much as a game one.
+   */
   size: 200,
-  /** Total walk-time spread allowed across the pool, ms. */
-  walkTimeBandMs: 90_000,
-  /** Max difference in summed difficulty between any two routes. */
-  difficultySpread: 1,
   /** Level 1 is always this tier or easier. */
   maxFirstLevelDifficulty: 1,
   /** No route may contain more than this many hard (tier 3) clues. */
   maxHardClues: 2,
   /**
-   * Nor fewer than this. Without a floor the pool collapses to all-easy
-   * routes: the balancer anchors on whichever total-difficulty bucket holds
-   * the most candidates, and with seven easy locations against three hard ones
-   * that is always the bucket with no hard clue in it. Every player would
-   * finish without ever meeting one of the three scenes the organisers marked
-   * Difficult.
+   * Nor fewer than this. Without a floor a random draw gives a share of players
+   * five Easy scenes and nothing else, and they finish without ever meeting one
+   * of the three the organisers marked Difficult.
    */
   minHardClues: 1,
   /**

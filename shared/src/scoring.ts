@@ -3,9 +3,10 @@
  * time their hints and extra looks cost — nothing subtracted. Lower is better,
  * and it can never be more than the 25-minute limit.
  *
- * `routePar` below still exists, but only to keep the route pool balanced: every
- * route is generated to take about the same real time, which is what makes
- * ranking on raw time fair without the player ever seeing the word "par".
+ * `routePar` below is the expected time for a route, and is never shown to a
+ * player. It no longer balances the pool — routes are drawn at random, see
+ * ./routes — but it still tints the film strip's quicker legs and feeds the
+ * organiser dashboard's per-location figures.
  */
 
 import {haversineM, type LatLng} from './geo'
@@ -19,7 +20,7 @@ export const walkParMs = (from: LatLng, to: LatLng, walkSpeedMps: number): numbe
 export interface RoutePar {
   totalMs: number
   legMs: [number, number, number, number, number]
-  /** Walk component only, used to band routes during pool generation. */
+  /** Walk component only — the part of the route that is not recognition. */
   walkOnlyMs: number
 }
 

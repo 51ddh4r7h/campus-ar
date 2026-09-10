@@ -1,12 +1,30 @@
 /**
- * Balanced route-pool generation.
+ * Route-pool generation: a random draw from every playable route.
  *
- * Every player plays 5 of the 10 locations in a personal order. A pure random
- * draw is unfair for a timed race — walking distance and clue difficulty vary
- * too much. So we enumerate every valid 5-permutation, keep only those that
- * pass the structural constraints, then select a pool whose members are tightly
- * banded on both walking time and total difficulty. Assignment hands each
- * player a distinct route from that pool.
+ * Every player plays 5 of the 10 locations in a personal order. We enumerate
+ * every 5-permutation, keep the ones that pass the playability rules below,
+ * shuffle all of them with the batch's random seed, and hand them out in that
+ * order — so each player gets a route drawn at random from the whole playable
+ * set, and no two players get the same one.
+ *
+ * This used to be a *balanced* pool: out of the playable routes it kept only
+ * the 200 whose par times sat closest together, which held route luck to about
+ * 14 seconds. The organisers chose variety instead — with ten locations that
+ * window only ever reached 80 distinct combinations of places. The trade is
+ * stated plainly so nobody rediscovers it: routes now range from about 14 to 22
+ * minutes of par, and since the podium is decided on raw time, part of any
+ * finishing order is the luck of the draw.
+ *
+ * The playability rules stay, because they are not about fairness between
+ * players — they are what stops any one route being a bad game: it opens on an
+ * Easy scene, difficulty only climbs, there are one or two Difficult scenes,
+ * and no single leg is a cross-campus slog.
+ *
+ * Only the first `ROUTE_POOL.size` of the shuffle is stored, because the pool
+ * rides on the batch row and that row is read on every authenticated request.
+ * That is not a smaller lottery: the first N of a uniformly random shuffle is a
+ * uniformly random N, in uniformly random order, so handing them out in turn is
+ * the same as drawing each player at random from all of them.
  */
 
 import type {LatLng} from './geo'
@@ -26,7 +44,7 @@ export interface RouteTemplate {
 export interface RoutePool {
   seed: string
   routes: RouteTemplate[]
-  /** True when the constraints had to be relaxed to fill the pool. */
+  /** True when there were fewer playable routes than the pool wanted. */
   relaxed: boolean
   /** Diagnostics for the operator reviewing a batch. */
   stats: {
@@ -73,10 +91,9 @@ const ramps = (perm: readonly GameLocation[]): boolean => {
  *
  * A player who opens on the hardest clue on campus has no idea yet what the
  * game feels like, and that is where people give up — so difficulty only ever
- * climbs. The floor on hard clues matters just as much: without it the
- * balancer settles on all-easy routes, because with seven easy locations
- * against two hard ones that bucket is much the largest, and the two scenes
- * the organisers marked Difficult would never be served to anybody.
+ * climbs. The floor on hard clues matters just as much: without it a random
+ * draw hands a share of players five Easy scenes and nothing else, and the
+ * three the organisers marked Difficult go unplayed by them.
  */
 export const playableOrder = (perm: readonly GameLocation[]): boolean => {
   if (perm[0]!.difficulty > ROUTE_POOL.maxFirstLevelDifficulty) return false
@@ -120,61 +137,6 @@ function buildCandidates(
   return out
 }
 
-/** Tightest window of `size` consecutive routes when sorted by par. */
-function tightestWindow(sortedByPar: Candidate[], size: number): Candidate[] {
-  if (sortedByPar.length <= size) return sortedByPar
-  let bestStart = 0
-  let bestSpan = Number.POSITIVE_INFINITY
-  for (let i = 0; i + size <= sortedByPar.length; i++) {
-    const span = sortedByPar[i + size - 1]!.parTotalMs - sortedByPar[i]!.parTotalMs
-    if (span < bestSpan) {
-      bestSpan = span
-      bestStart = i
-    }
-  }
-  return sortedByPar.slice(bestStart, bestStart + size)
-}
-
-/** Candidates bucketed by their total difficulty. */
-const bucketByDifficulty = (candidates: readonly Candidate[]): Map<number, Candidate[]> => {
-  const bySum = new Map<number, Candidate[]>()
-  for (const c of candidates) {
-    const bucket = bySum.get(c.difficultySum) ?? []
-    bucket.push(c)
-    bySum.set(c.difficultySum, bucket)
-  }
-  return bySum
-}
-
-/**
- * Which total-difficulty values a route may have. Routes are allowed to differ
- * by one point of difficulty, so we anchor on the pair of adjacent sums holding
- * the most candidates — that keeps the pool both large and tightly banded.
- */
-const allowedDifficultySums = (candidates: readonly Candidate[]): ReadonlySet<number> => {
-  const bySum = bucketByDifficulty(candidates)
-  const sums = [...bySum.keys()].sort((a, b) => a - b)
-  const sizeAt = (s: number): number => bySum.get(s)?.length ?? 0
-
-  let anchor = sums[0] ?? 0
-  let anchorCount = 0
-  for (const s of sums) {
-    const pairCount = sizeAt(s) + sizeAt(s + 1)
-    if (pairCount > anchorCount) {
-      anchorCount = pairCount
-      anchor = s
-    }
-  }
-  return new Set(ROUTE_POOL.difficultySpread >= 1 ? [anchor, anchor + 1] : [anchor])
-}
-
-/** Gap between the fastest and slowest par time in an already-sorted window. */
-const parSpreadMs = (window: readonly Candidate[]): number => {
-  const first = window[0]
-  const last = window[window.length - 1]
-  return first && last ? last.parTotalMs - first.parTotalMs : 0
-}
-
 export const generateRoutePool = (
   locations: readonly GameLocation[],
   startPoint: LatLng,
@@ -183,17 +145,10 @@ export const generateRoutePool = (
 ): RoutePool => {
   const rng = mulberry32(seedFromString(seed))
   const candidates = buildCandidates(locations, startPoint, pc)
+  const drawn = shuffled(candidates, rng).slice(0, ROUTE_POOL.size)
 
-  const allowedSums = allowedDifficultySums(candidates)
-  const balanced = candidates
-    .filter((c) => allowedSums.has(c.difficultySum))
-    .sort((a, b) => a.parTotalMs - b.parTotalMs)
-
-  const window = tightestWindow(balanced, ROUTE_POOL.size)
-  const walkSpreadMs = parSpreadMs(window)
-  const relaxed = window.length < ROUTE_POOL.size || walkSpreadMs > ROUTE_POOL.walkTimeBandMs
-
-  const routes = shuffled(window, rng).map(
+  const pars = drawn.map((c) => c.parTotalMs)
+  const routes = drawn.map(
     ({stops, parTotalMs, legParMs, walkOnlyMs, difficultySum}): RouteTemplate => ({
       stops,
       parTotalMs,
@@ -206,11 +161,14 @@ export const generateRoutePool = (
   return {
     seed,
     routes,
-    relaxed,
+    // Only true now when content is too thin to fill the pool at all.
+    relaxed: routes.length < ROUTE_POOL.size,
     stats: {
       candidates: candidates.length,
-      difficultySums: [...allowedSums].sort((a, b) => a - b),
-      walkSpreadMs,
+      difficultySums: [...new Set(drawn.map((c) => c.difficultySum))].sort((a, b) => a - b),
+      // Kept under its old name for the admin response; it is the par spread
+      // of what was drawn, and with a random draw it is minutes, not seconds.
+      walkSpreadMs: pars.length > 0 ? Math.max(...pars) - Math.min(...pars) : 0,
     },
   }
 }

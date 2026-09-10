@@ -32,19 +32,36 @@ describe('route pool generation', () => {
     }
   })
 
-  it('difficulty sums span at most one', () => {
-    const sums = new Set(pool.routes.map((r) => r.difficultySum))
-    expect(Math.max(...sums) - Math.min(...sums)).toBeLessThanOrEqual(
-      ROUTE_POOL.difficultySpread,
+  it('is a random draw, not a balanced window', () => {
+    // The old pool kept only the tightest par band, which meant every route
+    // carried the same number of Difficult scenes. A draw from the whole
+    // playable set carries both — that is most of the variety it buys.
+    const hardCounts = new Set(
+      pool.routes.map((r) => r.stops.filter((id) => locationById(id)!.difficulty === 3).length),
     )
+    expect(hardCounts).toEqual(new Set([1, 2]))
+    // And par spreads over minutes, where the balanced window held ~14 seconds.
+    const pars = pool.routes.map((r) => r.parTotalMs)
+    expect(Math.max(...pars) - Math.min(...pars)).toBeGreaterThan(3 * 60_000)
+    expect(pool.relaxed).toBe(false)
   })
 
-  it('par times are tightly banded', () => {
-    const pars = pool.routes.map((r) => r.parTotalMs)
-    expect(Math.max(...pars) - Math.min(...pars)).toBeLessThanOrEqual(
-      ROUTE_POOL.walkTimeBandMs,
-    )
-    expect(pool.relaxed).toBe(false)
+  it('draws from every playable route, not a subset of them', () => {
+    // Two batches should overlap about as much as two random 200-samples from
+    // the full playable set would — not share one fixed window.
+    const other = generateRoutePool(LOCATIONS, START_POINT, DEFAULT_PAR_CONSTANTS, 'batch-z')
+    const mine = new Set(pool.routes.map((r) => routeKey(r.stops)))
+    const shared = other.routes.filter((r) => mine.has(routeKey(r.stops))).length
+    // Expected overlap is 200 * 200 / candidates, about 12 of 3,258; a balanced
+    // window would share nearly all 200.
+    expect(shared).toBeLessThan(50)
+    expect(pool.stats.candidates).toBeGreaterThan(ROUTE_POOL.size * 5)
+  })
+
+  it('covers far more combinations of places than the balanced window did', () => {
+    const sets = new Set(pool.routes.map((r) => [...r.stops].sort().join('+')))
+    // The balanced window reached 80 distinct sets with ten locations.
+    expect(sets.size).toBeGreaterThan(120)
   })
 
   it('is deterministic for a seed and varies across seeds', () => {
@@ -81,10 +98,9 @@ describe('difficulty ramp', () => {
     }
   })
 
-  it('always includes at least one hard clue, so the two Difficult scenes get played', () => {
-    // Without a floor the balancer settles on all-easy routes, because with
-    // seven easy locations against two hard ones that bucket is much the
-    // largest — and the Difficult clips would never be served to anyone.
+  it('always includes at least one hard clue, so the Difficult scenes get played', () => {
+    // Without a floor a random draw hands some players five Easy scenes and
+    // nothing else, and the Difficult clips never reach them.
     for (const r of pool.routes) {
       expect(tiers(r.stops).filter((d) => d === 3).length).toBeGreaterThanOrEqual(
         ROUTE_POOL.minHardClues,

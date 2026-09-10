@@ -40,7 +40,7 @@ export interface Batch {
   name: string
   status: BatchStatus
   createdAtMs: number
-  /** Seed used to generate this batch's balanced route pool. */
+  /** Seed for this batch's random route shuffle — see ./routes. */
   routePoolSeed: string
   parConstants: ParConstants
   /** A throwaway practice batch — never mixed with real event results. */
@@ -76,11 +76,11 @@ export interface Player {
   device: DeviceKind | null
 }
 
-/** A player's assigned path: five location ids in play order. `parTotalMs` and
- *  `legParMs` are the pool balancer's expected times, kept only to keep every
- *  route roughly equal — never shown to a player. */
 export type DeviceKind = 'ios' | 'android' | 'other'
 
+/** A player's assigned path: five location ids in play order. `parTotalMs` and
+ *  `legParMs` are the route's expected times — used for the film strip's tint
+ *  and the organiser dashboard, never shown to a player. */
 export interface Route {
   playerId: string
   stops: [string, string, string, string, string]
@@ -105,7 +105,7 @@ export interface Session {
   endTsMs: number | null
   /** 1-5 while in progress; 6 once complete. */
   currentLevel: number
-  /** Hint rungs taken on the current level (0-3). Resets each level. */
+  /** Hint rungs taken on the current level (0-2). Resets each level. */
   currentLevelHints: number
   /** Times the scene has been watched on this level. Resets each level. */
   currentLevelViews: number
