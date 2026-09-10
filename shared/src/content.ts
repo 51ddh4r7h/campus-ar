@@ -133,8 +133,8 @@ const SURVEYED: readonly GameLocation[] = [
     // Sheet 7 — fountain
     id: 'fountain',
     name: 'The Fountain',
-    lat: 18.536108,
-    lng: 73.732878,
+    lat: 18.536281,
+    lng: 73.733004,
     radiusM: 15,
     difficulty: 3,
     ...media('fountain'),
