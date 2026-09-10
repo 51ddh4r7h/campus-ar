@@ -404,18 +404,25 @@ describe('engine — password signup and login', () => {
 })
 
 describe('engine — content changed under a live batch', () => {
-  /** Put a player on a route naming a location the content no longer has. */
+  /**
+   * Put a player on a route naming a location the content no longer has.
+   *
+   * The id is deliberately synthetic rather than a real stop that happens to be
+   * parked: this used to be 'auditorium', and the day the Auditorium was
+   * re-surveyed and brought into play, these tests started asserting the
+   * opposite of what they meant.
+   */
   async function strand() {
     const batch = await engine.createBatch({name: 'Old', eventCode: 'old1'})
     const {player} = await engine.registerPlayer({batchId: batch.id, name: 'A', rosterId: 'r1'})
     const route = (await store.getRoute(player.id))!
-    await store.putRoute({...route, stops: ['amphitheatre', 'sibm', 'auditorium', 'symbieat', 'library']})
+    await store.putRoute({...route, stops: ['amphitheatre', 'sibm', 'demolished-annexe', 'symbieat', 'library']})
     return {batch, player}
   }
 
   it('starts the hunt instead of throwing when a stop no longer exists', async () => {
     const {player} = await strand()
-    // Before the fix this threw `unknown location "auditorium" in route`, which
+    // Before the fix this threw `unknown location "..." in route`, which
     // the Worker turned into a 500 and the client blamed on the network.
     const {clue} = await engine.startHunt(player.sessionToken)
     expect(clue.level).toBe(1)
@@ -426,7 +433,7 @@ describe('engine — content changed under a live batch', () => {
     await engine.startHunt(player.sessionToken)
     const route = (await store.getRoute(player.id))!
     for (const id of route.stops) expect(locationById(id), id).toBeDefined()
-    expect(route.stops).not.toContain('auditorium')
+    expect(route.stops).not.toContain('demolished-annexe')
   })
 
   it('clears splits that pointed at the old route', async () => {
@@ -434,7 +441,7 @@ describe('engine — content changed under a live batch', () => {
     await store.putSplit({
       playerId: player.id,
       level: 1,
-      locationId: 'auditorium',
+      locationId: 'demolished-annexe',
       reachedTsMs: deps.now(),
       splitMs: 1000,
       hintsUsed: 0,

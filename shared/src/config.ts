@@ -8,10 +8,10 @@ import type {ParConstants} from './types'
 
 export const LEVEL_COUNT = 5
 /**
- * Locations in play. Nine of the twelve surveyed sites — the other three sit
+ * Locations in play. Ten of the twelve surveyed sites — the other two sit
  * inside a neighbour's geofence and are parked in ./content.
  */
-export const LOCATION_POOL_SIZE = 9
+export const LOCATION_POOL_SIZE = 10
 
 /** Validation thresholds applied server-side on every arrival check. */
 /**
@@ -105,9 +105,9 @@ export const ROUTE_POOL = {
   /**
    * Nor fewer than this. Without a floor the pool collapses to all-easy
    * routes: the balancer anchors on whichever total-difficulty bucket holds
-   * the most candidates, and with seven easy locations against two hard ones
+   * the most candidates, and with seven easy locations against three hard ones
    * that is always the bucket with no hard clue in it. Every player would
-   * finish without ever meeting one of the two scenes the organisers marked
+   * finish without ever meeting one of the three scenes the organisers marked
    * Difficult.
    */
   minHardClues: 1,

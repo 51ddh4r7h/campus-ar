@@ -8,7 +8,7 @@
  * own campus-knowledge riddles from `with_hints.pdf`: they lean on what a
  * Symbiosis student already knows, since that is who plays this.
  *
- * TWELVE sites were surveyed. NINE are in play. Three are parked, not because
+ * TWELVE sites were surveyed. TEN are in play. Two are parked, not because
  * anything is wrong with the clips but because they sit too close to another
  * site for consumer GPS to tell apart — see PARKED below. That is a physical
  * limit, not a tuning choice: a fence you cannot stand outside of is not a
@@ -127,6 +127,27 @@ const SURVEYED: readonly GameLocation[] = [
       far: 'A glass frontage with orange columns, and a printed list of departments beside the door.',
       warm: 'This place is named after a committee.',
       close: 'Where the top hierarchy works.',
+    },
+  },
+  {
+    // Sheet 4 — Auditorium. Re-surveyed 09/09/2026, 30m off the original
+    // stamp: the first one sat 16m from the Library and could not be fenced.
+    id: 'auditorium',
+    name: 'Auditorium',
+    lat: 18.536602,
+    lng: 73.732279,
+    radiusM: 15,
+    difficulty: 1,
+    ...media('auditorium'),
+    movie: {
+      title: BODYGUARD,
+      blurb: 'A lone figure in silhouette, walking out through the arch into the light.',
+    },
+    campusFact: '',
+    clue: {
+      far: 'A long polished passage at golden hour, a mural panel high on one wall above a row of small lamps, ending in a tall arch that opens onto distant hills.',
+      warm: 'Opposite the place where the knowledge resides.',
+      close: 'Where the flagship event happens every year.',
     },
   },
   {
@@ -258,20 +279,19 @@ const SURVEYED: readonly GameLocation[] = [
  * together than that cannot be separated at all: a player standing at one is
  * physically inside the other, so an arrival could validate the wrong level, or
  * refuse the right one. `ABSOLUTE_MIN_SPACING_M` in ./layout is the floor, and
- * these three are under it against the neighbour named.
+ * these two are under it against the neighbour named.
  *
  * Kept here rather than deleted: the clips are fine, and a fresh survey a few
  * dozen metres away — or dropping the neighbour instead — brings any of them
  * straight back.
  */
 export const PARKED = [
-  {sheet: 4, id: 'auditorium', name: 'Auditorium', lat: 18.536747, lng: 73.732526, clashesWith: 'library', gapM: 16, difficulty: 1},
   {sheet: 5, id: 'xerox', name: 'Xerox', lat: 18.537208, lng: 73.731825, clashesWith: 'sidtm-admin', gapM: 7, difficulty: 1},
   {sheet: 6, id: 'behind-amphi', name: 'Behind Amphi', lat: 18.537417, lng: 73.731713, clashesWith: 'sibm', gapM: 19, difficulty: 3},
 ] as const
 
-if (SURVEYED.length !== 9) {
-  throw new Error(`content: expected 9 locations, found ${SURVEYED.length}`)
+if (SURVEYED.length !== 10) {
+  throw new Error(`content: expected 10 locations, found ${SURVEYED.length}`)
 }
 
 /**
