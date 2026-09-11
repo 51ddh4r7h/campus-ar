@@ -163,7 +163,12 @@
 
   const troubles = $derived([
     ...(data?.abandonReasons ?? []).map((a) => ({
-      label: a.reason === 'stale' ? 'Timed out' : a.reason === 'batch_closed' ? 'Event closed' : 'Player stopped',
+      label:
+        a.reason === 'time_limit'
+          ? 'Timed out'
+          : a.reason === 'batch_closed'
+            ? 'Event closed'
+            : 'Player stopped',
       value: a.count,
     })),
     ...(data && data.speedFlags > 0 ? [{label: 'Impossible arrival', value: data.speedFlags}] : []),
